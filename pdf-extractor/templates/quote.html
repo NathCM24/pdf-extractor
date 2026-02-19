@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quote Generator — Waste Experts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:        #1e2e3d;
+    --navy-light:  #2a3f54;
+    --green:       #8ec431;
+    --green-pale:  #f0f8e0;
+    --white:       #ffffff;
+    --bg:          #f0f4f8;
+    --border:      #dde4ec;
+    --text:        #2d3748;
+    --muted:       #718096;
+    --row-alt:     #f7fafc;
+  }
+
+  body {
+    font-family: 'Montserrat', 'Segoe UI', Arial, sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+    color: var(--text);
+    font-size: 14px;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--navy);
+    padding: 0 32px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .logo-wrap { height: 40px; display: flex; align-items: center; }
+  .logo-wrap img { height: 40px; width: auto; display: block; }
+  .logo-fallback { font-size: 15px; font-weight: 800; color: var(--white); }
+  .hdr-divider { width: 1px; height: 28px; background: rgba(255,255,255,.2); }
+  .hdr-title { color: var(--white); font-size: 15px; font-weight: 600; }
+  .nav-link {
+    color: rgba(255,255,255,.65);
+    font-size: 13px; font-weight: 500;
+    text-decoration: none;
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 4px;
+    transition: all .15s;
+  }
+  .nav-link:hover { color: var(--white); border-color: rgba(255,255,255,.5); background: rgba(255,255,255,.08); }
+
+  /* ── Container ── */
+  .container { max-width: 960px; margin: 0 auto; padding: 36px 20px 60px; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 22px; border-radius: 4px;
+    font-size: 13px; font-weight: 700; font-family: inherit;
+    cursor: pointer; border: none; text-decoration: none;
+    transition: opacity .15s, transform .1s; line-height: 1;
+  }
+  .btn:hover  { opacity: .88; }
+  .btn:active { transform: scale(.98); }
+  .btn-navy    { background: var(--navy);  color: var(--white); }
+  .btn-green   { background: var(--green); color: var(--white); font-size: 14px; padding: 13px 28px; }
+  .btn-outline { background: var(--white); color: var(--navy); border: 2px solid var(--navy); }
+  .btn-sm      { padding: 7px 16px; font-size: 12px; }
+
+  /* ── Upload state ── */
+  #state-upload { max-width: 600px; margin: 0 auto; }
+  .page-heading { text-align: center; margin-bottom: 28px; }
+  .page-heading h2 { font-size: 22px; font-weight: 800; color: var(--navy); margin-bottom: 6px; }
+  .page-heading p  { font-size: 14px; color: var(--muted); font-weight: 500; }
+
+  .upload-zone {
+    background: var(--white);
+    border: 2px dashed var(--border);
+    border-radius: 4px;
+    padding: 52px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  .upload-zone.drag-over { border-color: var(--green); background: var(--green-pale); }
+  .upload-icon { font-size: 52px; display: block; margin-bottom: 16px; line-height: 1; }
+  .upload-zone h3 { font-size: 16px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .upload-zone p  { font-size: 13px; color: var(--muted); margin-bottom: 22px; font-weight: 500; }
+  #file-input { display: none; }
+  #selected-file { margin-top: 14px; font-size: 13px; color: var(--green); font-weight: 600; min-height: 18px; }
+
+  /* ── Spinner card ── */
+  .spinner-card {
+    background: var(--white); border-radius: 4px;
+    padding: 52px 32px; text-align: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  }
+  .spinner {
+    width: 52px; height: 52px;
+    border: 4px solid var(--border); border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin .75s linear infinite;
+    margin: 0 auto 20px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner-card h3 { font-size: 15px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .spinner-card p  { font-size: 13px; color: var(--muted); font-weight: 500; }
+
+  /* ── Edit card ── */
+  .edit-card {
+    background: var(--white);
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    overflow: hidden;
+  }
+  .edit-card-header {
+    background: var(--navy);
+    padding: 16px 28px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .edit-card-header h2 { color: var(--white); font-size: 15px; font-weight: 700; }
+
+  /* success banner inside edit card */
+  #download-banner {
+    display: none;
+    align-items: center; gap: 12px;
+    background: var(--green-pale);
+    border-bottom: 2px solid var(--green);
+    padding: 12px 28px;
+    font-size: 13px; font-weight: 600; color: #3a5a00;
+  }
+  #download-banner .banner-x {
+    margin-left: auto; cursor: pointer; font-size: 18px; color: var(--muted);
+    background: none; border: none; font-family: inherit; line-height: 1;
+  }
+
+  /* form sections */
+  .form-section { padding: 22px 28px; border-bottom: 1px solid var(--border); }
+  .form-section:last-of-type { border-bottom: none; }
+  .section-title {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.8px; color: var(--muted); margin-bottom: 16px;
+  }
+
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field.full { grid-column: 1 / -1; }
+
+  label {
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--navy);
+  }
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  textarea {
+    padding: 8px 11px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    font-family: 'Montserrat', inherit;
+    font-size: 13px;
+    color: var(--text);
+    transition: border-color .15s;
+    width: 100%;
+  }
+  input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--green);
+  }
+  textarea { resize: vertical; min-height: 70px; }
+
+  /* ── Line items table ── */
+  .table-scroll { overflow-x: auto; margin-bottom: 10px; }
+  .items-table { width: 100%; border-collapse: collapse; min-width: 580px; }
+  .items-table thead tr { background: var(--navy); }
+  .items-table thead th {
+    padding: 9px 10px;
+    font-size: 9px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--white); text-align: left; white-space: nowrap;
+  }
+  .items-table thead th.right { text-align: right; }
+  .items-table thead th:first-child { border-radius: 4px 0 0 0; }
+  .items-table thead th:last-child  { border-radius: 0 4px 0 0; width: 36px; }
+
+  .items-table tbody tr { border-bottom: 1px solid var(--border); }
+  .items-table tbody tr:nth-child(even) { background: var(--row-alt); }
+  .items-table tbody td { padding: 5px 6px; vertical-align: middle; }
+  .items-table tbody td input {
+    padding: 6px 8px; border-radius: 4px; font-size: 12px;
+  }
+  .items-table .col-desc  { width: 48%; }
+  .items-table .col-qty   { width: 9%; }
+  .items-table .col-unit  { width: 15%; }
+  .items-table .col-total { width: 15%; }
+  .items-table .col-rm    { width: 36px; text-align: center; }
+  .items-table input.right { text-align: right; }
+
+  .btn-remove {
+    background: none; border: none; cursor: pointer;
+    color: #aaa; font-size: 18px; line-height: 1;
+    padding: 2px 6px; border-radius: 4px;
+    transition: color .15s, background .15s;
+  }
+  .btn-remove:hover { color: #e53e3e; background: #fff5f5; }
+
+  .items-footer {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap; margin-top: 10px;
+  }
+  .btn-add {
+    background: none; border: 1.5px dashed var(--green);
+    border-radius: 4px; padding: 7px 16px;
+    font-family: inherit; font-size: 12px; font-weight: 700;
+    color: var(--green); cursor: pointer; transition: background .15s;
+  }
+  .btn-add:hover { background: var(--green-pale); }
+
+  .grand-total {
+    font-size: 13px; font-weight: 700; color: var(--navy);
+    background: var(--green-pale); border-radius: 4px;
+    padding: 7px 14px; white-space: nowrap;
+  }
+
+  /* form actions */
+  .form-actions {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 20px 28px;
+    background: var(--row-alt);
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── Error card ── */
+  .error-card {
+    background: #fff5f5; border: 2px solid #fc8181;
+    border-radius: 4px; padding: 22px 26px;
+  }
+  .error-card strong { display: block; color: #c53030; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .error-card p { color: #c53030; font-size: 13px; font-weight: 500; margin-bottom: 16px; }
+
+  /* ── Hidden helper ── */
+  .hidden { display: none !important; }
+
+  @media (max-width: 640px) {
+    .header { padding: 0 16px; }
+    .hdr-title { display: none; }
+    .field-grid { grid-template-columns: 1fr; }
+    .field.full { grid-column: 1; }
+    .form-section { padding: 18px 16px; }
+    .edit-card-header { padding: 14px 16px; }
+    .form-actions { padding: 16px; flex-direction: column; }
+    .btn { width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo-wrap">
+      <img src="/logo" alt="Waste Experts"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+      <span class="logo-fallback" style="display:none">WASTE EXPERTS</span>
+    </div>
+    <div class="hdr-divider"></div>
+    <span class="hdr-title">Quote Generator</span>
+  </div>
+  <a href="/" class="nav-link">Order Extractor →</a>
+</header>
+
+<main class="container">
+
+  <!-- ── STATE: upload ── -->
+  <div id="state-upload">
+    <div class="page-heading">
+      <h2>Generate a Quote PDF</h2>
+      <p>Drop a supplier purchase order and get a branded Waste Experts quote in seconds</p>
+    </div>
+    <div class="upload-zone" id="drop-zone">
+      <span class="upload-icon">📄</span>
+      <h3>Drop a purchase order PDF here</h3>
+      <p>We'll extract the details so you can review and edit before generating</p>
+      <button class="btn btn-navy" onclick="document.getElementById('file-input').click()">Choose PDF</button>
+      <input type="file" id="file-input" accept=".pdf">
+      <div id="selected-file"></div>
+    </div>
+  </div>
+
+  <!-- ── STATE: loading (extracting) ── -->
+  <div id="state-loading" class="hidden">
+    <div class="spinner-card">
+      <div class="spinner"></div>
+      <h3>Extracting data from PDF…</h3>
+      <p>Reading the purchase order — usually 10–15 seconds</p>
+    </div>
+  </div>
+
+  <!-- ── STATE: edit ── -->
+  <div id="state-edit" class="hidden">
+    <div class="edit-card">
+
+      <div class="edit-card-header">
+        <h2>Review &amp; Edit Extracted Data</h2>
+        <button class="btn btn-outline btn-sm" onclick="resetToUpload()">↩ Upload Another PDF</button>
+      </div>
+
+      <!-- success banner (shown after PDF download) -->
+      <div id="download-banner">
+        <span>✓ Quote PDF downloaded — edit the fields and generate again if needed</span>
+        <button class="banner-x" onclick="hideBanner()">×</button>
+      </div>
+
+      <!-- Order Details -->
+      <div class="form-section">
+        <div class="section-title">Order Details</div>
+        <div class="field-grid">
+          <div class="field">
+            <label for="f-client-name">Client / Supplier Name</label>
+            <input id="f-client-name" type="text" placeholder="e.g. Go Green">
+          </div>
+          <div class="field">
+            <label for="f-reference">Reference Number</label>
+            <input id="f-reference" type="text" placeholder="PO reference">
+          </div>
+          <div class="field">
+            <label for="f-expiry">Quote Expiry Date</label>
+            <input id="f-expiry" type="text" placeholder="DD/MM/YYYY">
+          </div>
+          <div class="field">
+            <label for="f-job-name">Job Name / Title <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(used as PDF title)</span></label>
+            <input id="f-job-name" type="text" placeholder="e.g. Fluorescent Tube Collection">
+          </div>
+          <div class="field">
+            <label for="f-postcode">Site Postcode <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(used in filename)</span></label>
+            <input id="f-postcode" type="text" placeholder="e.g. SG19 1QY">
+          </div>
+        </div>
+      </div>
+
+      <!-- Client Contact -->
+      <div class="form-section">
+        <div class="section-title">Client Contact</div>
+        <div class="field-grid">
+          <div class="field full">
+            <label for="f-address">Client Address</label>
+            <textarea id="f-address" rows="3" placeholder="Full postal address"></textarea>
+          </div>
+          <div class="field">
+            <label for="f-email">Client Email</label>
+            <input id="f-email" type="email" placeholder="client@example.com">
+          </div>
+        </div>
+      </div>
+
+      <!-- Line Items -->
+      <div class="form-section">
+        <div class="section-title">Line Items</div>
+        <div class="table-scroll">
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th class="col-desc">Description</th>
+                <th class="col-qty right">Qty</th>
+                <th class="col-unit right">Unit Price (£)</th>
+                <th class="col-total right">Line Total (£)</th>
+                <th class="col-rm"></th>
+              </tr>
+            </thead>
+            <tbody id="items-body"></tbody>
+          </table>
+        </div>
+        <div class="items-footer">
+          <button class="btn-add" onclick="addRow()">+ Add Line Item</button>
+          <div class="grand-total">Total: <span id="grand-total">£0.00</span></div>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="form-section">
+        <div class="section-title">Caveats / Notes</div>
+        <div class="field">
+          <textarea id="f-notes" rows="3" placeholder="Any caveats, special instructions, or comments…"></textarea>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="form-actions">
+        <button class="btn btn-green" onclick="generatePDF()">⬇ Generate Quote PDF</button>
+        <button class="btn btn-outline" onclick="resetToUpload()">↩ Upload Another PDF</button>
+      </div>
+
+    </div><!-- /.edit-card -->
+  </div>
+
+  <!-- ── STATE: generating PDF ── -->
+  <div id="state-generating" class="hidden">
+    <div class="spinner-card">
+      <div class="spinner"></div>
+      <h3>Generating your quote PDF…</h3>
+      <p>Building the branded document — just a moment</p>
+    </div>
+  </div>
+
+  <!-- ── STATE: error ── -->
+  <div id="state-error" class="hidden">
+    <div class="error-card">
+      <strong>⚠ Something went wrong</strong>
+      <p id="error-msg"></p>
+      <button class="btn btn-outline" onclick="resetToUpload()">Try Again</button>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  // ── State management ───────────────────────────────────────────────────────
+  const STATES = ['upload', 'loading', 'edit', 'generating', 'error'];
+  function setState(name) {
+    STATES.forEach(s => {
+      const el = document.getElementById('state-' + s);
+      if (!el) return;
+      if (s === name) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    });
+  }
+
+  // ── Drag and drop ──────────────────────────────────────────────────────────
+  const dropZone  = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.toLowerCase().endsWith('.pdf')) {
+      uploadAndExtract(file);
+    } else {
+      alert('Please drop a PDF file.');
+    }
+  });
+  dropZone.addEventListener('click', e => { if (e.target.tagName !== 'BUTTON') fileInput.click(); });
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) uploadAndExtract(e.target.files[0]); });
+
+  // ── Step 1: upload PDF and extract data ───────────────────────────────────
+  async function uploadAndExtract(file) {
+    document.getElementById('selected-file').textContent = '📎 ' + file.name;
+    setState('loading');
+
+    const form = new FormData();
+    form.append('pdf', file);
+
+    try {
+      const resp = await fetch('/extract-quote-data', { method: 'POST', body: form });
+      const json = await resp.json();
+      if (!resp.ok || json.error) { showError(json.error || 'Extraction failed.'); return; }
+      populateForm(json.data);
+      setState('edit');
+    } catch (err) {
+      showError('Network error — ' + err.message);
+    }
+  }
+
+  // ── Populate form with extracted data ─────────────────────────────────────
+  function populateForm(data) {
+    document.getElementById('f-client-name').value = data.client_name     || '';
+    document.getElementById('f-reference').value   = data.reference_number || '';
+    document.getElementById('f-expiry').value       = data.quote_expiry_date || '';
+    document.getElementById('f-job-name').value     = data.job_name         || '';
+    document.getElementById('f-postcode').value     = data.site_postcode    || '';
+    document.getElementById('f-address').value      = data.client_address   || '';
+    document.getElementById('f-email').value        = data.client_email     || '';
+    document.getElementById('f-notes').value        = data.notes            || '';
+
+    const tbody = document.getElementById('items-body');
+    tbody.innerHTML = '';
+    (data.line_items || []).forEach(item => addRow(item));
+    if (!tbody.children.length) addRow();
+    updateGrandTotal();
+  }
+
+  // ── Step 2: collect form data and generate PDF ────────────────────────────
+  async function generatePDF() {
+    const data = collectFormData();
+    hideBanner();
+    setState('generating');
+
+    try {
+      const resp = await fetch('/render-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Generation failed.' }));
+        showError(err.error || 'Generation failed.');
+        return;
+      }
+
+      // Trigger browser download
+      const cd       = resp.headers.get('Content-Disposition') || '';
+      const fnMatch  = cd.match(/filename="([^"]+)"/);
+      const filename = fnMatch ? fnMatch[1] : 'quote.pdf';
+
+      const blob = await resp.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+      // Return to edit state and show banner
+      setState('edit');
+      showBanner(filename);
+
+    } catch (err) {
+      showError('Network error — ' + err.message);
+    }
+  }
+
+  // ── Collect form data into JSON ───────────────────────────────────────────
+  function collectFormData() {
+    return {
+      client_name:      document.getElementById('f-client-name').value.trim(),
+      reference_number: document.getElementById('f-reference').value.trim(),
+      quote_expiry_date:document.getElementById('f-expiry').value.trim(),
+      job_name:         document.getElementById('f-job-name').value.trim(),
+      site_postcode:    document.getElementById('f-postcode').value.trim(),
+      client_address:   document.getElementById('f-address').value.trim(),
+      client_email:     document.getElementById('f-email').value.trim(),
+      notes:            document.getElementById('f-notes').value.trim(),
+      line_items:       collectRows(),
+    };
+  }
+
+  // ── Line items table ──────────────────────────────────────────────────────
+  function addRow(item = {}) {
+    const tr = document.createElement('tr');
+    const qty   = item.quantity   ?? 1;
+    const unit  = item.unit_price ?? 0;
+    const total = item.line_total ?? (qty * unit);
+    tr.innerHTML = `
+      <td class="col-desc">
+        <input type="text" value="${esc(item.description || '')}" placeholder="Description">
+      </td>
+      <td class="col-qty">
+        <input type="number" class="right li-qty"   min="0" step="0.01" value="${qty}"
+               oninput="calcRow(this)">
+      </td>
+      <td class="col-unit">
+        <input type="number" class="right li-unit"  min="0" step="0.01" value="${fmtNum(unit)}"
+               oninput="calcRow(this)">
+      </td>
+      <td class="col-total">
+        <input type="number" class="right li-total" min="0" step="0.01" value="${fmtNum(total)}">
+      </td>
+      <td class="col-rm">
+        <button class="btn-remove" onclick="removeRow(this)" title="Remove">×</button>
+      </td>`;
+    document.getElementById('items-body').appendChild(tr);
+    updateGrandTotal();
+  }
+
+  function removeRow(btn) {
+    btn.closest('tr').remove();
+    updateGrandTotal();
+  }
+
+  function calcRow(input) {
+    const tr    = input.closest('tr');
+    const qty   = parseFloat(tr.querySelector('.li-qty').value)  || 0;
+    const unit  = parseFloat(tr.querySelector('.li-unit').value) || 0;
+    tr.querySelector('.li-total').value = (qty * unit).toFixed(2);
+    updateGrandTotal();
+  }
+
+  function updateGrandTotal() {
+    let sum = 0;
+    document.querySelectorAll('#items-body .li-total').forEach(i => {
+      sum += parseFloat(i.value) || 0;
+    });
+    document.getElementById('grand-total').textContent = '£' + sum.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function collectRows() {
+    return Array.from(document.querySelectorAll('#items-body tr')).map(tr => ({
+      description: tr.querySelector('input[type="text"]').value.trim(),
+      quantity:    parseFloat(tr.querySelector('.li-qty').value)   || 0,
+      unit_price:  parseFloat(tr.querySelector('.li-unit').value)  || 0,
+      line_total:  parseFloat(tr.querySelector('.li-total').value) || 0,
+    }));
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function esc(s) {
+    return (s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  }
+  function fmtNum(n) {
+    return (parseFloat(n) || 0).toFixed(2);
+  }
+
+  function showError(msg) {
+    document.getElementById('error-msg').textContent = msg;
+    setState('error');
+  }
+
+  function showBanner(filename) {
+    const b = document.getElementById('download-banner');
+    b.querySelector('span').textContent = '✓ Downloaded: ' + filename + '  — edit the fields and generate again if needed.';
+    b.style.display = 'flex';
+  }
+  function hideBanner() {
+    document.getElementById('download-banner').style.display = 'none';
+  }
+
+  function resetToUpload() {
+    fileInput.value = '';
+    document.getElementById('selected-file').textContent = '';
+    hideBanner();
+    setState('upload');
+  }
+
+  // Start in upload state
+  setState('upload');
+</script>
+</body>
+</html>

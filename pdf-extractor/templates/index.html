@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supplier Order Extractor — Waste Experts</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f0f4f8;
+    min-height: 100vh;
+    color: #2d3748;
+  }
+
+  /* Header */
+  .header {
+    background: #1a3a5c;
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .header h1 { color: #fff; font-size: 20px; font-weight: 600; }
+  .header p  { color: #a8c4e0; font-size: 13px; margin-top: 2px; }
+
+  /* Layout */
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 20px; }
+
+  /* Upload card */
+  .upload-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    border: 2px dashed #cbd5e0;
+    transition: border-color 0.2s, background 0.2s;
+    cursor: pointer;
+    margin-bottom: 24px;
+  }
+  .upload-card.drag-over {
+    border-color: #1a3a5c;
+    background: #f0f4f8;
+  }
+  .upload-icon { font-size: 48px; margin-bottom: 16px; }
+  .upload-card h2 { font-size: 18px; color: #1a3a5c; margin-bottom: 8px; }
+  .upload-card p  { color: #718096; font-size: 14px; margin-bottom: 20px; }
+
+  .btn {
+    display: inline-block;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.88; }
+  .btn-primary { background: #1a3a5c; color: #fff; }
+  .btn-green   { background: #38a169; color: #fff; }
+  .btn-outline { background: #fff; color: #1a3a5c; border: 2px solid #1a3a5c; }
+
+  #file-input { display: none; }
+  #selected-file {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #38a169;
+    font-weight: 600;
+    min-height: 20px;
+  }
+
+  /* Loading */
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 40px;
+    background: #fff;
+    border-radius: 12px;
+    margin-bottom: 24px;
+  }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 4px solid #e2e8f0;
+    border-top-color: #1a3a5c;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Review banner */
+  .review-banner {
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: none;
+  }
+  .review-banner strong { color: #856404; }
+  .review-banner ul { color: #856404; margin-top: 8px; padding-left: 20px; }
+  .review-banner li { font-size: 14px; margin-top: 4px; }
+
+  /* Results */
+  .results-card {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 24px;
+    display: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+  .results-header {
+    background: #1a3a5c;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .results-header h2 { color: #fff; font-size: 16px; }
+  .results-header span { color: #a8c4e0; font-size: 13px; }
+
+  /* Field groups */
+  .field-group {
+    border-bottom: 1px solid #f0f4f8;
+    padding: 0;
+  }
+  .group-title {
+    background: #f7fafc;
+    padding: 10px 24px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #718096;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+  .field {
+    padding: 14px 24px;
+    border-right: 1px solid #f0f4f8;
+    border-bottom: 1px solid #f0f4f8;
+    position: relative;
+  }
+  .field:nth-child(even) { border-right: none; }
+  .field.full-width {
+    grid-column: 1 / -1;
+    border-right: none;
+  }
+  .field-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #a0aec0;
+    margin-bottom: 4px;
+  }
+  .field-value {
+    font-size: 14px;
+    color: #2d3748;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+  .field-value.empty { color: #cbd5e0; font-style: italic; font-weight: 400; }
+  .field-value.money { color: #276749; font-weight: 700; }
+
+  /* Copy button on each field */
+  .copy-btn {
+    position: absolute;
+    top: 12px; right: 12px;
+    background: #edf2f7;
+    border: none;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    color: #4a5568;
+    display: none;
+  }
+  .field:hover .copy-btn { display: block; }
+  .copy-btn:hover { background: #e2e8f0; }
+
+  /* Actions */
+  .actions {
+    display: flex;
+    gap: 12px;
+    padding: 20px 24px;
+    background: #f7fafc;
+    flex-wrap: wrap;
+  }
+
+  /* Error */
+  .error-card {
+    background: #fff5f5;
+    border: 2px solid #fc8181;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    display: none;
+    color: #c53030;
+  }
+
+  @media (max-width: 600px) {
+    .fields-grid { grid-template-columns: 1fr; }
+    .field { border-right: none; }
+    .field.full-width { grid-column: 1; }
+    .actions { flex-direction: column; }
+    .btn { width: 100%; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📄 Supplier Order Extractor</h1>
+    <p>Upload a supplier purchase order PDF → extract fields → download for HubSpot</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Upload -->
+  <div class="upload-card" id="drop-zone">
+    <div class="upload-icon">📂</div>
+    <h2>Drop a supplier PDF here</h2>
+    <p>Supports purchase orders from Go Green, Mitie, Suez, and other brokers</p>
+    <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
+      Choose PDF
+    </button>
+    <input type="file" id="file-input" accept=".pdf">
+    <div id="selected-file"></div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-card" id="error-card"></div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p style="color:#718096;font-size:15px;">Reading PDF and extracting fields...</p>
+    <p style="color:#a0aec0;font-size:13px;margin-top:6px;">This usually takes 5–10 seconds</p>
+  </div>
+
+  <!-- Review banner -->
+  <div class="review-banner" id="review-banner">
+    <strong>⚠️ Review Required</strong>
+    <ul id="review-list"></ul>
+  </div>
+
+  <!-- Results -->
+  <div class="results-card" id="results-card">
+    <div class="results-header">
+      <h2 id="results-title">Extracted Order Data</h2>
+      <span id="results-meta"></span>
+    </div>
+
+    <!-- Order Info -->
+    <div class="field-group">
+      <div class="group-title">Order Information</div>
+      <div class="fields-grid">
+        <div class="field" id="f-client_name">
+          <div class="field-label">Client / Broker</div>
+          <div class="field-value" id="v-client_name">—</div>
+          <button class="copy-btn" onclick="copyField('client_name')">Copy</button>
+        </div>
+        <div class="field" id="f-order_number">
+          <div class="field-label">Order Number</div>
+          <div class="field-value" id="v-order_number">—</div>
+          <button class="copy-btn" onclick="copyField('order_number')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Order Raised Date</div>
+          <div class="field-value" id="v-order_raised_date">—</div>
+          <button class="copy-btn" onclick="copyField('order_raised_date')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Job Date</div>
+          <div class="field-value" id="v-job_date">—</div>
+          <button class="copy-btn" onclick="copyField('job_date')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Movement Type</div>
+          <div class="field-value" id="v-movement_type">—</div>
+          <button class="copy-btn" onclick="copyField('movement_type')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Container Type</div>
+          <div class="field-value" id="v-container_type">—</div>
+          <button class="copy-btn" onclick="copyField('container_type')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Waste Type</div>
+          <div class="field-value" id="v-waste_type">—</div>
+          <button class="copy-btn" onclick="copyField('waste_type')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">EWC Code</div>
+          <div class="field-value" id="v-ewc_code">—</div>
+          <button class="copy-btn" onclick="copyField('ewc_code')">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Site Info -->
+    <div class="field-group">
+      <div class="group-title">Site Information</div>
+      <div class="fields-grid">
+        <div class="field">
+          <div class="field-label">Waste Producer</div>
+          <div class="field-value" id="v-waste_producer">—</div>
+          <button class="copy-btn" onclick="copyField('waste_producer')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Site Name</div>
+          <div class="field-value" id="v-site_name">—</div>
+          <button class="copy-btn" onclick="copyField('site_name')">Copy</button>
+        </div>
+        <div class="field full-width">
+          <div class="field-label">Site Address</div>
+          <div class="field-value" id="v-site_address">—</div>
+          <button class="copy-btn" onclick="copyField('site_address')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Site Postcode</div>
+          <div class="field-value" id="v-site_postcode">—</div>
+          <button class="copy-btn" onclick="copyField('site_postcode')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Access Times</div>
+          <div class="field-value" id="v-access_times">—</div>
+          <button class="copy-btn" onclick="copyField('access_times')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Site Contact Name</div>
+          <div class="field-value" id="v-site_contact_name">—</div>
+          <button class="copy-btn" onclick="copyField('site_contact_name')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Site Contact Number</div>
+          <div class="field-value" id="v-site_contact_number">—</div>
+          <button class="copy-btn" onclick="copyField('site_contact_number')">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="field-group">
+      <div class="group-title">Pricing</div>
+      <div class="fields-grid">
+        <div class="field">
+          <div class="field-label">Transport Cost</div>
+          <div class="field-value money" id="v-transport_cost">—</div>
+          <button class="copy-btn" onclick="copyField('transport_cost')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Total Cost</div>
+          <div class="field-value money" id="v-total_cost">—</div>
+          <button class="copy-btn" onclick="copyField('total_cost')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Per Hour Cost</div>
+          <div class="field-value" id="v-per_hour_cost">—</div>
+          <button class="copy-btn" onclick="copyField('per_hour_cost')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Per Tonne Cost</div>
+          <div class="field-value" id="v-per_tonne_cost">—</div>
+          <button class="copy-btn" onclick="copyField('per_tonne_cost')">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compliance -->
+    <div class="field-group">
+      <div class="group-title">Compliance & Facility</div>
+      <div class="fields-grid">
+        <div class="field">
+          <div class="field-label">Facility Name</div>
+          <div class="field-value" id="v-facility_name">—</div>
+          <button class="copy-btn" onclick="copyField('facility_name')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">Broker Contact Email</div>
+          <div class="field-value" id="v-broker_contact_email">—</div>
+          <button class="copy-btn" onclick="copyField('broker_contact_email')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">WCL Number</div>
+          <div class="field-value" id="v-wcl_number">—</div>
+          <button class="copy-btn" onclick="copyField('wcl_number')">Copy</button>
+        </div>
+        <div class="field">
+          <div class="field-label">WML Number</div>
+          <div class="field-value" id="v-wml_number">—</div>
+          <button class="copy-btn" onclick="copyField('wml_number')">Copy</button>
+        </div>
+        <div class="field full-width">
+          <div class="field-label">Order Notes</div>
+          <div class="field-value" id="v-order_notes">—</div>
+          <button class="copy-btn" onclick="copyField('order_notes')">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button class="btn btn-green" onclick="downloadCSV()">⬇ Download CSV for HubSpot</button>
+      <button class="btn btn-outline" onclick="resetTool()">Upload Another PDF</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let extractedData = null;
+
+  // Drag and drop
+  const dropZone = document.getElementById('drop-zone');
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.toLowerCase().endsWith('.pdf')) {
+      processFile(file);
+    } else {
+      showError('Please drop a PDF file.');
+    }
+  });
+
+  document.getElementById('file-input').addEventListener('change', e => {
+    if (e.target.files[0]) processFile(e.target.files[0]);
+  });
+
+  function processFile(file) {
+    document.getElementById('selected-file').textContent = `📎 ${file.name}`;
+    uploadAndExtract(file);
+  }
+
+  async function uploadAndExtract(file) {
+    showLoading(true);
+    hideError();
+    hideResults();
+
+    const formData = new FormData();
+    formData.append('pdf', file);
+
+    try {
+      const response = await fetch('/extract', { method: 'POST', body: formData });
+      const result = await response.json();
+
+      if (!response.ok || result.error) {
+        showError(result.error || 'Extraction failed. Please try again.');
+        return;
+      }
+
+      extractedData = result.data;
+      displayResults(result.data);
+
+    } catch (err) {
+      showError('Network error. Please check your connection and try again.');
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  function displayResults(data) {
+    const fields = [
+      'client_name','order_number','order_raised_date','job_date',
+      'movement_type','container_type','waste_type','ewc_code',
+      'waste_producer','site_name','site_address','site_postcode',
+      'access_times','site_contact_name','site_contact_number',
+      'transport_cost','total_cost','per_hour_cost','per_tonne_cost',
+      'facility_name','broker_contact_email','wcl_number','wml_number','order_notes'
+    ];
+
+    fields.forEach(key => {
+      const el = document.getElementById('v-' + key);
+      if (!el) return;
+      const val = data[key];
+      if (val === null || val === undefined || val === '' || val === 0 || val === '0' || val === '0.00') {
+        el.textContent = 'Not found';
+        el.classList.add('empty');
+        el.classList.remove('money');
+      } else {
+        const isMoney = ['transport_cost','total_cost','per_hour_cost','per_tonne_cost'].includes(key);
+        el.textContent = isMoney && val ? `£${parseFloat(val).toFixed(2)}` : val;
+        el.classList.remove('empty');
+      }
+    });
+
+    // Title
+    const client = data.client_name || 'Unknown Client';
+    const orderNum = data.order_number || '';
+    document.getElementById('results-title').textContent = `${client} — Order ${orderNum}`;
+    document.getElementById('results-meta').textContent = `Extracted ${data._extracted_at}`;
+
+    // Review banner
+    if (data.requires_review && data.review_notes && data.review_notes.length > 0) {
+      const banner = document.getElementById('review-banner');
+      const list = document.getElementById('review-list');
+      list.innerHTML = data.review_notes.map(n => `<li>${n}</li>`).join('');
+      banner.style.display = 'block';
+    }
+
+    document.getElementById('results-card').style.display = 'block';
+  }
+
+  function copyField(key) {
+    const el = document.getElementById('v-' + key);
+    if (!el || el.classList.contains('empty')) return;
+    navigator.clipboard.writeText(el.textContent).then(() => {
+      const btn = el.parentElement.querySelector('.copy-btn');
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      btn.style.background = '#c6f6d5';
+      setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 1500);
+    });
+  }
+
+  async function downloadCSV() {
+    if (!extractedData) return;
+    const response = await fetch('/download-csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: extractedData })
+    });
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `order-extract-${extractedData.order_number || 'unknown'}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function resetTool() {
+    extractedData = null;
+    document.getElementById('selected-file').textContent = '';
+    document.getElementById('file-input').value = '';
+    document.getElementById('review-banner').style.display = 'none';
+    document.getElementById('review-list').innerHTML = '';
+    hideResults();
+    hideError();
+  }
+
+  function showLoading(show) {
+    document.getElementById('loading').style.display = show ? 'block' : 'none';
+    document.getElementById('drop-zone').style.display = show ? 'none' : 'block';
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-card');
+    el.textContent = '⚠️ ' + msg;
+    el.style.display = 'block';
+  }
+
+  function hideError() { document.getElementById('error-card').style.display = 'none'; }
+  function hideResults() { document.getElementById('results-card').style.display = 'none'; }
+</script>
+</body>
+</html>
