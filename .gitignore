@@ -1,2 +1,5 @@
-﻿.claude/
 .env
+__pycache__/
+*.pyc
+*.pyo
+*.pdf
