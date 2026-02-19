@@ -42,6 +42,14 @@ def _init_quote_generator() -> bool:
     except Exception as _gq_err:
         QUOTE_AVAILABLE = False
         print(f"[warn] Quote generator unavailable: {_gq_err}")
+        return QUOTE_AVAILABLE
+
+    # Font setup should not make the whole quote generator unavailable.
+    try:
+        gq.ensure_fonts()
+    except Exception as _font_err:
+        print(f"[warn] Quote generator fonts setup failed, continuing: {_font_err}")
+
     return QUOTE_AVAILABLE
 
 
