@@ -159,9 +159,11 @@ EXTRACT_PROMPT = """Extract all of the following fields from this PDF document a
   "po_provider_name":    "PO provider/issuer company from terms/footer/important info (the company sending you the PO), or null",
   "po_provider_address": "PO provider postal address (newline-separated) from terms/footer/important info, or null",
   "po_provider_email":   "PO provider email address, or null",
+
   "supplier_name":       "Same as PO provider if present; otherwise null",
   "supplier_address":    "Same as PO provider address if present; otherwise null",
   "supplier_email":      "Same as PO provider email if present; otherwise null",
+
   "client_name":      "Company name of the buyer/client (if present), or null",
   "client_address":   "Full postal address of the client (newline-separated), or null",
   "client_email":     "Client email address, or null",
