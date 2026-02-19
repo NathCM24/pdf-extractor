@@ -23,7 +23,6 @@ import argparse
 import urllib.request
 import re
 from pathlib import Path
-from datetime import datetime
 
 # ─── dependency guard ────────────────────────────────────────────────────────
 
@@ -152,13 +151,22 @@ def ensure_fonts():
         FONT_B  = "Helvetica-Bold"
         FONT_XB = "Helvetica-Bold"
 
+
 # ─── Claude extraction ───────────────────────────────────────────────────────
 
 EXTRACT_PROMPT = """Extract all of the following fields from this PDF document and return ONLY a valid JSON object.
 
 {
-  "client_name":      "Company name of the buyer/client",
-  "client_address":   "Full postal address of the client (newline-separated)",
+  "po_provider_name":    "PO provider/issuer company from terms/footer/important info (the company sending you the PO), or null",
+  "po_provider_address": "PO provider postal address (newline-separated) from terms/footer/important info, or null",
+  "po_provider_email":   "PO provider email address, or null",
+
+  "supplier_name":       "Same as PO provider if present; otherwise null",
+  "supplier_address":    "Same as PO provider address if present; otherwise null",
+  "supplier_email":      "Same as PO provider email if present; otherwise null",
+
+  "client_name":      "Company name of the buyer/client (if present), or null",
+  "client_address":   "Full postal address of the client (newline-separated), or null",
   "client_email":     "Client email address, or null",
   "reference_number": "PO or reference number",
   "quote_expiry_date":"Valid-until / expiry date in DD/MM/YYYY format, or null",
@@ -166,17 +174,103 @@ EXTRACT_PROMPT = """Extract all of the following fields from this PDF document a
   "site_postcode":    "Postcode of the site or delivery location (e.g. SG19 1QY), or null",
   "line_items": [
     {
-      "description": "Product or service name",
+      "description": "Clear, plain-English product/service summary from the PO (include waste/material type and service type where possible)",
       "quantity":    1,
       "unit_price":  0.00,
       "line_total":  0.00
     }
   ],
-  "notes": "Any caveats, special instructions, or comments. Empty string if none."
+  "notes": "Any caveats, special instructions, or comments. Empty string if none.",
+  "terms_important_info": "Verbatim bottom terms/footer/important-info block text, or empty string"
 }
 
+Prioritise PO provider identity from footer/terms/important info/signature blocks.
+Never use Waste Experts, Electrical Waste, Electrical Waste Recycling Group, or the service/customer/site address entity as the supplier unless explicitly stated as the PO issuer in terms/footer.
+If terms/footer says phrases like "Go Green Ltd employee" or "accept ... terms & conditions" tied to a company name, that company is the PO provider.
 Use numeric types (not strings) for quantity, unit_price, and line_total.
 Return ONLY the JSON object — no markdown fences, no explanation."""
+
+INVALID_BILL_TO_PATTERNS = (
+    "waste experts",
+    "electrical waste",
+    "electrical waste recycling group",
+)
+
+
+def _is_invalid_supplier(name: str) -> bool:
+    normalized = (name or "").strip().lower()
+    return any(pat in normalized for pat in INVALID_BILL_TO_PATTERNS)
+
+
+def _extract_company_candidates(text: str) -> list:
+    """Find likely UK company names from free text (e.g. footer terms)."""
+    if not text:
+        return []
+    pattern = re.compile(
+        r"\b([A-Z][A-Za-z&'.,-]*(?:\s+[A-Z][A-Za-z&'.,-]*){0,5}\s+(?:Ltd|Limited|PLC|LLP))\b"
+    )
+    seen, names = set(), []
+    for match in pattern.findall(text):
+        name = " ".join(match.replace("\n", " ").split()).strip(" ,.-")
+        key = name.lower()
+        if key not in seen and not _is_invalid_supplier(name):
+            seen.add(key)
+            names.append(name)
+    return names
+
+
+def _extract_registered_office(text: str) -> str:
+    """Try to pull a Registered Office address block from free text."""
+    if not text:
+        return ""
+    m = re.search(
+        r"Registered Office:\s*(.+?)(?:Registered in|Company Number|$)",
+        text,
+        flags=re.I | re.S,
+    )
+    if not m:
+        return ""
+    return " ".join(m.group(1).replace("\n", " ").split()).strip(" ,")
+
+
+def normalize_extracted_data(data: dict) -> dict:
+    """Prefer PO provider details and avoid billing us/end-customer entities."""
+    supplier_name = (data.get("po_provider_name") or data.get("supplier_name") or "").strip()
+    supplier_address = (data.get("po_provider_address") or data.get("supplier_address") or "").strip()
+    supplier_email = (data.get("po_provider_email") or data.get("supplier_email") or "").strip()
+
+    terms_text = str(data.get("terms_important_info") or "")
+    combined_text = "\n".join(
+        part
+        for part in [
+            terms_text,
+            str(data.get("notes") or ""),
+            str(data.get("po_provider_name") or ""),
+            str(data.get("supplier_name") or ""),
+        ]
+        if part
+    )
+
+    # If missing/invalid supplier, try derive from terms/footer.
+    if not supplier_name or _is_invalid_supplier(supplier_name):
+        candidates = _extract_company_candidates(combined_text)
+        supplier_name = candidates[0] if candidates else ""
+
+    if not supplier_address:
+        supplier_address = _extract_registered_office(combined_text)
+
+    # Final guard: never allow invalid supplier patterns through.
+    if _is_invalid_supplier(supplier_name):
+        supplier_name = ""
+        supplier_address = ""
+        supplier_email = ""
+
+    data["supplier_name"] = supplier_name or None
+    data["supplier_address"] = supplier_address or None
+    data["supplier_email"] = supplier_email or None
+    return data
+
+
 def extract(pdf_path: Path) -> dict:
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
@@ -188,35 +282,38 @@ def extract(pdf_path: Path) -> dict:
     resp = client.messages.create(
         model="claude-opus-4-6",
         max_tokens=2000,
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "application/pdf",
-                        "data": b64,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": b64,
+                        },
                     },
-                },
-                {"type": "text", "text": EXTRACT_PROMPT},
-            ],
-        }],
+                    {"type": "text", "text": EXTRACT_PROMPT},
+                ],
+            }
+        ],
     )
 
     raw = resp.content[0].text.strip()
     # Strip any accidental markdown fences
     if "```" in raw:
         start = raw.find("{")
-        end   = raw.rfind("}") + 1
-        raw   = raw[start:end]
+        end = raw.rfind("}") + 1
+        raw = raw[start:end]
 
-    return json.loads(raw)
+    return normalize_extracted_data(json.loads(raw))
+
 
 # ─── drawing helpers ─────────────────────────────────────────────────────────
 
 def rounded_rect(c, x, y, w, h, r=RADIUS, fill=None, stroke=None, lw=0.5):
-    """Draw a rounded-corner rectangle.  y = BOTTOM of rect (ReportLab coords)."""
+    """Draw a rounded-corner rectangle. y = BOTTOM of rect (ReportLab coords)."""
     k = r * 0.5523  # Bezier control-point offset for quarter-circle approximation
     p = c.beginPath()
     p.moveTo(x + r, y)
@@ -282,6 +379,7 @@ def label(c, x, y, text):
     c.setFillColor(NAVY)
     c.drawString(x, y, text.upper())
 
+
 # ─── PDF generation ──────────────────────────────────────────────────────────
 
 def generate_pdf(data: dict, logo_path: Path, out_path: Path):
@@ -299,14 +397,16 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
         c.setFont(FONT_R, 7)
         c.setFillColor(LABEL_GREY)
         c.drawCentredString(
-            PAGE_W / 2, MARGIN / 2,
+            PAGE_W / 2,
+            MARGIN / 2,
             "Waste Experts Ltd  •  School Lane, Kirkheaton, Huddersfield HD5 0JS"
             "  •  emma-jane@wasteexperts.co.uk  •  +441388721000",
         )
 
-    def ensure_space(required_height_mm, redraw=None):
+    def ensure_space(required_height, redraw=None):
+        """Ensure there's at least required_height points available above bottom margin."""
         nonlocal y
-        if (y - MARGIN) >= required_height_mm:
+        if (y - MARGIN) >= required_height:
             return
         draw_footer()
         c.showPage()
@@ -321,12 +421,18 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     logo_h = 16 * mm
     if logo_path.exists():
         try:
-            img     = ImageReader(str(logo_path))
-            iw, ih  = img.getSize()
-            logo_w  = logo_h * (iw / ih)
-            c.drawImage(str(logo_path), MARGIN, y - logo_h,
-                        width=logo_w, height=logo_h,
-                        preserveAspectRatio=True, mask="auto")
+            img = ImageReader(str(logo_path))
+            iw, ih = img.getSize()
+            logo_w = logo_h * (iw / ih)
+            c.drawImage(
+                str(logo_path),
+                MARGIN,
+                y - logo_h,
+                width=logo_w,
+                height=logo_h,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
         except Exception:
             c.setFont(FONT_XB, 13)
             c.setFillColor(NAVY)
@@ -362,20 +468,26 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     # Left – Bill To
     label(c, col1_x, y, "Bill To")
     down(4.5 * mm)
+    supplier_name = data.get("supplier_name") or "PO provider not found"
+    supplier_address = data.get("supplier_address") or ""
+    supplier_email = data.get("supplier_email")
+
     c.setFont(FONT_B, 10)
     c.setFillColor(NAVY)
-    c.drawString(col1_x, y, data.get("client_name") or "")
+    c.drawString(col1_x, y, supplier_name)
     down(5 * mm)
     c.setFont(FONT_R, 9)
     c.setFillColor(TEXT_GREY)
-    addr_lines = [l.strip() for l in
-                  (data.get("client_address") or "").replace(", ", "\n").split("\n")
-                  if l.strip()][:5]
+    addr_lines = [
+        l.strip()
+        for l in (supplier_address or "").replace(", ", "\n").split("\n")
+        if l.strip()
+    ][:5]
     for al in addr_lines:
         c.drawString(col1_x, y, al)
         down(4.5 * mm)
-    if data.get("client_email"):
-        c.drawString(col1_x, y, data["client_email"])
+    if supplier_email:
+        c.drawString(col1_x, y, supplier_email)
         down(4.5 * mm)
     bottom_left = y
 
@@ -399,8 +511,8 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
 
     # ── Prepared By (2-line layout to avoid overflow) ────────────────────────
     prep_h = 17 * mm
-    rounded_rect(c, MARGIN, y - prep_h, CONTENT_W, prep_h,
-                 fill=colors.HexColor("#f5f7f9"))
+    ensure_space(prep_h + 6 * mm)
+    rounded_rect(c, MARGIN, y - prep_h, CONTENT_W, prep_h, fill=colors.HexColor("#f5f7f9"))
     label(c, MARGIN + 3 * mm, y - 4 * mm, "Prepared By")
     c.setFont(FONT_B, 9)
     c.setFillColor(NAVY)
@@ -408,41 +520,41 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     c.setFont(FONT_R, 8.5)
     c.setFillColor(TEXT_GREY)
     c.drawString(MARGIN + 3 * mm, y - 14 * mm, PREPARED_BY["title"])
-    c.drawRightString(PAGE_W - MARGIN - 3 * mm, y - 14 * mm,
-                      f"{PREPARED_BY['email']}  |  {PREPARED_BY['phone']}")
+    c.drawRightString(
+        PAGE_W - MARGIN - 3 * mm,
+        y - 14 * mm,
+        f"{PREPARED_BY['email']}  |  {PREPARED_BY['phone']}",
+    )
     down(prep_h + 6 * mm)
 
     # ── Reference / Expiry pills ─────────────────────────────────────────────
     box_w = 65 * mm
     box_h = 13 * mm
 
-    rounded_rect(c, MARGIN, y - box_h, box_w, box_h,
-                 fill=BG_BOX, stroke=MID_GREY)
+    ensure_space(box_h + 8 * mm)
+    rounded_rect(c, MARGIN, y - box_h, box_w, box_h, fill=BG_BOX, stroke=MID_GREY)
     label(c, MARGIN + 3 * mm, y - 4.5 * mm, "Reference")
     c.setFont(FONT_B, 11)
     c.setFillColor(NAVY)
-    c.drawString(MARGIN + 3 * mm, y - 9.5 * mm,
-                 data.get("reference_number") or "—")
+    c.drawString(MARGIN + 3 * mm, y - 9.5 * mm, data.get("reference_number") or "—")
 
     ex_x = MARGIN + box_w + 5 * mm
-    rounded_rect(c, ex_x, y - box_h, box_w, box_h,
-                 fill=BG_BOX, stroke=MID_GREY)
+    rounded_rect(c, ex_x, y - box_h, box_w, box_h, fill=BG_BOX, stroke=MID_GREY)
     label(c, ex_x + 3 * mm, y - 4.5 * mm, "Quote Valid Until")
     c.setFont(FONT_B, 11)
     c.setFillColor(NAVY)
-    c.drawString(ex_x + 3 * mm, y - 9.5 * mm,
-                 data.get("quote_expiry_date") or "—")
+    c.drawString(ex_x + 3 * mm, y - 9.5 * mm, data.get("quote_expiry_date") or "—")
 
     down(box_h + 8 * mm)
 
     # ── Products & Services table ────────────────────────────────────────────
-    col_w   = [CONTENT_W * 0.50, CONTENT_W * 0.11,
-               CONTENT_W * 0.19, CONTENT_W * 0.20]
+    col_w = [CONTENT_W * 0.50, CONTENT_W * 0.11, CONTENT_W * 0.19, CONTENT_W * 0.20]
     headers = ["PRODUCTS & SERVICES", "QUANTITY", "PRICE PER UNIT", "LINE TOTAL"]
-    hdr_h   = 9 * mm
-    row_h   = 8 * mm
+    hdr_h = 9 * mm
+    row_h = 8 * mm
 
     def draw_table_header():
+        nonlocal y
         rounded_rect(c, MARGIN, y - hdr_h, CONTENT_W, hdr_h, r=2 * mm, fill=NAVY)
         c.setFont(FONT_B, 8)
         c.setFillColor(WHITE)
@@ -460,13 +572,27 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
 
     # Data rows
     grand_total = 0.0
-    line_items  = data.get("line_items") or []
+    line_items = data.get("line_items") or []
     for idx, item in enumerate(line_items):
         ensure_space(row_h, redraw=draw_table_header)
-        desc  = str(item.get("description") or "")
-        qty   = item.get("quantity", 1)
-        unit  = float(item.get("unit_price") or 0)
-        total = float(item.get("line_total") or (float(qty) * unit))
+
+        desc = str(item.get("description") or "")
+        qty = item.get("quantity", 1)
+        try:
+            qty_f = float(qty)
+        except (TypeError, ValueError):
+            qty_f = 1.0
+
+        try:
+            unit = float(item.get("unit_price") or 0)
+        except (TypeError, ValueError):
+            unit = 0.0
+
+        try:
+            total = float(item.get("line_total") or (qty_f * unit))
+        except (TypeError, ValueError):
+            total = qty_f * unit
+
         grand_total += total
 
         row_fill = LIGHT_ROW if idx % 2 == 0 else WHITE
@@ -476,7 +602,7 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
         c.setLineWidth(0.3)
         c.line(MARGIN, y - row_h, MARGIN + CONTENT_W, y - row_h)
 
-        text_y  = y - row_h + 2.5 * mm
+        text_y = y - row_h + 2.5 * mm
         max_desc = col_w[0] - 6 * mm
 
         # Truncate description if too wide
@@ -484,7 +610,7 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
         c.setFont(FONT_R, 9)
         while desc_str and c.stringWidth(desc_str, FONT_R, 9) > max_desc:
             desc_str = desc_str[:-1]
-        if desc_str != desc:
+        if desc_str != desc and len(desc_str) > 1:
             desc_str = desc_str[:-1] + "…"
 
         c.setFillColor(DARK_GREY)
@@ -492,7 +618,7 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
 
         rx = MARGIN + col_w[0]
         c.setFont(FONT_R, 9)
-        c.drawRightString(rx + col_w[1] - 3 * mm, text_y, str(qty))
+        c.drawRightString(rx + col_w[1] - 3 * mm, text_y, str(int(qty_f) if qty_f.is_integer() else qty_f))
         rx += col_w[1]
         c.drawRightString(rx + col_w[2] - 3 * mm, text_y, money(unit))
         rx += col_w[2]
@@ -527,8 +653,7 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     c.drawString(sum_x + 5 * mm, y - tot_h / 2 - 1.5 * mm, "TOTAL")
     c.setFont(FONT_XB, 15)
     c.setFillColor(NAVY)
-    c.drawRightString(sum_x + sum_w - 5 * mm, y - tot_h / 2 - 2.5 * mm,
-                      money(grand_total))
+    c.drawRightString(sum_x + sum_w - 5 * mm, y - tot_h / 2 - 2.5 * mm, money(grand_total))
     down(tot_h + 10 * mm)
 
     # ── Caveats / Comments ───────────────────────────────────────────────────
@@ -541,8 +666,7 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
         remaining = y - MARGIN - 5 * mm
         comm_h = max(22 * mm, min(remaining, 45 * mm))
 
-        rounded_rect(c, MARGIN, y - comm_h, CONTENT_W, comm_h,
-                     stroke=BORDER_CLR, lw=1.5)
+        rounded_rect(c, MARGIN, y - comm_h, CONTENT_W, comm_h, stroke=BORDER_CLR, lw=1.5)
         label(c, MARGIN + 4 * mm, y - 5 * mm, "Caveats / Comments")
 
         if not note_lines:
@@ -572,6 +696,7 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     c.save()
     print(f"[ok] Quote saved: {out_path}")
 
+
 # ─── entry point ─────────────────────────────────────────────────────────────
 
 def main():
@@ -585,9 +710,9 @@ def main():
             "  python generate_quote.py po.pdf --out quote-final.pdf"
         ),
     )
-    ap.add_argument("input_pdf",  help="Supplier purchase order PDF to read")
+    ap.add_argument("input_pdf", help="Supplier purchase order PDF to read")
     ap.add_argument("--job-name", help="Override the quote title")
-    ap.add_argument("--out",      help="Output PDF path (default: auto-generated)")
+    ap.add_argument("--out", help="Output PDF path (default: auto-generated)")
     args = ap.parse_args()
 
     pdf_in = Path(args.input_pdf)
@@ -610,10 +735,16 @@ def main():
 
     # Logo: prefer the WhatsApp image, fall back to generic names
     logo_path = next(
-        (p for pattern in (
-            "WhatsApp_Image_*.jpeg", "WhatsApp_Image_*.jpg",
-            "logo.png", "logo.jpg",
-        ) for p in SCRIPT_DIR.glob(pattern)),
+        (
+            p
+            for pattern in (
+                "WhatsApp_Image_*.jpeg",
+                "WhatsApp_Image_*.jpg",
+                "logo.png",
+                "logo.jpg",
+            )
+            for p in SCRIPT_DIR.glob(pattern)
+        ),
         SCRIPT_DIR / "logo.png",
     )
 
@@ -624,8 +755,8 @@ def main():
         client = (data.get("client_name") or "customer").strip().lower()
         postcode = (data.get("site_postcode") or "unknown-postcode").strip().lower()
 
-        def slugify(val):
-            cleaned = "".join(ch if (ch.isalnum() or ch in " -_") else " " for ch in val)
+        def slugify(val: str) -> str:
+            cleaned = "".join(ch if (ch.isalnum() or ch in " -_") else " " for ch in (val or ""))
             slug = "-".join(part for part in cleaned.replace("_", " ").split() if part)
             return slug[:60] or "quote"
 
