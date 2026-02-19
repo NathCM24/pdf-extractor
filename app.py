@@ -36,6 +36,7 @@ def _init_quote_generator() -> bool:
     global gq, QUOTE_AVAILABLE
     try:
         import generate_quote as _gq
+        _gq.ensure_fonts()
         gq = _gq
         QUOTE_AVAILABLE = True
     except Exception as _gq_err:

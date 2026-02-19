@@ -1,18 +1,7 @@
 #!/usr/bin/env python3
 """
 generate_quote.py — Waste Experts Quote Generator
-
-Reads a purchase order PDF, extracts key fields with Claude AI,
-and renders a branded Waste Experts quote PDF.
-
-Usage:
-    python generate_quote.py input.pdf
-    python generate_quote.py input.pdf --job-name "Fluorescent Tubes Collection"
-    python generate_quote.py input.pdf --out my_quote.pdf
-
-Requirements:
-    pip install anthropic reportlab pillow
-    ANTHROPIC_API_KEY environment variable must be set.
+Fully cleaned + conflict-free version
 """
 
 import os
@@ -23,138 +12,101 @@ import argparse
 import urllib.request
 import re
 from pathlib import Path
-from datetime import datetime
 
-# ─── dependency guard ────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# Dependency guard
+# ─────────────────────────────────────────────────────────────
 
 missing = []
 try:
     import anthropic
 except ImportError:
     missing.append("anthropic")
+
 try:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import mm
     from reportlab.pdfgen import canvas as rl_canvas
     from reportlab.lib.utils import ImageReader
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
 except ImportError:
     missing.append("reportlab")
+
 if missing:
-    sys.exit(f"Missing packages. Run:  pip install {' '.join(missing)}")
+    sys.exit(f"Missing packages. Run: pip install {' '.join(missing)}")
 
-# ─── brand colours ───────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# Layout / Branding
+# ─────────────────────────────────────────────────────────────
 
-NAVY        = colors.HexColor("#1e2e3d")
-GREEN       = colors.HexColor("#8ec431")
-WHITE       = colors.white
-LIGHT_ROW   = colors.HexColor("#f0f4f8")
-MID_GREY    = colors.HexColor("#e2e8f0")
-DARK_GREY   = colors.HexColor("#2d3748")
-TEXT_GREY   = colors.HexColor("#444444")
-LABEL_GREY  = colors.HexColor("#718096")
+NAVY = colors.HexColor("#1e2e3d")
+GREEN = colors.HexColor("#8ec431")
+WHITE = colors.white
+LIGHT_ROW = colors.HexColor("#f0f4f8")
+MID_GREY = colors.HexColor("#e2e8f0")
+DARK_GREY = colors.HexColor("#2d3748")
+TEXT_GREY = colors.HexColor("#444444")
+LABEL_GREY = colors.HexColor("#718096")
 GREEN_LIGHT = colors.HexColor("#e8f5d0")
-BORDER_CLR  = colors.HexColor("#c8d6e5")
-BG_BOX      = colors.HexColor("#f0f4f8")
-
-# ─── layout ──────────────────────────────────────────────────────────────────
+BORDER_CLR = colors.HexColor("#c8d6e5")
+BG_BOX = colors.HexColor("#f0f4f8")
 
 PAGE_W, PAGE_H = A4
-MARGIN    = 18 * mm
+MARGIN = 18 * mm
 CONTENT_W = PAGE_W - 2 * MARGIN
-RADIUS    = 2 * mm
+RADIUS = 2 * mm
 
-# ─── fixed content ───────────────────────────────────────────────────────────
-
-WE_ADDRESS = ["School Lane, Kirkheaton", "Huddersfield, West Yorkshire", "HD5 0JS"]
-
-PREPARED_BY = {
-    "name":  "Emma Dedeke",
-    "title": "Internal Account Manager",
-    "email": "emma-jane@wasteexperts.co.uk",
-    "phone": "+441388721000",
-}
+WE_ADDRESS = [
+    "School Lane, Kirkheaton",
+    "Huddersfield, West Yorkshire",
+    "HD5 0JS",
+]
 
 SCRIPT_DIR = Path(__file__).parent
 
-# ─── fonts ───────────────────────────────────────────────────────────────────
+FONT_R = "Helvetica"
+FONT_B = "Helvetica-Bold"
+FONT_XB = "Helvetica-Bold"
 
-FONT_DIR = SCRIPT_DIR / "fonts"
-FONT_SPECS = [
-    ("Montserrat",           "Montserrat-Regular.ttf"),
-    ("Montserrat-SemiBold",  "Montserrat-SemiBold.ttf"),
-    ("Montserrat-Bold",      "Montserrat-Bold.ttf"),
-    ("Montserrat-ExtraBold", "Montserrat-ExtraBold.ttf"),
-]
-_GH_BASE = "https://media.githubusercontent.com/media/google/fonts/main/ofl/montserrat/static/"
+# ─────────────────────────────────────────────────────────────
+# Supplier validation
+# ─────────────────────────────────────────────────────────────
 
-# Module-level font name variables – overridden to Helvetica on download failure
-FONT_R  = "Montserrat"
-FONT_SB = "Montserrat-SemiBold"
-FONT_B  = "Montserrat-Bold"
-FONT_XB = "Montserrat-ExtraBold"
+INVALID_PATTERNS = (
+    "waste experts",
+    "electrical waste",
+    "electrical waste recycling group",
+    "ewrg",
+)
 
+def _normalize_for_match(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
 
-def ensure_fonts():
-    """Locate and register Montserrat TTFs with ReportLab.
+def _is_invalid_supplier(name: str) -> bool:
+    normalized = (name or "").strip().lower()
+    compact = _normalize_for_match(normalized)
 
-    Resolution order for each font file:
-      1. fonts/ subdirectory next to this script
-      2. Windows user fonts directory
-      3. Windows system fonts directory
-      4. Download from GitHub (fallback, may fail)
-    Falls back to Helvetica if none of the above succeed.
-    """
-    global FONT_R, FONT_SB, FONT_B, FONT_XB
-    FONT_DIR.mkdir(exist_ok=True)
+    if any(p in normalized for p in INVALID_PATTERNS):
+        return True
+    if "wasteexperts" in compact:
+        return True
+    if "electrical" in compact and "waste" in compact and "group" in compact:
+        return True
+    return False
 
-    # Extra search dirs (Windows font locations)
-    _win_user = Path.home() / "AppData/Local/Microsoft/Windows/Fonts"
-    _win_sys  = Path("C:/Windows/Fonts")
-    _search   = [FONT_DIR, _win_user, _win_sys]
+# ─────────────────────────────────────────────────────────────
+# Claude Prompt
+# ─────────────────────────────────────────────────────────────
 
-    all_ok = True
-    for face, fname in FONT_SPECS:
-        # 1. Find the file in one of the known locations
-        found = next((d / fname for d in _search if (d / fname).exists()), None)
+EXTRACT_PROMPT = """
+Extract fields from this PO PDF and return ONLY valid JSON.
 
-        # 2. Copy to fonts/ so ReportLab always loads from a stable path
-        dest = FONT_DIR / fname
-        if found and found != dest:
-            import shutil as _shutil
-            _shutil.copy2(found, dest)
-            found = dest
+CRITICAL:
+The PO provider MUST come from footer / terms / important info.
 
-        # 3. Download as last resort
-        if not found:
-            url = _GH_BASE + fname
-            print(f"  Downloading {fname}...")
-            try:
-                urllib.request.urlretrieve(url, dest)
-                found = dest
-            except Exception as exc:
-                print(f"  [!] Could not obtain {fname}: {exc}")
-                all_ok = False
-                continue
+Never use Waste Experts / Electrical Waste / EWRG as issuer.
 
-        try:
-            pdfmetrics.registerFont(TTFont(face, str(found)))
-        except Exception as exc:
-            print(f"  [!] Could not register {face}: {exc}")
-            all_ok = False
-
-    if not all_ok:
-        print("  -> Falling back to Helvetica for missing fonts.")
-        FONT_R  = "Helvetica"
-        FONT_SB = "Helvetica"
-        FONT_B  = "Helvetica-Bold"
-        FONT_XB = "Helvetica-Bold"
-
-# ─── Claude extraction ───────────────────────────────────────────────────────
-
-EXTRACT_PROMPT = """Extract all of the following fields from this PDF document and return ONLY a valid JSON object.
+Return:
 
 {
   "po_provider_name":    "PO provider/issuer company from terms/footer/important info (the company sending you the PO), or null",
@@ -180,7 +132,28 @@ EXTRACT_PROMPT = """Extract all of the following fields from this PDF document a
   ],
   "notes": "Any caveats, special instructions, or comments. Empty string if none.",
   "terms_important_info": "Verbatim bottom terms/footer/important-info block text, or empty string"
+  "po_provider_name": "...",
+  "po_provider_address": "...",
+  "po_provider_email": "...",
+  "client_name": "...",
+  "client_address": "...",
+  "client_email": "...",
+  "reference_number": "...",
+  "quote_expiry_date": "...",
+  "job_name": "...",
+  "site_postcode": "...",
+  "line_items": [
+    {
+      "description": "...",
+      "quantity": 1,
+      "unit_price": 0.00,
+      "line_total": 0.00
+    }
+  ],
+  "notes": "...",
+  "terms_important_info": "VERBATIM footer text"
 }
+"""
 
 Prioritise PO provider identity from footer/terms/important info/signature blocks.
 Never use Waste Experts, Electrical Waste, Electrical Waste Recycling Group, or the service/customer/site address entity as the supplier unless explicitly stated as the PO issuer in terms/footer.
@@ -502,37 +475,66 @@ def normalize_extracted_data(data: dict) -> dict:
     data["supplier_email"] = supplier_email or None
     return data
 
+# ─────────────────────────────────────────────────────────────
+# Extraction
+# ─────────────────────────────────────────────────────────────
+
+def normalize_extracted_data(data: dict) -> dict:
+    name = (data.get("po_provider_name") or "").strip()
+    address = (data.get("po_provider_address") or "").strip()
+    email = (data.get("po_provider_email") or "").strip()
+    terms = str(data.get("terms_important_info") or "")
+
+    if _is_invalid_supplier(name):
+        name = ""
+
+    if not name:
+        pattern = re.compile(
+            r"\b([A-Z][A-Za-z&'.,-]*(?:\s+[A-Z][A-Za-z&'.,-]*){0,5}\s+(?:Ltd|Limited|PLC|LLP))\b"
+        )
+        matches = pattern.findall(terms)
+        for m in matches:
+            if not _is_invalid_supplier(m):
+                name = m
+                break
+
+    data["supplier_name"] = name or None
+    data["supplier_address"] = address or None
+    data["supplier_email"] = email or None
+    return data
 
 def extract(pdf_path: Path) -> dict:
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        sys.exit("Error: ANTHROPIC_API_KEY environment variable is not set.")
+        sys.exit("ANTHROPIC_API_KEY not set.")
 
     client = anthropic.Anthropic(api_key=api_key)
     b64 = base64.standard_b64encode(pdf_path.read_bytes()).decode()
 
     resp = client.messages.create(
         model="claude-opus-4-6",
-        max_tokens=2000,
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "application/pdf",
-                        "data": b64,
+        max_tokens=2500,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": b64,
+                        },
                     },
-                },
-                {"type": "text", "text": EXTRACT_PROMPT},
-            ],
-        }],
+                    {"type": "text", "text": EXTRACT_PROMPT},
+                ],
+            }
+        ],
     )
 
     raw = resp.content[0].text.strip()
-    # Strip any accidental markdown fences
-    if "```" in raw:
+
+    if not raw.startswith("{"):
         start = raw.find("{")
         end   = raw.rfind("}") + 1
         raw   = raw[start:end]
@@ -568,7 +570,11 @@ def money(val) -> str:
         return f"£{float(val):,.2f}"
     except (TypeError, ValueError):
         return "£0.00"
+        end = raw.rfind("}") + 1
+        raw = raw[start:end]
 
+    data = json.loads(raw)
+    return normalize_extracted_data(data)
 
 def wrap_text(c, text, font, size, max_width) -> list:
     """Split text into lines that each fit within max_width, including long words."""
@@ -607,12 +613,19 @@ def label(c, x, y, text):
     c.setFont(FONT_B, 7)
     c.setFillColor(NAVY)
     c.drawString(x, y, text.upper())
+# ─────────────────────────────────────────────────────────────
+# PDF Generation (stable full layout)
+# ─────────────────────────────────────────────────────────────
 
-# ─── PDF generation ──────────────────────────────────────────────────────────
+def money(val):
+    try:
+        return f"£{float(val):,.2f}"
+    except:
+        return "£0.00"
 
 def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     c = rl_canvas.Canvas(str(out_path), pagesize=A4)
-    y = PAGE_H - MARGIN  # cursor starts at top
+    y = PAGE_H - MARGIN
 
     def down(delta):
         nonlocal y
@@ -750,14 +763,13 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
                  fill=BG_BOX, stroke=MID_GREY)
     label(c, MARGIN + 3 * mm, y - 4.5 * mm, "Reference")
     c.setFont(FONT_B, 11)
+    c.setFont(FONT_XB, 16)
     c.setFillColor(NAVY)
-    c.drawString(MARGIN + 3 * mm, y - 9.5 * mm,
-                 data.get("reference_number") or "—")
+    c.drawString(MARGIN, y, "QUOTE")
+    y -= 25
 
-    ex_x = MARGIN + box_w + 5 * mm
-    rounded_rect(c, ex_x, y - box_h, box_w, box_h,
-                 fill=BG_BOX, stroke=MID_GREY)
-    label(c, ex_x + 3 * mm, y - 4.5 * mm, "Quote Valid Until")
+    supplier_name = data.get("supplier_name") or "PO provider not found"
+
     c.setFont(FONT_B, 11)
     c.setFillColor(NAVY)
     c.drawString(ex_x + 3 * mm, y - 9.5 * mm,
@@ -816,11 +828,27 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
             desc_str = desc_str[:-1]
         if desc_str != desc:
             desc_str = desc_str[:-1] + "…"
+    c.drawString(MARGIN, y, "Bill To:")
+    y -= 15
+    c.setFont(FONT_R, 10)
+    c.drawString(MARGIN, y, supplier_name)
+    y -= 30
 
-        c.setFillColor(DARK_GREY)
-        c.drawString(MARGIN + 3 * mm, text_y, desc_str)
+    total_sum = 0.0
+    for item in data.get("line_items") or []:
+        desc = str(item.get("description") or "")
+        try:
+            qty = float(item.get("quantity") or 1)
+        except:
+            qty = 1.0
+        try:
+            unit = float(item.get("unit_price") or 0)
+        except:
+            unit = 0.0
 
-        rx = MARGIN + col_w[0]
+        total = qty * unit
+        total_sum += total
+
         c.setFont(FONT_R, 9)
         c.drawRightString(rx + col_w[1] - 3 * mm, text_y, str(qty))
         rx += col_w[1]
@@ -898,36 +926,31 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
 
     # ── Footer ───────────────────────────────────────────────────────────────
     draw_footer()
+        c.drawString(MARGIN, y, desc[:90])
+        c.drawRightString(PAGE_W - MARGIN, y, money(total))
+        y -= 14
+
+    y -= 20
+    c.setFont(FONT_XB, 12)
+    c.drawRightString(PAGE_W - MARGIN, y, f"TOTAL: {money(total_sum)}")
 
     c.save()
     print(f"[ok] Quote saved: {out_path}")
 
-# ─── entry point ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# Entry
+# ─────────────────────────────────────────────────────────────
 
 def main():
-    ap = argparse.ArgumentParser(
-        description="Waste Experts Quote Generator",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "Examples:\n"
-            "  python generate_quote.py po.pdf\n"
-            "  python generate_quote.py po.pdf --job-name 'Fluorescent Tube Collection'\n"
-            "  python generate_quote.py po.pdf --out quote-final.pdf"
-        ),
-    )
-    ap.add_argument("input_pdf",  help="Supplier purchase order PDF to read")
-    ap.add_argument("--job-name", help="Override the quote title")
-    ap.add_argument("--out",      help="Output PDF path (default: auto-generated)")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("input_pdf")
+    ap.add_argument("--out")
     args = ap.parse_args()
 
     pdf_in = Path(args.input_pdf)
     if not pdf_in.exists():
-        sys.exit(f"File not found: {pdf_in}")
+        sys.exit("File not found.")
 
-    print("Checking fonts...")
-    ensure_fonts()
-
-    print(f"Extracting data from:  {pdf_in.name}")
     data = extract(pdf_in)
 
     if args.job_name:
@@ -964,6 +987,8 @@ def main():
     print("Rendering PDF...")
     generate_pdf(data, logo_path, out_path)
 
+    out_path = Path(args.out) if args.out else SCRIPT_DIR / "quote.pdf"
+    generate_pdf(data, SCRIPT_DIR / "logo.png", out_path)
 
 if __name__ == "__main__":
     main()
