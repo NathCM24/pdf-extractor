@@ -27,13 +27,25 @@ if _env.exists():
             os.environ.setdefault(_k.strip(), _v.strip())
 
 # ── Quote-generator integration ───────────────────────────────────────────────
-try:
-    import generate_quote as gq
-    gq.ensure_fonts()
-    QUOTE_AVAILABLE = True
-except Exception as _gq_err:
-    QUOTE_AVAILABLE = False
-    print(f"[warn] Quote generator unavailable: {_gq_err}")
+gq = None
+QUOTE_AVAILABLE = False
+
+
+def _init_quote_generator() -> bool:
+    """Try loading quote generator; allows recovery after startup/import failures."""
+    global gq, QUOTE_AVAILABLE
+    try:
+        import generate_quote as _gq
+        _gq.ensure_fonts()
+        gq = _gq
+        QUOTE_AVAILABLE = True
+    except Exception as _gq_err:
+        QUOTE_AVAILABLE = False
+        print(f"[warn] Quote generator unavailable: {_gq_err}")
+    return QUOTE_AVAILABLE
+
+
+_init_quote_generator()
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB max upload
@@ -237,7 +249,7 @@ def _build_quote_filename(data: dict) -> str:
 @app.route("/extract-quote-data", methods=["POST"])
 def extract_quote_data():
     """Step 1: extract fields from a PO PDF and return them as JSON."""
-    if not QUOTE_AVAILABLE:
+    if not QUOTE_AVAILABLE and not _init_quote_generator():
         return jsonify({"error": "Quote generator unavailable."}), 500
     if "pdf" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
@@ -263,7 +275,7 @@ def extract_quote_data():
 @app.route("/render-quote", methods=["POST"])
 def render_quote():
     """Step 2: generate a branded quote PDF from submitted (possibly edited) JSON data."""
-    if not QUOTE_AVAILABLE:
+    if not QUOTE_AVAILABLE and not _init_quote_generator():
         return jsonify({"error": "Quote generator unavailable."}), 500
 
     data = request.get_json(silent=True)
@@ -299,7 +311,7 @@ def render_quote():
 
 @app.route("/generate-quote", methods=["POST"])
 def generate_quote_route():
-    if not QUOTE_AVAILABLE:
+    if not QUOTE_AVAILABLE and not _init_quote_generator():
         return jsonify({"error": "Quote generator is not available. Check server logs."}), 500
 
     if "pdf" not in request.files:

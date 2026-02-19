@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 """
 generate_quote.py — Waste Experts Quote Generator
-
-• Extracts PO issuer strictly from footer/terms
-• Never allows Waste Experts / Electrical Waste / EWRG as supplier
-• Uses allowlist boost matching
-• Handles OCR variants safely
-• No merge conflicts
-• No duplicate functions
+Fully cleaned + conflict-free version
 """
 
 import os
@@ -15,7 +9,6 @@ import sys
 import json
 import base64
 import argparse
-import urllib.request
 import re
 from pathlib import Path
 
@@ -35,8 +28,6 @@ try:
     from reportlab.lib.units import mm
     from reportlab.pdfgen import canvas as rl_canvas
     from reportlab.lib.utils import ImageReader
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
 except ImportError:
     missing.append("reportlab")
 
@@ -44,7 +35,7 @@ if missing:
     sys.exit(f"Missing packages. Run: pip install {' '.join(missing)}")
 
 # ─────────────────────────────────────────────────────────────
-# Branding / layout
+# Layout / Branding
 # ─────────────────────────────────────────────────────────────
 
 NAVY = colors.HexColor("#1e2e3d")
@@ -70,28 +61,14 @@ WE_ADDRESS = [
     "HD5 0JS",
 ]
 
-PREPARED_BY = {
-    "name": "Emma Dedeke",
-    "title": "Internal Account Manager",
-    "email": "emma-jane@wasteexperts.co.uk",
-    "phone": "+441388721000",
-}
-
 SCRIPT_DIR = Path(__file__).parent
-
-# ─────────────────────────────────────────────────────────────
-# Fonts
-# ─────────────────────────────────────────────────────────────
-
-FONT_DIR = SCRIPT_DIR / "fonts"
-FONT_DIR.mkdir(exist_ok=True)
 
 FONT_R = "Helvetica"
 FONT_B = "Helvetica-Bold"
 FONT_XB = "Helvetica-Bold"
 
 # ─────────────────────────────────────────────────────────────
-# Supplier validation logic
+# Supplier validation
 # ─────────────────────────────────────────────────────────────
 
 INVALID_PATTERNS = (
@@ -114,20 +91,19 @@ def _is_invalid_supplier(name: str) -> bool:
         return True
     if "electrical" in compact and "waste" in compact and "group" in compact:
         return True
-
     return False
 
 # ─────────────────────────────────────────────────────────────
-# Claude prompt
+# Claude Prompt
 # ─────────────────────────────────────────────────────────────
 
 EXTRACT_PROMPT = """
 Extract fields from this PO PDF and return ONLY valid JSON.
 
 CRITICAL:
-The PO provider/issuer MUST come from the bottom Terms / Footer / Important Info block.
+The PO provider MUST come from footer / terms / important info.
 
-Never select Waste Experts / Electrical Waste / EWRG as issuer.
+Never use Waste Experts / Electrical Waste / EWRG as issuer.
 
 Return:
 
@@ -163,8 +139,7 @@ def normalize_extracted_data(data: dict) -> dict:
     name = (data.get("po_provider_name") or "").strip()
     address = (data.get("po_provider_address") or "").strip()
     email = (data.get("po_provider_email") or "").strip()
-
-    terms_text = str(data.get("terms_important_info") or "")
+    terms = str(data.get("terms_important_info") or "")
 
     if _is_invalid_supplier(name):
         name = ""
@@ -173,7 +148,7 @@ def normalize_extracted_data(data: dict) -> dict:
         pattern = re.compile(
             r"\b([A-Z][A-Za-z&'.,-]*(?:\s+[A-Z][A-Za-z&'.,-]*){0,5}\s+(?:Ltd|Limited|PLC|LLP))\b"
         )
-        matches = pattern.findall(terms_text)
+        matches = pattern.findall(terms)
         for m in matches:
             if not _is_invalid_supplier(m):
                 name = m
@@ -224,7 +199,7 @@ def extract(pdf_path: Path) -> dict:
     return normalize_extracted_data(data)
 
 # ─────────────────────────────────────────────────────────────
-# PDF Generation (clean + stable)
+# PDF Generation (stable full layout)
 # ─────────────────────────────────────────────────────────────
 
 def money(val):
@@ -237,26 +212,21 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     c = rl_canvas.Canvas(str(out_path), pagesize=A4)
     y = PAGE_H - MARGIN
 
-    supplier_name = data.get("supplier_name") or "PO provider not found"
-
     c.setFont(FONT_XB, 16)
     c.setFillColor(NAVY)
     c.drawString(MARGIN, y, "QUOTE")
-    y -= 20
+    y -= 25
 
-    c.setFont(FONT_B, 10)
+    supplier_name = data.get("supplier_name") or "PO provider not found"
+
+    c.setFont(FONT_B, 11)
     c.drawString(MARGIN, y, "Bill To:")
-    y -= 14
+    y -= 15
     c.setFont(FONT_R, 10)
     c.drawString(MARGIN, y, supplier_name)
-
     y -= 30
-    c.setFont(FONT_B, 10)
-    c.drawString(MARGIN, y, "Items")
-    y -= 14
 
     total_sum = 0.0
-
     for item in data.get("line_items") or []:
         desc = str(item.get("description") or "")
         try:
@@ -272,7 +242,7 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
         total_sum += total
 
         c.setFont(FONT_R, 9)
-        c.drawString(MARGIN, y, desc[:80])
+        c.drawString(MARGIN, y, desc[:90])
         c.drawRightString(PAGE_W - MARGIN, y, money(total))
         y -= 14
 
