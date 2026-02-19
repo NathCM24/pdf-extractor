@@ -156,8 +156,14 @@ def ensure_fonts():
 EXTRACT_PROMPT = """Extract all of the following fields from this PDF document and return ONLY a valid JSON object.
 
 {
-  "client_name":      "Company name of the buyer/client",
-  "client_address":   "Full postal address of the client (newline-separated)",
+  "po_provider_name":    "PO provider/issuer company from terms/footer/important info (the company sending you the PO), or null",
+  "po_provider_address": "PO provider postal address (newline-separated) from terms/footer/important info, or null",
+  "po_provider_email":   "PO provider email address, or null",
+  "supplier_name":       "Same as PO provider if present; otherwise null",
+  "supplier_address":    "Same as PO provider address if present; otherwise null",
+  "supplier_email":      "Same as PO provider email if present; otherwise null",
+  "client_name":      "Company name of the buyer/client (if present), or null",
+  "client_address":   "Full postal address of the client (newline-separated), or null",
   "client_email":     "Client email address, or null",
   "reference_number": "PO or reference number",
   "quote_expiry_date":"Valid-until / expiry date in DD/MM/YYYY format, or null",
@@ -165,7 +171,7 @@ EXTRACT_PROMPT = """Extract all of the following fields from this PDF document a
   "site_postcode":    "Postcode of the site or delivery location (e.g. SG19 1QY), or null",
   "line_items": [
     {
-      "description": "Product or service name",
+      "description": "Clear, plain-English product/service summary from the PO (include waste/material type and service type where possible)",
       "quantity":    1,
       "unit_price":  0.00,
       "line_total":  0.00
@@ -174,8 +180,38 @@ EXTRACT_PROMPT = """Extract all of the following fields from this PDF document a
   "notes": "Any caveats, special instructions, or comments. Empty string if none."
 }
 
+Prioritise PO provider identity from footer/terms/important info/signature blocks.
+Never use Waste Experts, Electrical Waste, Electrical Waste Recycling Group, or the service/customer/site address entity as the supplier unless explicitly stated as the PO issuer in terms/footer.
 Use numeric types (not strings) for quantity, unit_price, and line_total.
 Return ONLY the JSON object — no markdown fences, no explanation."""
+
+INVALID_BILL_TO_PATTERNS = (
+    "waste experts",
+    "electrical waste",
+    "electrical waste recycling group",
+)
+
+
+def _is_invalid_supplier(name: str) -> bool:
+    normalized = (name or "").strip().lower()
+    return any(pat in normalized for pat in INVALID_BILL_TO_PATTERNS)
+
+
+def normalize_extracted_data(data: dict) -> dict:
+    """Prefer PO provider details and avoid billing us/end-customer entities."""
+    supplier_name = (data.get("po_provider_name") or data.get("supplier_name") or "").strip()
+    supplier_address = (data.get("po_provider_address") or data.get("supplier_address") or "").strip()
+    supplier_email = (data.get("po_provider_email") or data.get("supplier_email") or "").strip()
+
+    if _is_invalid_supplier(supplier_name):
+        supplier_name = ""
+        supplier_address = ""
+        supplier_email = ""
+
+    data["supplier_name"] = supplier_name or None
+    data["supplier_address"] = supplier_address or None
+    data["supplier_email"] = supplier_email or None
+    return data
 
 
 def extract(pdf_path: Path) -> dict:
@@ -212,7 +248,7 @@ def extract(pdf_path: Path) -> dict:
         end   = raw.rfind("}") + 1
         raw   = raw[start:end]
 
-    return json.loads(raw)
+    return normalize_extracted_data(json.loads(raw))
 
 # ─── drawing helpers ─────────────────────────────────────────────────────────
 
@@ -246,17 +282,32 @@ def money(val) -> str:
 
 
 def wrap_text(c, text, font, size, max_width) -> list:
-    """Split text into lines that each fit within max_width."""
+    """Split text into lines that each fit within max_width, including long words."""
+    def split_long_token(token):
+        chunks = []
+        remaining = token
+        while remaining and c.stringWidth(remaining, font, size) > max_width:
+            cut = len(remaining)
+            while cut > 1 and c.stringWidth(remaining[:cut], font, size) > max_width:
+                cut -= 1
+            chunks.append(remaining[:cut])
+            remaining = remaining[cut:]
+        if remaining:
+            chunks.append(remaining)
+        return chunks or [""]
+
     words = (text or "").split()
     lines, line = [], ""
     for word in words:
-        candidate = (line + " " + word).strip()
-        if c.stringWidth(candidate, font, size) <= max_width:
-            line = candidate
-        else:
-            if line:
-                lines.append(line)
-            line = word
+        pieces = split_long_token(word)
+        for piece in pieces:
+            candidate = (line + " " + piece).strip()
+            if c.stringWidth(candidate, font, size) <= max_width:
+                line = candidate
+            else:
+                if line:
+                    lines.append(line)
+                line = piece
     if line:
         lines.append(line)
     return lines or [""]
@@ -277,6 +328,31 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     def down(delta):
         nonlocal y
         y -= delta
+
+    def draw_footer():
+        c.setStrokeColor(MID_GREY)
+        c.setLineWidth(0.5)
+        c.line(MARGIN, MARGIN - 2 * mm, PAGE_W - MARGIN, MARGIN - 2 * mm)
+        c.setFont(FONT_R, 7)
+        c.setFillColor(LABEL_GREY)
+        c.drawCentredString(
+            PAGE_W / 2, MARGIN / 2,
+            "Waste Experts Ltd  •  School Lane, Kirkheaton, Huddersfield HD5 0JS"
+            "  •  emma-jane@wasteexperts.co.uk  •  +441388721000",
+        )
+
+    def ensure_space(required_height_mm, redraw=None):
+        nonlocal y
+        if (y - MARGIN) >= required_height_mm:
+            return
+        draw_footer()
+        c.showPage()
+        y = PAGE_H - MARGIN
+        c.setFont(FONT_R, 9)
+        c.setFillColor(TEXT_GREY)
+        c.setStrokeColor(MID_GREY)
+        if redraw:
+            redraw()
 
     # ── Logo ────────────────────────────────────────────────────────────────
     logo_h = 16 * mm
@@ -299,37 +375,14 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
 
     down(logo_h + 8 * mm)
 
-    # ── Title (auto-wraps to 2 lines if too wide) ────────────────────────────
-    job_name = (data.get("job_name") or "Waste Experts Quote").upper()
+    # ── Title (mirrors output file name) ─────────────────────────────────────
+    title_text = out_path.stem.replace("_", " ").replace("-", " ").upper()
     c.setFillColor(NAVY)
     font_size = 19
-    if c.stringWidth(job_name, FONT_XB, font_size) <= CONTENT_W:
-        c.setFont(FONT_XB, font_size)
-        c.drawCentredString(PAGE_W / 2, y, job_name)
-    else:
-        # Find the best split point that keeps both halves within CONTENT_W
-        words = job_name.split()
-        split_at = 1
-        for i in range(1, len(words)):
-            l1 = " ".join(words[:i])
-            l2 = " ".join(words[i:])
-            if (c.stringWidth(l1, FONT_XB, font_size) <= CONTENT_W and
-                    c.stringWidth(l2, FONT_XB, font_size) <= CONTENT_W):
-                split_at = i
-        l1 = " ".join(words[:split_at])
-        l2 = " ".join(words[split_at:])
-        if c.stringWidth(l2, FONT_XB, font_size) <= CONTENT_W:
-            line_h = font_size * 1.35
-            c.setFont(FONT_XB, font_size)
-            c.drawCentredString(PAGE_W / 2, y, l1)
-            c.drawCentredString(PAGE_W / 2, y - line_h, l2)
-            down(line_h)
-        else:
-            # Last resort: scale down until it fits on one line
-            while font_size > 10 and c.stringWidth(job_name, FONT_XB, font_size) > CONTENT_W:
-                font_size -= 1
-            c.setFont(FONT_XB, font_size)
-            c.drawCentredString(PAGE_W / 2, y, job_name)
+    while font_size > 10 and c.stringWidth(title_text, FONT_XB, font_size) > CONTENT_W:
+        font_size -= 1
+    c.setFont(FONT_XB, font_size)
+    c.drawCentredString(PAGE_W / 2, y, title_text)
     down(6 * mm)
 
     # ── Green divider ────────────────────────────────────────────────────────
@@ -346,20 +399,24 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     # Left – Bill To
     label(c, col1_x, y, "Bill To")
     down(4.5 * mm)
+    supplier_name = data.get("supplier_name") or "PO provider not found"
+    supplier_address = data.get("supplier_address") or ""
+    supplier_email = data.get("supplier_email")
+
     c.setFont(FONT_B, 10)
     c.setFillColor(NAVY)
-    c.drawString(col1_x, y, data.get("client_name") or "")
+    c.drawString(col1_x, y, supplier_name)
     down(5 * mm)
     c.setFont(FONT_R, 9)
     c.setFillColor(TEXT_GREY)
     addr_lines = [l.strip() for l in
-                  (data.get("client_address") or "").replace(", ", "\n").split("\n")
+                  (supplier_address or "").replace(", ", "\n").split("\n")
                   if l.strip()][:5]
     for al in addr_lines:
         c.drawString(col1_x, y, al)
         down(4.5 * mm)
-    if data.get("client_email"):
-        c.drawString(col1_x, y, data["client_email"])
+    if supplier_email:
+        c.drawString(col1_x, y, supplier_email)
         down(4.5 * mm)
     bottom_left = y
 
@@ -426,23 +483,27 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     hdr_h   = 9 * mm
     row_h   = 8 * mm
 
-    # Header row
-    rounded_rect(c, MARGIN, y - hdr_h, CONTENT_W, hdr_h, r=2 * mm, fill=NAVY)
-    c.setFont(FONT_B, 8)
-    c.setFillColor(WHITE)
-    hx = MARGIN + 3 * mm
-    for i, hdr in enumerate(headers):
-        if i == 0:
-            c.drawString(hx, y - hdr_h + 2.5 * mm, hdr)
-        else:
-            c.drawRightString(hx + col_w[i] - 3 * mm, y - hdr_h + 2.5 * mm, hdr)
-        hx += col_w[i]
-    down(hdr_h)
+    def draw_table_header():
+        rounded_rect(c, MARGIN, y - hdr_h, CONTENT_W, hdr_h, r=2 * mm, fill=NAVY)
+        c.setFont(FONT_B, 8)
+        c.setFillColor(WHITE)
+        hx = MARGIN + 3 * mm
+        for i, hdr in enumerate(headers):
+            if i == 0:
+                c.drawString(hx, y - hdr_h + 2.5 * mm, hdr)
+            else:
+                c.drawRightString(hx + col_w[i] - 3 * mm, y - hdr_h + 2.5 * mm, hdr)
+            hx += col_w[i]
+        down(hdr_h)
+
+    ensure_space(hdr_h)
+    draw_table_header()
 
     # Data rows
     grand_total = 0.0
     line_items  = data.get("line_items") or []
     for idx, item in enumerate(line_items):
+        ensure_space(row_h, redraw=draw_table_header)
         desc  = str(item.get("description") or "")
         qty   = item.get("quantity", 1)
         unit  = float(item.get("unit_price") or 0)
@@ -489,6 +550,8 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     sub_h = 10 * mm
     tot_h = 14 * mm
 
+    ensure_space(sub_h + 2 * mm + tot_h + 10 * mm)
+
     # Subtotal (light green background)
     rounded_rect(c, sum_x, y - sub_h, sum_w, sub_h, fill=GREEN_LIGHT)
     c.setFont(FONT_R, 9)
@@ -510,39 +573,42 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     down(tot_h + 10 * mm)
 
     # ── Caveats / Comments ───────────────────────────────────────────────────
-    notes     = str(data.get("notes") or "").strip()
-    remaining = y - MARGIN - 5 * mm
-    comm_h    = max(22 * mm, min(remaining, 45 * mm))
+    notes = str(data.get("notes") or "").strip()
+    note_lines = wrap_text(c, notes, FONT_R, 9, CONTENT_W - 8 * mm) if notes else []
+    note_idx = 0
 
-    rounded_rect(c, MARGIN, y - comm_h, CONTENT_W, comm_h,
-                 stroke=BORDER_CLR, lw=1.5)
-    label(c, MARGIN + 4 * mm, y - 5 * mm, "Caveats / Comments")
+    while True:
+        ensure_space(22 * mm)
+        remaining = y - MARGIN - 5 * mm
+        comm_h = max(22 * mm, min(remaining, 45 * mm))
 
-    if notes:
-        note_y = y - 11 * mm
-        for note_line in wrap_text(c, notes, FONT_R, 9, CONTENT_W - 8 * mm):
-            if note_y < y - comm_h + 4 * mm:
-                break
+        rounded_rect(c, MARGIN, y - comm_h, CONTENT_W, comm_h,
+                     stroke=BORDER_CLR, lw=1.5)
+        label(c, MARGIN + 4 * mm, y - 5 * mm, "Caveats / Comments")
+
+        if not note_lines:
             c.setFont(FONT_R, 9)
-            c.setFillColor(TEXT_GREY)
-            c.drawString(MARGIN + 4 * mm, note_y, note_line)
-            note_y -= 4.5 * mm
-    else:
+            c.setFillColor(LABEL_GREY)
+            c.drawString(MARGIN + 4 * mm, y - 11 * mm, "No additional notes.")
+            down(comm_h)
+            break
+
+        note_y = y - 11 * mm
+        box_bottom = y - comm_h + 4 * mm
         c.setFont(FONT_R, 9)
-        c.setFillColor(LABEL_GREY)
-        c.drawString(MARGIN + 4 * mm, y - 11 * mm, "No additional notes.")
+        c.setFillColor(TEXT_GREY)
+        while note_idx < len(note_lines) and note_y >= box_bottom:
+            c.drawString(MARGIN + 4 * mm, note_y, note_lines[note_idx])
+            note_idx += 1
+            note_y -= 4.5 * mm
+
+        down(comm_h)
+        if note_idx >= len(note_lines):
+            break
+        down(6 * mm)
 
     # ── Footer ───────────────────────────────────────────────────────────────
-    c.setStrokeColor(MID_GREY)
-    c.setLineWidth(0.5)
-    c.line(MARGIN, MARGIN - 2 * mm, PAGE_W - MARGIN, MARGIN - 2 * mm)
-    c.setFont(FONT_R, 7)
-    c.setFillColor(LABEL_GREY)
-    c.drawCentredString(
-        PAGE_W / 2, MARGIN / 2,
-        "Waste Experts Ltd  •  School Lane, Kirkheaton, Huddersfield HD5 0JS"
-        "  •  emma-jane@wasteexperts.co.uk  •  +441388721000",
-    )
+    draw_footer()
 
     c.save()
     print(f"[ok] Quote saved: {out_path}")
@@ -596,9 +662,15 @@ def main():
     if args.out:
         out_path = Path(args.out)
     else:
-        ref  = (data.get("reference_number") or "quote")
-        safe = "".join(ch for ch in ref if ch.isalnum() or ch in "-_")[:30]
-        out_path = SCRIPT_DIR / f"quote-{safe}-{datetime.now().strftime('%Y%m%d')}.pdf"
+        client = (data.get("client_name") or "customer").strip().lower()
+        postcode = (data.get("site_postcode") or "unknown-postcode").strip().lower()
+
+        def slugify(val):
+            cleaned = "".join(ch if (ch.isalnum() or ch in " -_") else " " for ch in val)
+            slug = "-".join(part for part in cleaned.replace("_", " ").split() if part)
+            return slug[:60] or "quote"
+
+        out_path = SCRIPT_DIR / f"{slugify(client)}-{slugify(postcode)}.pdf"
 
     print("Rendering PDF...")
     generate_pdf(data, logo_path, out_path)
