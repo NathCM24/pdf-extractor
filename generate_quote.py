@@ -21,6 +21,7 @@ import json
 import base64
 import argparse
 import urllib.request
+import re
 from pathlib import Path
 from datetime import datetime
 
@@ -156,8 +157,14 @@ def ensure_fonts():
 EXTRACT_PROMPT = """Extract all of the following fields from this PDF document and return ONLY a valid JSON object.
 
 {
-  "client_name":      "Company name of the buyer/client",
-  "client_address":   "Full postal address of the client (newline-separated)",
+  "po_provider_name":    "PO provider/issuer company from terms/footer/important info (the company sending you the PO), or null",
+  "po_provider_address": "PO provider postal address (newline-separated) from terms/footer/important info, or null",
+  "po_provider_email":   "PO provider email address, or null",
+  "supplier_name":       "Same as PO provider if present; otherwise null",
+  "supplier_address":    "Same as PO provider address if present; otherwise null",
+  "supplier_email":      "Same as PO provider email if present; otherwise null",
+  "client_name":      "Company name of the buyer/client (if present), or null",
+  "client_address":   "Full postal address of the client (newline-separated), or null",
   "client_email":     "Client email address, or null",
   "reference_number": "PO or reference number",
   "quote_expiry_date":"Valid-until / expiry date in DD/MM/YYYY format, or null",
@@ -165,17 +172,335 @@ EXTRACT_PROMPT = """Extract all of the following fields from this PDF document a
   "site_postcode":    "Postcode of the site or delivery location (e.g. SG19 1QY), or null",
   "line_items": [
     {
-      "description": "Product or service name",
+      "description": "Clear, plain-English product/service summary from the PO (include waste/material type and service type where possible)",
       "quantity":    1,
       "unit_price":  0.00,
       "line_total":  0.00
     }
   ],
-  "notes": "Any caveats, special instructions, or comments. Empty string if none."
+  "notes": "Any caveats, special instructions, or comments. Empty string if none.",
+  "terms_important_info": "Verbatim bottom terms/footer/important-info block text, or empty string"
 }
 
+Prioritise PO provider identity from footer/terms/important info/signature blocks.
+Never use Waste Experts, Electrical Waste, Electrical Waste Recycling Group, or the service/customer/site address entity as the supplier unless explicitly stated as the PO issuer in terms/footer.
+If terms/footer says phrases like "Go Green Ltd employee" or "accept ... terms & conditions" tied to a company name, that company is the PO provider.
 Use numeric types (not strings) for quantity, unit_price, and line_total.
 Return ONLY the JSON object — no markdown fences, no explanation."""
+
+INVALID_BILL_TO_PATTERNS = (
+    "waste experts",
+    "electrical waste",
+    "electrical waste recycling group",
+    "ewrg",
+)
+
+ALLOWED_SUPPLIER_NAMES_TEXT = """Go Green Ltd
+Business Waste Ltd
+BusinessWaste.co.uk Ltd
+Divert.co.uk Ltd
+Reconomy (UK) Ltd
+Reconomy Group
+Biffa Waste Services Ltd
+Veolia ES (UK) Ltd
+SUEZ Recycling and Recovery UK Ltd
+FCC Environment (UK) Ltd
+Grundon Waste Management Ltd
+Viridor Waste Management Ltd
+Tradebe UK Ltd
+Tradebe Healthcare Ltd
+Restore Datashred Ltd
+Paper Round Ltd
+Enva UK Ltd
+Enva England Ltd
+Sims Lifecycle Services Ltd
+Sims Recycling Solutions Ltd
+Mitie Waste Services Ltd
+Mitie Environmental Services Ltd
+Olleco Ltd
+Valpak Ltd
+Comply Direct Ltd
+Anthesis Ltd
+Recyclex Ltd
+Clearsprings Waste Management Ltd
+Waste Managed Ltd
+Waste Care Ltd
+Total Recycling Services Ltd
+UK Waste Solutions Ltd
+Waste Support Ltd
+Waste Managed Services Ltd
+Waste King Ltd
+Waste Cost Reduction Services Ltd
+Waste Mission Ltd
+All Waste Matters Ltd
+Waste Knot Energy Ltd
+Wastebox Ltd
+Initial Medical Services Ltd
+Sharpsmart Ltd
+SRCL Ltd
+Rentokil Initial UK Ltd
+Daniels Healthcare Ltd
+SteriCycle UK Ltd
+Recycling Lives Ltd
+Hills Waste Solutions Ltd
+Ward Recycling Ltd
+Cawleys Waste Management Ltd
+Bywaters Ltd
+Powerday PLC
+Geminor UK Ltd
+Ecosurety Ltd
+Augean Ltd
+Envirogreen Ltd
+Mitie Group plc
+Sodexo Ltd
+ISS Facility Services Ltd
+CBRE Managed Services Ltd
+Compass Group UK & Ireland Ltd
+Engie Services Ltd
+OCS Group UK Ltd
+Bouygues E&S Solutions Ltd
+Kier Facilities Services Ltd
+Amey plc
+Serco Ltd
+LondonWaste Ltd
+PHS Group Ltd
+PHS Waste Management Ltd
+PHS Teacrate Ltd
+Countrystyle Recycling Ltd
+Ellgia Ltd
+Mick George Ltd
+Beauparc Ltd
+NWH Group Ltd
+Fenix Recycling Ltd
+Noble Recycling Ltd
+Collecteco Ltd
+Cory Environmental Ltd
+Cory Riverside Energy Ltd
+Riverside Waste Machinery Ltd
+Clearaway Recycling Ltd
+Willshee's Waste & Recycling Ltd
+A1 Recycling Ltd
+Recycling UK Ltd
+Envirocycle London Ltd
+Thalia Waste Management Ltd
+Acumen Waste Services Ltd
+Advanced Waste Solutions Ltd
+Blueleaf Ltd
+BPR Group Europe Ltd
+Celtic Recycling Ltd
+Cleansing Service Group Ltd
+Clearfast Waste Consultancy Ltd
+CLD Environmental Ltd
+Coastal Recycling Ltd
+Dunmow Waste Management Ltd
+Eco Sustainable Solutions Ltd
+ECO2 Management Services Ltd
+Encon Insulation Ltd
+Envirocraft Waste Solutions Ltd
+EnviroHub Ltd
+EPC-UK Ltd
+Essex Waste Management Ltd
+Europcar Waste Services Ltd
+Forward Waste Management Ltd
+Gaskells Waste Services Ltd
+Gemini Recycling Ltd
+Glasdon UK Ltd
+Green Recycling Ltd
+Greenstar Recycling Ltd
+Greyparrot Ltd
+Hadfields Waste Management Ltd
+Hazrem Environmental Ltd
+Hewden Hire Ltd
+Hurn Recycling Ltd
+Impact Recycling Ltd
+J&B Recycling Ltd
+J Dickinson & Sons Ltd
+Jayplas Ltd
+Kay Group Ltd
+KCM Waste Management Ltd
+Key Recycling Ltd
+Lathams Ltd
+Leafield Environmental Ltd
+Leigh Environmental Ltd
+LKM Recycling Ltd
+LSS Waste Management Ltd
+M&M Waste Solutions Ltd
+Malary Ltd
+May Glass Recycling Ltd
+McCarthy Marland Ltd
+Mid UK Recycling Ltd
+Moran Waste Management Ltd
+Moulded Foams Ltd
+MTS Cleansing Services Ltd
+New Earth Solutions Ltd
+Norfolk Waste Management Ltd
+North West Recycling Ltd
+Oakleaf Recycling Ltd
+Pallet Loop Ltd
+Pennon Group plc
+Perrywell Ltd
+Plastics Recycling Ltd
+PPR Recycling Ltd
+Premier Waste Recycling Ltd
+Quest Waste Management Ltd
+R Collard Ltd
+RDF Services Ltd
+Recycled Products Ltd
+Recycling Lives Services Ltd
+Renewi UK Services Ltd
+Resource Futures Ltd
+RGM Environmental Ltd
+RJ Recycling Ltd
+S Roberts & Son Ltd
+Savanna Rags International Ltd
+Select Environmental Services Ltd
+Seneca Resource Recovery Ltd
+Shredall SDS Group Ltd
+Simply Waste Solutions Ltd
+Smith Recycling Ltd
+Southern Waste Management Ltd
+Spectrum Waste Ltd
+Speedy Waste Ltd
+SRS Waste Management Ltd
+Stuart Partners Ltd
+Sustainable Waste Management Ltd
+SWEEEP Kuusakoski Ltd
+The Green Group Ltd
+The Recycling Partnership Ltd
+Thorntons Recycling Ltd
+Tom White Waste Ltd
+Totus Environmental Ltd
+UK Computer Recycling Ltd
+UK Recycling Ltd
+Universal Recycling Ltd
+Valley Trading Ltd
+Vanden Recycling Ltd
+Viridor Energy Ltd
+W&S Recycling Ltd
+Wade Environmental Ltd
+Waste2Tricity Ltd
+Wastecycle Ltd
+WastePlan Ltd
+WCR Waste Consultancy Ltd
+WEEE Solutions Ltd
+West London Waste Authority
+Western Bio-Energy Ltd
+WGM Waste Management Ltd
+White Recycling Ltd
+William Tracey Group Ltd
+WRM Recycling Ltd
+Yorwaste Ltd
+Zero Waste Group Ltd
+Zest Recycle Ltd"""
+
+ALLOWED_SUPPLIER_NAMES = [
+    name.strip() for name in ALLOWED_SUPPLIER_NAMES_TEXT.splitlines() if name.strip()
+]
+
+
+def _normalize_for_match(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
+
+
+def _is_invalid_supplier(name: str) -> bool:
+    normalized = (name or "").strip().lower()
+    compact = _normalize_for_match(normalized)
+
+    if any(pat in normalized for pat in INVALID_BILL_TO_PATTERNS):
+        return True
+
+    # Catch OCR variants like "recyclcing" / "recyling" where explicit phrase match fails.
+    if "wasteexperts" in compact:
+        return True
+    if "electrical" in compact and "waste" in compact and "group" in compact:
+        return True
+
+    return False
+
+
+def _find_allowlisted_supplier(text: str) -> str:
+    if not text:
+        return ""
+
+    lower_text = (text or "").lower()
+    compact_text = _normalize_for_match(text)
+    best_name, best_pos = "", None
+
+    for name in ALLOWED_SUPPLIER_NAMES:
+        pos = lower_text.find(name.lower())
+        if pos == -1:
+            compact_name = _normalize_for_match(name)
+            compact_pos = compact_text.find(compact_name)
+            if compact_pos == -1:
+                continue
+            pos = compact_pos
+
+        if best_pos is None or pos < best_pos:
+            best_name, best_pos = name, pos
+
+    return best_name
+
+
+def _extract_company_candidates(text: str) -> list:
+    """Find likely UK company names from free text (e.g. footer terms)."""
+    if not text:
+        return []
+    pattern = re.compile(r"\b([A-Z][A-Za-z&'.,-]*(?:\s+[A-Z][A-Za-z&'.,-]*){0,5}\s+(?:Ltd|Limited|PLC|LLP))\b")
+    seen, names = set(), []
+    for match in pattern.findall(text):
+        name = " ".join(match.replace("\n", " ").split()).strip(" ,.-")
+        key = name.lower()
+        if key not in seen and not _is_invalid_supplier(name):
+            seen.add(key)
+            names.append(name)
+    return names
+
+
+def _extract_registered_office(text: str) -> str:
+    if not text:
+        return ""
+    m = re.search(r"Registered Office:\s*(.+?)(?:Registered in|Company Number|$)", text, flags=re.I | re.S)
+    if not m:
+        return ""
+    return " ".join(m.group(1).replace("\n", " ").split()).strip(" ,")
+
+
+def normalize_extracted_data(data: dict) -> dict:
+    """Prefer PO provider details and avoid billing us/end-customer entities."""
+    supplier_name = (data.get("po_provider_name") or data.get("supplier_name") or "").strip()
+    supplier_address = (data.get("po_provider_address") or data.get("supplier_address") or "").strip()
+    supplier_email = (data.get("po_provider_email") or data.get("supplier_email") or "").strip()
+
+    terms_text = str(data.get("terms_important_info") or "")
+    combined_text = "\n".join(
+        part for part in [
+            terms_text,
+            str(data.get("notes") or ""),
+            str(data.get("po_provider_name") or ""),
+            str(data.get("supplier_name") or ""),
+        ] if part
+    )
+
+    allowlisted_supplier = _find_allowlisted_supplier(combined_text)
+    if allowlisted_supplier:
+        supplier_name = allowlisted_supplier
+
+    if not supplier_name or _is_invalid_supplier(supplier_name):
+        candidates = _extract_company_candidates(combined_text)
+        supplier_name = candidates[0] if candidates else ""
+
+    if not supplier_address:
+        supplier_address = _extract_registered_office(combined_text)
+
+    if _is_invalid_supplier(supplier_name):
+        supplier_name = ""
+        supplier_address = ""
+        supplier_email = ""
+
+    data["supplier_name"] = supplier_name or None
+    data["supplier_address"] = supplier_address or None
+    data["supplier_email"] = supplier_email or None
+    return data
 
 
 def extract(pdf_path: Path) -> dict:
@@ -212,7 +537,7 @@ def extract(pdf_path: Path) -> dict:
         end   = raw.rfind("}") + 1
         raw   = raw[start:end]
 
-    return json.loads(raw)
+    return normalize_extracted_data(json.loads(raw))
 
 # ─── drawing helpers ─────────────────────────────────────────────────────────
 
@@ -246,17 +571,32 @@ def money(val) -> str:
 
 
 def wrap_text(c, text, font, size, max_width) -> list:
-    """Split text into lines that each fit within max_width."""
+    """Split text into lines that each fit within max_width, including long words."""
+    def split_long_token(token):
+        chunks = []
+        remaining = token
+        while remaining and c.stringWidth(remaining, font, size) > max_width:
+            cut = len(remaining)
+            while cut > 1 and c.stringWidth(remaining[:cut], font, size) > max_width:
+                cut -= 1
+            chunks.append(remaining[:cut])
+            remaining = remaining[cut:]
+        if remaining:
+            chunks.append(remaining)
+        return chunks or [""]
+
     words = (text or "").split()
     lines, line = [], ""
     for word in words:
-        candidate = (line + " " + word).strip()
-        if c.stringWidth(candidate, font, size) <= max_width:
-            line = candidate
-        else:
-            if line:
-                lines.append(line)
-            line = word
+        pieces = split_long_token(word)
+        for piece in pieces:
+            candidate = (line + " " + piece).strip()
+            if c.stringWidth(candidate, font, size) <= max_width:
+                line = candidate
+            else:
+                if line:
+                    lines.append(line)
+                line = piece
     if line:
         lines.append(line)
     return lines or [""]
@@ -277,6 +617,31 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     def down(delta):
         nonlocal y
         y -= delta
+
+    def draw_footer():
+        c.setStrokeColor(MID_GREY)
+        c.setLineWidth(0.5)
+        c.line(MARGIN, MARGIN - 2 * mm, PAGE_W - MARGIN, MARGIN - 2 * mm)
+        c.setFont(FONT_R, 7)
+        c.setFillColor(LABEL_GREY)
+        c.drawCentredString(
+            PAGE_W / 2, MARGIN / 2,
+            "Waste Experts Ltd  •  School Lane, Kirkheaton, Huddersfield HD5 0JS"
+            "  •  emma-jane@wasteexperts.co.uk  •  +441388721000",
+        )
+
+    def ensure_space(required_height_mm, redraw=None):
+        nonlocal y
+        if (y - MARGIN) >= required_height_mm:
+            return
+        draw_footer()
+        c.showPage()
+        y = PAGE_H - MARGIN
+        c.setFont(FONT_R, 9)
+        c.setFillColor(TEXT_GREY)
+        c.setStrokeColor(MID_GREY)
+        if redraw:
+            redraw()
 
     # ── Logo ────────────────────────────────────────────────────────────────
     logo_h = 16 * mm
@@ -299,37 +664,14 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
 
     down(logo_h + 8 * mm)
 
-    # ── Title (auto-wraps to 2 lines if too wide) ────────────────────────────
-    job_name = (data.get("job_name") or "Waste Experts Quote").upper()
+    # ── Title (mirrors output file name) ─────────────────────────────────────
+    title_text = out_path.stem.replace("_", " ").replace("-", " ").upper()
     c.setFillColor(NAVY)
     font_size = 19
-    if c.stringWidth(job_name, FONT_XB, font_size) <= CONTENT_W:
-        c.setFont(FONT_XB, font_size)
-        c.drawCentredString(PAGE_W / 2, y, job_name)
-    else:
-        # Find the best split point that keeps both halves within CONTENT_W
-        words = job_name.split()
-        split_at = 1
-        for i in range(1, len(words)):
-            l1 = " ".join(words[:i])
-            l2 = " ".join(words[i:])
-            if (c.stringWidth(l1, FONT_XB, font_size) <= CONTENT_W and
-                    c.stringWidth(l2, FONT_XB, font_size) <= CONTENT_W):
-                split_at = i
-        l1 = " ".join(words[:split_at])
-        l2 = " ".join(words[split_at:])
-        if c.stringWidth(l2, FONT_XB, font_size) <= CONTENT_W:
-            line_h = font_size * 1.35
-            c.setFont(FONT_XB, font_size)
-            c.drawCentredString(PAGE_W / 2, y, l1)
-            c.drawCentredString(PAGE_W / 2, y - line_h, l2)
-            down(line_h)
-        else:
-            # Last resort: scale down until it fits on one line
-            while font_size > 10 and c.stringWidth(job_name, FONT_XB, font_size) > CONTENT_W:
-                font_size -= 1
-            c.setFont(FONT_XB, font_size)
-            c.drawCentredString(PAGE_W / 2, y, job_name)
+    while font_size > 10 and c.stringWidth(title_text, FONT_XB, font_size) > CONTENT_W:
+        font_size -= 1
+    c.setFont(FONT_XB, font_size)
+    c.drawCentredString(PAGE_W / 2, y, title_text)
     down(6 * mm)
 
     # ── Green divider ────────────────────────────────────────────────────────
@@ -346,20 +688,24 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     # Left – Bill To
     label(c, col1_x, y, "Bill To")
     down(4.5 * mm)
+    supplier_name = data.get("supplier_name") or "PO provider not found"
+    supplier_address = data.get("supplier_address") or ""
+    supplier_email = data.get("supplier_email")
+
     c.setFont(FONT_B, 10)
     c.setFillColor(NAVY)
-    c.drawString(col1_x, y, data.get("client_name") or "")
+    c.drawString(col1_x, y, supplier_name)
     down(5 * mm)
     c.setFont(FONT_R, 9)
     c.setFillColor(TEXT_GREY)
     addr_lines = [l.strip() for l in
-                  (data.get("client_address") or "").replace(", ", "\n").split("\n")
+                  (supplier_address or "").replace(", ", "\n").split("\n")
                   if l.strip()][:5]
     for al in addr_lines:
         c.drawString(col1_x, y, al)
         down(4.5 * mm)
-    if data.get("client_email"):
-        c.drawString(col1_x, y, data["client_email"])
+    if supplier_email:
+        c.drawString(col1_x, y, supplier_email)
         down(4.5 * mm)
     bottom_left = y
 
@@ -426,23 +772,27 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     hdr_h   = 9 * mm
     row_h   = 8 * mm
 
-    # Header row
-    rounded_rect(c, MARGIN, y - hdr_h, CONTENT_W, hdr_h, r=2 * mm, fill=NAVY)
-    c.setFont(FONT_B, 8)
-    c.setFillColor(WHITE)
-    hx = MARGIN + 3 * mm
-    for i, hdr in enumerate(headers):
-        if i == 0:
-            c.drawString(hx, y - hdr_h + 2.5 * mm, hdr)
-        else:
-            c.drawRightString(hx + col_w[i] - 3 * mm, y - hdr_h + 2.5 * mm, hdr)
-        hx += col_w[i]
-    down(hdr_h)
+    def draw_table_header():
+        rounded_rect(c, MARGIN, y - hdr_h, CONTENT_W, hdr_h, r=2 * mm, fill=NAVY)
+        c.setFont(FONT_B, 8)
+        c.setFillColor(WHITE)
+        hx = MARGIN + 3 * mm
+        for i, hdr in enumerate(headers):
+            if i == 0:
+                c.drawString(hx, y - hdr_h + 2.5 * mm, hdr)
+            else:
+                c.drawRightString(hx + col_w[i] - 3 * mm, y - hdr_h + 2.5 * mm, hdr)
+            hx += col_w[i]
+        down(hdr_h)
+
+    ensure_space(hdr_h)
+    draw_table_header()
 
     # Data rows
     grand_total = 0.0
     line_items  = data.get("line_items") or []
     for idx, item in enumerate(line_items):
+        ensure_space(row_h, redraw=draw_table_header)
         desc  = str(item.get("description") or "")
         qty   = item.get("quantity", 1)
         unit  = float(item.get("unit_price") or 0)
@@ -489,6 +839,8 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     sub_h = 10 * mm
     tot_h = 14 * mm
 
+    ensure_space(sub_h + 2 * mm + tot_h + 10 * mm)
+
     # Subtotal (light green background)
     rounded_rect(c, sum_x, y - sub_h, sum_w, sub_h, fill=GREEN_LIGHT)
     c.setFont(FONT_R, 9)
@@ -510,39 +862,42 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     down(tot_h + 10 * mm)
 
     # ── Caveats / Comments ───────────────────────────────────────────────────
-    notes     = str(data.get("notes") or "").strip()
-    remaining = y - MARGIN - 5 * mm
-    comm_h    = max(22 * mm, min(remaining, 45 * mm))
+    notes = str(data.get("notes") or "").strip()
+    note_lines = wrap_text(c, notes, FONT_R, 9, CONTENT_W - 8 * mm) if notes else []
+    note_idx = 0
 
-    rounded_rect(c, MARGIN, y - comm_h, CONTENT_W, comm_h,
-                 stroke=BORDER_CLR, lw=1.5)
-    label(c, MARGIN + 4 * mm, y - 5 * mm, "Caveats / Comments")
+    while True:
+        ensure_space(22 * mm)
+        remaining = y - MARGIN - 5 * mm
+        comm_h = max(22 * mm, min(remaining, 45 * mm))
 
-    if notes:
-        note_y = y - 11 * mm
-        for note_line in wrap_text(c, notes, FONT_R, 9, CONTENT_W - 8 * mm):
-            if note_y < y - comm_h + 4 * mm:
-                break
+        rounded_rect(c, MARGIN, y - comm_h, CONTENT_W, comm_h,
+                     stroke=BORDER_CLR, lw=1.5)
+        label(c, MARGIN + 4 * mm, y - 5 * mm, "Caveats / Comments")
+
+        if not note_lines:
             c.setFont(FONT_R, 9)
-            c.setFillColor(TEXT_GREY)
-            c.drawString(MARGIN + 4 * mm, note_y, note_line)
-            note_y -= 4.5 * mm
-    else:
+            c.setFillColor(LABEL_GREY)
+            c.drawString(MARGIN + 4 * mm, y - 11 * mm, "No additional notes.")
+            down(comm_h)
+            break
+
+        note_y = y - 11 * mm
+        box_bottom = y - comm_h + 4 * mm
         c.setFont(FONT_R, 9)
-        c.setFillColor(LABEL_GREY)
-        c.drawString(MARGIN + 4 * mm, y - 11 * mm, "No additional notes.")
+        c.setFillColor(TEXT_GREY)
+        while note_idx < len(note_lines) and note_y >= box_bottom:
+            c.drawString(MARGIN + 4 * mm, note_y, note_lines[note_idx])
+            note_idx += 1
+            note_y -= 4.5 * mm
+
+        down(comm_h)
+        if note_idx >= len(note_lines):
+            break
+        down(6 * mm)
 
     # ── Footer ───────────────────────────────────────────────────────────────
-    c.setStrokeColor(MID_GREY)
-    c.setLineWidth(0.5)
-    c.line(MARGIN, MARGIN - 2 * mm, PAGE_W - MARGIN, MARGIN - 2 * mm)
-    c.setFont(FONT_R, 7)
-    c.setFillColor(LABEL_GREY)
-    c.drawCentredString(
-        PAGE_W / 2, MARGIN / 2,
-        "Waste Experts Ltd  •  School Lane, Kirkheaton, Huddersfield HD5 0JS"
-        "  •  emma-jane@wasteexperts.co.uk  •  +441388721000",
-    )
+    draw_footer()
 
     c.save()
     print(f"[ok] Quote saved: {out_path}")
@@ -596,9 +951,15 @@ def main():
     if args.out:
         out_path = Path(args.out)
     else:
-        ref  = (data.get("reference_number") or "quote")
-        safe = "".join(ch for ch in ref if ch.isalnum() or ch in "-_")[:30]
-        out_path = SCRIPT_DIR / f"quote-{safe}-{datetime.now().strftime('%Y%m%d')}.pdf"
+        client = (data.get("client_name") or "customer").strip().lower()
+        postcode = (data.get("site_postcode") or "unknown-postcode").strip().lower()
+
+        def slugify(val):
+            cleaned = "".join(ch if (ch.isalnum() or ch in " -_") else " " for ch in val)
+            slug = "-".join(part for part in cleaned.replace("_", " ").split() if part)
+            return slug[:60] or "quote"
+
+        out_path = SCRIPT_DIR / f"{slugify(client)}-{slugify(postcode)}.pdf"
 
     print("Rendering PDF...")
     generate_pdf(data, logo_path, out_path)
