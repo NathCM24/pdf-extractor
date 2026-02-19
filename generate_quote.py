@@ -246,17 +246,32 @@ def money(val) -> str:
 
 
 def wrap_text(c, text, font, size, max_width) -> list:
-    """Split text into lines that each fit within max_width."""
+    """Split text into lines that each fit within max_width, including long words."""
+    def split_long_token(token):
+        chunks = []
+        remaining = token
+        while remaining and c.stringWidth(remaining, font, size) > max_width:
+            cut = len(remaining)
+            while cut > 1 and c.stringWidth(remaining[:cut], font, size) > max_width:
+                cut -= 1
+            chunks.append(remaining[:cut])
+            remaining = remaining[cut:]
+        if remaining:
+            chunks.append(remaining)
+        return chunks or [""]
+
     words = (text or "").split()
     lines, line = [], ""
     for word in words:
-        candidate = (line + " " + word).strip()
-        if c.stringWidth(candidate, font, size) <= max_width:
-            line = candidate
-        else:
-            if line:
-                lines.append(line)
-            line = word
+        pieces = split_long_token(word)
+        for piece in pieces:
+            candidate = (line + " " + piece).strip()
+            if c.stringWidth(candidate, font, size) <= max_width:
+                line = candidate
+            else:
+                if line:
+                    lines.append(line)
+                line = piece
     if line:
         lines.append(line)
     return lines or [""]
