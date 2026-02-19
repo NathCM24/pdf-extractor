@@ -5,6 +5,11 @@ generate_quote.py — Waste Experts Quote Generator
 Reads a purchase order PDF, extracts key fields with Claude AI,
 and renders a branded Waste Experts quote PDF.
 
+Key fix:
+- Supplier (PO provider/issuer) is forced to come from the Terms/Important Info/footer block.
+- We explicitly forbid selecting Waste Experts / Electrical Waste / EWRG as supplier, even with OCR variants.
+- We ask Claude to (a) return the verbatim footer block, and (b) explicitly choose the issuer from that block.
+
 Usage:
     python generate_quote.py input.pdf
     python generate_quote.py input.pdf --job-name "Fluorescent Tubes Collection"
@@ -154,16 +159,22 @@ def ensure_fonts():
 
 # ─── Claude extraction ───────────────────────────────────────────────────────
 
-EXTRACT_PROMPT = """Extract all of the following fields from this PDF document and return ONLY a valid JSON object.
+EXTRACT_PROMPT = """Extract the fields below from this PO PDF and return ONLY valid JSON.
+
+CRITICAL RULE:
+- The PO provider/issuer (supplier to bill) MUST be identified from the *bottom Terms / Important Info / Footer* block.
+- Do NOT choose Waste Experts / Electrical Waste / Electrical Waste Recycling Group as the issuer unless the footer explicitly states they issued the PO.
+
+Return JSON in this shape:
 
 {
-  "po_provider_name":    "PO provider/issuer company from terms/footer/important info (the company sending you the PO), or null",
-  "po_provider_address": "PO provider postal address (newline-separated) from terms/footer/important info, or null",
-  "po_provider_email":   "PO provider email address, or null",
+  "po_provider_name":    "Issuer company from footer/terms/important info/signature block, or null",
+  "po_provider_address": "Issuer postal address from footer/terms/important info (newline-separated), or null",
+  "po_provider_email":   "Issuer email from footer/terms/important info, or null",
 
-  "supplier_name":       "Same as PO provider if present; otherwise null",
-  "supplier_address":    "Same as PO provider address if present; otherwise null",
-  "supplier_email":      "Same as PO provider email if present; otherwise null",
+  "supplier_name":       "Same as po_provider_name if present; otherwise null",
+  "supplier_address":    "Same as po_provider_address if present; otherwise null",
+  "supplier_email":      "Same as po_provider_email if present; otherwise null",
 
   "client_name":      "Company name of the buyer/client (if present), or null",
   "client_address":   "Full postal address of the client (newline-separated), or null",
@@ -174,32 +185,51 @@ EXTRACT_PROMPT = """Extract all of the following fields from this PDF document a
   "site_postcode":    "Postcode of the site or delivery location (e.g. SG19 1QY), or null",
   "line_items": [
     {
-      "description": "Clear, plain-English product/service summary from the PO (include waste/material type and service type where possible)",
+      "description": "Clear, plain-English product/service summary (include waste/material type and service type where possible)",
       "quantity":    1,
       "unit_price":  0.00,
       "line_total":  0.00
     }
   ],
   "notes": "Any caveats, special instructions, or comments. Empty string if none.",
-  "terms_important_info": "Verbatim bottom terms/footer/important-info block text, or empty string"
+  "terms_important_info": "VERBATIM bottom terms/footer/important-info block text (copy exactly), or empty string"
 }
 
-Prioritise PO provider identity from footer/terms/important info/signature blocks.
-Never use Waste Experts, Electrical Waste, Electrical Waste Recycling Group, or the service/customer/site address entity as the supplier unless explicitly stated as the PO issuer in terms/footer.
-If terms/footer says phrases like "Go Green Ltd employee" or "accept ... terms & conditions" tied to a company name, that company is the PO provider.
-Use numeric types (not strings) for quantity, unit_price, and line_total.
-Return ONLY the JSON object — no markdown fences, no explanation."""
+Extra guidance:
+- Prioritise footer cues like: 'Registered Office', 'Company No', 'VAT', 'Terms and Conditions', 'On behalf of <Company>', '<Company> employees', signature blocks, or a footer company name/address.
+- Use numeric types (not strings) for quantity, unit_price, line_total.
+Return ONLY the JSON object. No markdown. No explanation.
+"""
 
+# Anything like these should NEVER be the supplier/issuer.
 INVALID_BILL_TO_PATTERNS = (
     "waste experts",
     "electrical waste",
     "electrical waste recycling group",
+    "ewrg",
 )
 
 
 def _is_invalid_supplier(name: str) -> bool:
+    """
+    Reject obvious self/sister-brand matches and common OCR variants.
+    We use both substring matching and compacted alpha-only matching.
+    """
     normalized = (name or "").strip().lower()
-    return any(pat in normalized for pat in INVALID_BILL_TO_PATTERNS)
+    compact = re.sub(r"[^a-z]", "", normalized)
+
+    if any(pat in normalized for pat in INVALID_BILL_TO_PATTERNS):
+        return True
+
+    # OCR/spacing variants
+    if "wasteexperts" in compact:
+        return True
+
+    # Electrical Waste Recycling Group variants (spacing/typos)
+    if "electrical" in compact and "waste" in compact and "recycling" in compact and "group" in compact:
+        return True
+
+    return False
 
 
 def _extract_company_candidates(text: str) -> list:
@@ -207,7 +237,7 @@ def _extract_company_candidates(text: str) -> list:
     if not text:
         return []
     pattern = re.compile(
-        r"\b([A-Z][A-Za-z&'.,-]*(?:\s+[A-Z][A-Za-z&'.,-]*){0,5}\s+(?:Ltd|Limited|PLC|LLP))\b"
+        r"\b([A-Z][A-Za-z&'.,-]*(?:\s+[A-Z][A-Za-z&'.,-]*){0,6}\s+(?:Ltd|Limited|PLC|LLP))\b"
     )
     seen, names = set(), []
     for match in pattern.findall(text):
@@ -224,7 +254,7 @@ def _extract_registered_office(text: str) -> str:
     if not text:
         return ""
     m = re.search(
-        r"Registered Office:\s*(.+?)(?:Registered in|Company Number|$)",
+        r"Registered Office[:\s]*\s*(.+?)(?:Registered in|Company Number|Company No\.?|Reg(?:istered)? No\.?|VAT|$)",
         text,
         flags=re.I | re.S,
     )
@@ -233,41 +263,69 @@ def _extract_registered_office(text: str) -> str:
     return " ".join(m.group(1).replace("\n", " ").split()).strip(" ,")
 
 
+def _extract_email(text: str) -> str:
+    if not text:
+        return ""
+    m = re.search(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", text, flags=re.I)
+    return (m.group(0) if m else "").strip()
+
+
 def normalize_extracted_data(data: dict) -> dict:
-    """Prefer PO provider details and avoid billing us/end-customer entities."""
-    supplier_name = (data.get("po_provider_name") or data.get("supplier_name") or "").strip()
-    supplier_address = (data.get("po_provider_address") or data.get("supplier_address") or "").strip()
-    supplier_email = (data.get("po_provider_email") or data.get("supplier_email") or "").strip()
+    """
+    Force issuer/supplier from Terms/Important Info/footer when possible.
 
-    terms_text = str(data.get("terms_important_info") or "")
-    combined_text = "\n".join(
-        part
-        for part in [
-            terms_text,
-            str(data.get("notes") or ""),
-            str(data.get("po_provider_name") or ""),
-            str(data.get("supplier_name") or ""),
-        ]
-        if part
-    )
+    Strategy:
+    1) Prefer po_provider_* from Claude.
+    2) If missing OR invalid (Waste Experts/EWRG/etc), derive from terms_important_info using heuristics.
+    3) If still missing, fall back to any other candidates (notes etc) but NEVER invalid.
+    """
+    # Start with Claude's preferred issuer fields
+    supplier_name = (data.get("po_provider_name") or "").strip()
+    supplier_address = (data.get("po_provider_address") or "").strip()
+    supplier_email = (data.get("po_provider_email") or "").strip()
 
-    # If missing/invalid supplier, try derive from terms/footer.
-    if not supplier_name or _is_invalid_supplier(supplier_name):
-        candidates = _extract_company_candidates(combined_text)
+    terms_text = str(data.get("terms_important_info") or "").strip()
+    notes_text = str(data.get("notes") or "").strip()
+
+    # If Claude didn't populate, or populated with an invalid "us" name, fix from footer text.
+    if (not supplier_name) or _is_invalid_supplier(supplier_name):
+        candidates = _extract_company_candidates(terms_text)
         supplier_name = candidates[0] if candidates else ""
 
+    # Address should come from footer first
     if not supplier_address:
-        supplier_address = _extract_registered_office(combined_text)
+        supplier_address = _extract_registered_office(terms_text)
 
-    # Final guard: never allow invalid supplier patterns through.
+    # Email should come from footer first
+    if not supplier_email:
+        supplier_email = _extract_email(terms_text)
+
+    # If still empty, use broader combined text as a last resort (but still disallow invalid)
+    combined_text = "\n".join(part for part in [terms_text, notes_text] if part).strip()
+    if (not supplier_name) and combined_text:
+        candidates = _extract_company_candidates(combined_text)
+        supplier_name = candidates[0] if candidates else ""
+    if (not supplier_address) and combined_text:
+        supplier_address = _extract_registered_office(combined_text)
+    if (not supplier_email) and combined_text:
+        supplier_email = _extract_email(combined_text)
+
+    # Final guardrail: never allow invalid names through.
     if _is_invalid_supplier(supplier_name):
         supplier_name = ""
         supplier_address = ""
         supplier_email = ""
 
+    # Set the canonical fields used by the PDF
     data["supplier_name"] = supplier_name or None
     data["supplier_address"] = supplier_address or None
     data["supplier_email"] = supplier_email or None
+
+    # Also keep po_provider_* aligned to the same chosen issuer, for debugging/printing
+    data["po_provider_name"] = data.get("po_provider_name") or (supplier_name or None)
+    data["po_provider_address"] = data.get("po_provider_address") or (supplier_address or None)
+    data["po_provider_email"] = data.get("po_provider_email") or (supplier_email or None)
+
     return data
 
 
@@ -281,7 +339,7 @@ def extract(pdf_path: Path) -> dict:
 
     resp = client.messages.create(
         model="claude-opus-4-6",
-        max_tokens=2000,
+        max_tokens=2500,
         messages=[
             {
                 "role": "user",
@@ -301,13 +359,16 @@ def extract(pdf_path: Path) -> dict:
     )
 
     raw = resp.content[0].text.strip()
-    # Strip any accidental markdown fences
-    if "```" in raw:
+
+    # Strip accidental fences / leading text.
+    if "```" in raw or not raw.lstrip().startswith("{"):
         start = raw.find("{")
         end = raw.rfind("}") + 1
-        raw = raw[start:end]
+        if start != -1 and end != -1:
+            raw = raw[start:end]
 
-    return normalize_extracted_data(json.loads(raw))
+    data = json.loads(raw)
+    return normalize_extracted_data(data)
 
 
 # ─── drawing helpers ─────────────────────────────────────────────────────────
@@ -465,7 +526,7 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     col2_x = PAGE_W / 2 + 6 * mm
     addr_top = y
 
-    # Left – Bill To
+    # Left – Bill To (issuer / PO provider)
     label(c, col1_x, y, "Bill To")
     down(4.5 * mm)
     supplier_name = data.get("supplier_name") or "PO provider not found"
@@ -509,7 +570,7 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     y = min(bottom_left, bottom_right)
     down(6 * mm)
 
-    # ── Prepared By (2-line layout to avoid overflow) ────────────────────────
+    # ── Prepared By ─────────────────────────────────────────────────────────
     prep_h = 17 * mm
     ensure_space(prep_h + 6 * mm)
     rounded_rect(c, MARGIN, y - prep_h, CONTENT_W, prep_h, fill=colors.HexColor("#f5f7f9"))
@@ -570,7 +631,6 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     ensure_space(hdr_h)
     draw_table_header()
 
-    # Data rows
     grand_total = 0.0
     line_items = data.get("line_items") or []
     for idx, item in enumerate(line_items):
@@ -605,7 +665,6 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
         text_y = y - row_h + 2.5 * mm
         max_desc = col_w[0] - 6 * mm
 
-        # Truncate description if too wide
         desc_str = desc
         c.setFont(FONT_R, 9)
         while desc_str and c.stringWidth(desc_str, FONT_R, 9) > max_desc:
@@ -618,7 +677,11 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
 
         rx = MARGIN + col_w[0]
         c.setFont(FONT_R, 9)
-        c.drawRightString(rx + col_w[1] - 3 * mm, text_y, str(int(qty_f) if qty_f.is_integer() else qty_f))
+        c.drawRightString(
+            rx + col_w[1] - 3 * mm,
+            text_y,
+            str(int(qty_f) if qty_f.is_integer() else qty_f),
+        )
         rx += col_w[1]
         c.drawRightString(rx + col_w[2] - 3 * mm, text_y, money(unit))
         rx += col_w[2]
@@ -637,7 +700,6 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
 
     ensure_space(sub_h + 2 * mm + tot_h + 10 * mm)
 
-    # Subtotal (light green background)
     rounded_rect(c, sum_x, y - sub_h, sum_w, sub_h, fill=GREEN_LIGHT)
     c.setFont(FONT_R, 9)
     c.setFillColor(NAVY)
@@ -646,7 +708,6 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     c.drawRightString(sum_x + sum_w - 4 * mm, y - sub_h + 3 * mm, money(grand_total))
     down(sub_h + 2 * mm)
 
-    # Total (green, larger)
     rounded_rect(c, sum_x, y - tot_h, sum_w, tot_h, r=3 * mm, fill=GREEN)
     c.setFont(FONT_B, 10)
     c.setFillColor(WHITE)
@@ -690,9 +751,7 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
             break
         down(6 * mm)
 
-    # ── Footer ───────────────────────────────────────────────────────────────
     draw_footer()
-
     c.save()
     print(f"[ok] Quote saved: {out_path}")
 
@@ -728,6 +787,7 @@ def main():
     if args.job_name:
         data["job_name"] = args.job_name
 
+    print(f"  Supplier  : {data.get('supplier_name', '–')}")
     print(f"  Client    : {data.get('client_name', '–')}")
     print(f"  Reference : {data.get('reference_number', '–')}")
     print(f"  Expiry    : {data.get('quote_expiry_date', '–')}")
