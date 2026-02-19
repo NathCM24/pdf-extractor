@@ -339,37 +339,14 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
 
     down(logo_h + 8 * mm)
 
-    # ── Title (auto-wraps to 2 lines if too wide) ────────────────────────────
-    job_name = (data.get("job_name") or "Waste Experts Quote").upper()
+    # ── Title (mirrors output file name) ─────────────────────────────────────
+    title_text = out_path.stem.replace("_", " ").replace("-", " ").upper()
     c.setFillColor(NAVY)
     font_size = 19
-    if c.stringWidth(job_name, FONT_XB, font_size) <= CONTENT_W:
-        c.setFont(FONT_XB, font_size)
-        c.drawCentredString(PAGE_W / 2, y, job_name)
-    else:
-        # Find the best split point that keeps both halves within CONTENT_W
-        words = job_name.split()
-        split_at = 1
-        for i in range(1, len(words)):
-            l1 = " ".join(words[:i])
-            l2 = " ".join(words[i:])
-            if (c.stringWidth(l1, FONT_XB, font_size) <= CONTENT_W and
-                    c.stringWidth(l2, FONT_XB, font_size) <= CONTENT_W):
-                split_at = i
-        l1 = " ".join(words[:split_at])
-        l2 = " ".join(words[split_at:])
-        if c.stringWidth(l2, FONT_XB, font_size) <= CONTENT_W:
-            line_h = font_size * 1.35
-            c.setFont(FONT_XB, font_size)
-            c.drawCentredString(PAGE_W / 2, y, l1)
-            c.drawCentredString(PAGE_W / 2, y - line_h, l2)
-            down(line_h)
-        else:
-            # Last resort: scale down until it fits on one line
-            while font_size > 10 and c.stringWidth(job_name, FONT_XB, font_size) > CONTENT_W:
-                font_size -= 1
-            c.setFont(FONT_XB, font_size)
-            c.drawCentredString(PAGE_W / 2, y, job_name)
+    while font_size > 10 and c.stringWidth(title_text, FONT_XB, font_size) > CONTENT_W:
+        font_size -= 1
+    c.setFont(FONT_XB, font_size)
+    c.drawCentredString(PAGE_W / 2, y, title_text)
     down(6 * mm)
 
     # ── Green divider ────────────────────────────────────────────────────────
@@ -645,9 +622,15 @@ def main():
     if args.out:
         out_path = Path(args.out)
     else:
-        ref  = (data.get("reference_number") or "quote")
-        safe = "".join(ch for ch in ref if ch.isalnum() or ch in "-_")[:30]
-        out_path = SCRIPT_DIR / f"quote-{safe}-{datetime.now().strftime('%Y%m%d')}.pdf"
+        client = (data.get("client_name") or "customer").strip().lower()
+        postcode = (data.get("site_postcode") or "unknown-postcode").strip().lower()
+
+        def slugify(val):
+            cleaned = "".join(ch if (ch.isalnum() or ch in " -_") else " " for ch in val)
+            slug = "-".join(part for part in cleaned.replace("_", " ").split() if part)
+            return slug[:60] or "quote"
+
+        out_path = SCRIPT_DIR / f"{slugify(client)}-{slugify(postcode)}.pdf"
 
     print("Rendering PDF...")
     generate_pdf(data, logo_path, out_path)
