@@ -156,8 +156,11 @@ def ensure_fonts():
 EXTRACT_PROMPT = """Extract all of the following fields from this PDF document and return ONLY a valid JSON object.
 
 {
-  "client_name":      "Company name of the buyer/client",
-  "client_address":   "Full postal address of the client (newline-separated)",
+  "supplier_name":    "Supplier company that issued/sent the PO (often in footer/terms), or null",
+  "supplier_address": "Supplier postal address (newline-separated) from footer/terms/header, or null",
+  "supplier_email":   "Supplier email address, or null",
+  "client_name":      "Company name of the buyer/client (if present), or null",
+  "client_address":   "Full postal address of the client (newline-separated), or null",
   "client_email":     "Client email address, or null",
   "reference_number": "PO or reference number",
   "quote_expiry_date":"Valid-until / expiry date in DD/MM/YYYY format, or null",
@@ -165,7 +168,7 @@ EXTRACT_PROMPT = """Extract all of the following fields from this PDF document a
   "site_postcode":    "Postcode of the site or delivery location (e.g. SG19 1QY), or null",
   "line_items": [
     {
-      "description": "Product or service name",
+      "description": "Clear, plain-English product/service summary from the PO (include waste/material type and service type where possible)",
       "quantity":    1,
       "unit_price":  0.00,
       "line_total":  0.00
@@ -174,6 +177,7 @@ EXTRACT_PROMPT = """Extract all of the following fields from this PDF document a
   "notes": "Any caveats, special instructions, or comments. Empty string if none."
 }
 
+Prioritise supplier identity from footer/terms/signature blocks when available.
 Use numeric types (not strings) for quantity, unit_price, and line_total.
 Return ONLY the JSON object — no markdown fences, no explanation."""
 
@@ -363,20 +367,24 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     # Left – Bill To
     label(c, col1_x, y, "Bill To")
     down(4.5 * mm)
+    supplier_name = data.get("supplier_name") or data.get("client_name") or ""
+    supplier_address = data.get("supplier_address") or data.get("client_address") or ""
+    supplier_email = data.get("supplier_email") or data.get("client_email")
+
     c.setFont(FONT_B, 10)
     c.setFillColor(NAVY)
-    c.drawString(col1_x, y, data.get("client_name") or "")
+    c.drawString(col1_x, y, supplier_name)
     down(5 * mm)
     c.setFont(FONT_R, 9)
     c.setFillColor(TEXT_GREY)
     addr_lines = [l.strip() for l in
-                  (data.get("client_address") or "").replace(", ", "\n").split("\n")
+                  (supplier_address or "").replace(", ", "\n").split("\n")
                   if l.strip()][:5]
     for al in addr_lines:
         c.drawString(col1_x, y, al)
         down(4.5 * mm)
-    if data.get("client_email"):
-        c.drawString(col1_x, y, data["client_email"])
+    if supplier_email:
+        c.drawString(col1_x, y, supplier_email)
         down(4.5 * mm)
     bottom_left = y
 
