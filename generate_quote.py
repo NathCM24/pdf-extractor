@@ -156,9 +156,14 @@ def ensure_fonts():
 EXTRACT_PROMPT = """Extract all of the following fields from this PDF document and return ONLY a valid JSON object.
 
 {
-  "supplier_name":    "Supplier company that issued/sent the PO (often in footer/terms), or null",
-  "supplier_address": "Supplier postal address (newline-separated) from footer/terms/header, or null",
-  "supplier_email":   "Supplier email address, or null",
+  "po_provider_name":    "PO provider/issuer company from terms/footer/important info (the company sending you the PO), or null",
+  "po_provider_address": "PO provider postal address (newline-separated) from terms/footer/important info, or null",
+  "po_provider_email":   "PO provider email address, or null",
+
+  "supplier_name":       "Same as PO provider if present; otherwise null",
+  "supplier_address":    "Same as PO provider address if present; otherwise null",
+  "supplier_email":      "Same as PO provider email if present; otherwise null",
+
   "client_name":      "Company name of the buyer/client (if present), or null",
   "client_address":   "Full postal address of the client (newline-separated), or null",
   "client_email":     "Client email address, or null",
@@ -177,9 +182,38 @@ EXTRACT_PROMPT = """Extract all of the following fields from this PDF document a
   "notes": "Any caveats, special instructions, or comments. Empty string if none."
 }
 
-Prioritise supplier identity from footer/terms/signature blocks when available.
+Prioritise PO provider identity from footer/terms/important info/signature blocks.
+Never use Waste Experts, Electrical Waste, Electrical Waste Recycling Group, or the service/customer/site address entity as the supplier unless explicitly stated as the PO issuer in terms/footer.
 Use numeric types (not strings) for quantity, unit_price, and line_total.
 Return ONLY the JSON object — no markdown fences, no explanation."""
+
+INVALID_BILL_TO_PATTERNS = (
+    "waste experts",
+    "electrical waste",
+    "electrical waste recycling group",
+)
+
+
+def _is_invalid_supplier(name: str) -> bool:
+    normalized = (name or "").strip().lower()
+    return any(pat in normalized for pat in INVALID_BILL_TO_PATTERNS)
+
+
+def normalize_extracted_data(data: dict) -> dict:
+    """Prefer PO provider details and avoid billing us/end-customer entities."""
+    supplier_name = (data.get("po_provider_name") or data.get("supplier_name") or "").strip()
+    supplier_address = (data.get("po_provider_address") or data.get("supplier_address") or "").strip()
+    supplier_email = (data.get("po_provider_email") or data.get("supplier_email") or "").strip()
+
+    if _is_invalid_supplier(supplier_name):
+        supplier_name = ""
+        supplier_address = ""
+        supplier_email = ""
+
+    data["supplier_name"] = supplier_name or None
+    data["supplier_address"] = supplier_address or None
+    data["supplier_email"] = supplier_email or None
+    return data
 
 
 def extract(pdf_path: Path) -> dict:
@@ -216,7 +250,7 @@ def extract(pdf_path: Path) -> dict:
         end   = raw.rfind("}") + 1
         raw   = raw[start:end]
 
-    return json.loads(raw)
+    return normalize_extracted_data(json.loads(raw))
 
 # ─── drawing helpers ─────────────────────────────────────────────────────────
 
@@ -367,9 +401,9 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     # Left – Bill To
     label(c, col1_x, y, "Bill To")
     down(4.5 * mm)
-    supplier_name = data.get("supplier_name") or data.get("client_name") or ""
-    supplier_address = data.get("supplier_address") or data.get("client_address") or ""
-    supplier_email = data.get("supplier_email") or data.get("client_email")
+    supplier_name = data.get("supplier_name") or "PO provider not found"
+    supplier_address = data.get("supplier_address") or ""
+    supplier_email = data.get("supplier_email")
 
     c.setFont(FONT_B, 10)
     c.setFillColor(NAVY)
