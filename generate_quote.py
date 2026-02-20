@@ -156,47 +156,54 @@ def ensure_fonts():
 
 # ─── Claude extraction ───────────────────────────────────────────────────────
 
-EXTRACT_PROMPT = """Extract all of the following fields from this PDF document and return ONLY a valid JSON object.
+EXTRACT_PROMPT = """You are extracting data from a supplier purchase order PDF sent to Waste Experts.
+
+STEP 1 — IDENTIFY THE BROKER (Bill To)
+The company who sent this PO is one of our approved brokers. Scan the ENTIRE document — logo, header, footer, terms, email addresses, phrases like "X Ltd employee" or "email to X" or "accept X terms & conditions" or "Registered Office" — and match against this approved broker list:
+
+ACM Environmental PLC, Acumen Waste Services, 707 Ltd, Click Waste, Aqua Force Special Waste Ltd, AMA Waste, Associated Waste Management Ltd, Asprey St John & Co Ltd, Ash Waste Services Ltd, ACMS Waste Limited, A1 Chemical Waste Management Ltd, Alchemy Metals Ltd, Bakers Waste Services Ltd, Biffa Waste Services Limited, BW Skip Hire, Bywaters (Leyton) Limited, Bagnall & Morris Waste Services Ltd, Baileys Skip Hire and Recycling Ltd, Business Waste Ltd, Brown Recycling Ltd, BKP Waste & Recycling Ltd, Belford Bros Skip Hire Ltd, Countrystyle Recycling Ltd, Cartwrights Waste Disposal Services, C & M Waste Management Ltd, Change Waste Recycling Limited, Chloros Environmental Ltd, CHC Waste FM Ltd, Cleansing Service Group Ltd, Circle Waste Ltd, City Waste London Ltd, Cheshire Waste Skip Hire Limited, Circom Ltd, CITB, DP Skip Hire Ltd, Forward Environmental Ltd, EMN Plant Ltd, E-Cycle Limited, Enva England Ltd, Ellgia Ltd, Eco-Cycle Waste Management Ltd, Enva WEEE Recycling Scotland Ltd, FPWM Ltd, Footprint Recycling, Forward Waste Management Ltd, Fresh Start Waste Ltd, Forvis Mazars LLP, Greenzone Facilities Management Ltd, Greenway Environmental Ltd, GPT Waste Management Ltd, Go Green, Germstar UK Ltd, GD Environmental Services Ltd, Great Western Recycling Ltd, Grundon Waste Management Ltd, Gillett Environmental Ltd, Go For It Trading Ltd, Go 4 Greener Waste Management Ltd, Intelligent Waste Management Limited, J & B Recycling Ltd, Just Clear Ltd, Just A Step UK Ltd, J Dickinson & Sons (Horwich) Limited, Kenny Waste Management Ltd, Kane Management Consultancy Ltd, LSS Waste Management, LTL Systems Ltd, Mitie Waste & Environmental Services Limited, Mitie, MJ Church Recycling Ltd, M & M Skip Hire Ltd, MVV Environment, Mick George Recycling Ltd, NWH Waste Services, Nationwide Waste Services Limited, Optima Health UK Ltd, Premier Waste Recycling Ltd, Pearce Recycling Company Ltd, Phoenix Environmental Management Ltd, Papilo Ltd, RFMW UK Ltd, Riverdale Paper PLC, Remondis Ltd, Roydon Resource Recovery Limited, Risinxtreme Limited, Recorra Ltd, Sackers Ltd, Suez Recycling and Recovery UK Ltd, Suez, Safety Kleen UK Limited, Mobius Environmental Ltd, Sustainable Waste Services, Select A Skip UK Ltd, Slicker Recycling Ltd, Sommers Waste Solutions Limited, Saica Natur UK Ltd, Site Clear Solutions Ltd, Sharp Brothers (Skips) Ltd, SLM Waste Management Limited, Shredall (East Midlands) Limited, Scott Waste Limited, Smiths (Gloucester) Ltd, Tradebe North West Ltd, The Waste Brokerage Co Ltd, T.Ward & Son Ltd, Terracycle UK Limited, UK Waste Solutions Ltd, UBT (EU) Ltd, Veolia ES (UK) Ltd, Verto Recycle Ltd, Waste Management Facilities Ltd, Reconomy (UK) Ltd, Waterman Waste Management Ltd, Wastenot Ltd, Waste Wise Management Solutions, WEEE (Scotland) Ltd, WM101 Ltd, Whitkirk Waste Solutions Ltd, Williams Environmental Management Ltd, Wastesolve Limited, WMR Waste Solutions Ltd, Wheeldon Brothers Waste Ltd, Waste Cloud Limited, Yorwaste Ltd, Yes Waste Limited
+
+Set po_provider_name to the BEST MATCHING name from the list above. If no match found, set to null.
+NEVER use: Waste Experts, Electrical Waste Recycling Group, Electrical Waste Recycling Group Limited, or the waste producer / site company as the broker.
+
+STEP 2 — EXTRACT ALL FIELDS and return ONLY a valid JSON object:
 
 {
-  "po_provider_name":    "The company who SENT this PO to us. Look for: (1) company name printed prominently at the top-left of the document or as a header/logo label, (2) phrases like 'Go Green Ltd employee', 'email to operations@gogreen.co.uk', 'accept Go Green Ltd terms & conditions', (3) the domain of any email address present (e.g. @gogreen.co.uk → Go Green, @mitie.com → Mitie, @suez.com → Suez, @businesswaste.co.uk → Business Waste), (4) Registered Office company name in footer. Return the plain trading name only (e.g. 'Go Green', not 'Go Green Ltd'). NEVER use Waste Experts, Electrical Waste Recycling Group, or the waste producer/site as the sender.",
-  "po_provider_address": "Full postal address of the PO sender, formatted exactly as it appears on the document (street, city, county, postcode, country on separate lines). Look in the document header near the company name first, then footer Registered Office block. Return newline-separated string, or null.",
-  "po_provider_email":   "Email address belonging to the PO sender's domain (not wasteexperts.co.uk), or null.",
+  "po_provider_name":    "Best matching broker name from the approved list above, or null if genuinely not found",
+  "po_provider_address": "Full postal address of the broker, exactly as it appears on the document. Newline-separated. null if not found.",
+  "po_provider_email":   "Email address belonging to the broker's domain (not wasteexperts.co.uk). null if not found.",
 
   "supplier_name":       "Same as po_provider_name",
   "supplier_address":    "Same as po_provider_address",
   "supplier_email":      "Same as po_provider_email",
 
-  "client_name":      "Company name of the buyer/client (if present), or null",
-  "client_address":   "Full postal address of the client (newline-separated), or null",
+  "client_name":      "Company name of the buyer/client if present, or null",
+  "client_address":   "Full postal address of the client, newline-separated, or null",
   "client_email":     "Client email address, or null",
-  "reference_number": "The PO or order reference number (e.g. 26131771615, REF-12345)",
-  "quote_expiry_date":"Look for: 'Quote expires', 'Valid until', 'Valid to', 'Expiry date', 'Order valid until', or any date associated with validity. Return in DD/MM/YYYY format, or null.",
-  "job_name":         "A SHORT 3-6 word title for this job (e.g. '8ft Dura Pipe Exchange', 'Fluorescent Tube Collection', 'WEEE Magnum Service'). Based on container type and waste/service type.",
-  "waste_type":       "The waste type or material description as stated on the PO (e.g. 'Fluorescent tubes and other mercury-containing waste', 'WEEE', 'Clinical waste')",
-  "ewc_code":         "The EWC (European Waste Catalogue) code if present (e.g. '20.01.21*'). Codes ending in * are hazardous.",
-  "site_postcode":    "Postcode of the collection/site location (e.g. SG19 1QY), or null",
-  "note_already_included": "true if a consignment note or waste transfer note charge is already embedded within the transport/service pricing (common in broker POs where a single 'Transport Cost' lump sum covers all charges). false if the note needs to be added separately as its own line item.",
+  "reference_number": "The PO or order reference number (e.g. 26131771615)",
+  "quote_expiry_date":"Look for: 'Quote expires', 'Valid until', 'Valid to', 'Expiry date', 'Order valid until'. Return DD/MM/YYYY format, or null.",
+  "job_name":         "SHORT 3-6 word job title based on container and service type (e.g. '8ft Dura Pipe Exchange', 'Fluorescent Tube Collection')",
+  "waste_type":       "Waste type or material as stated on the PO",
+  "ewc_code":         "EWC code if present (e.g. '20.01.21*'). Codes ending in * are hazardous.",
+  "site_postcode":    "Site/collection postcode, or null",
+  "note_already_included": true or false — true if the transport/service price already includes the consignment or transfer note fee,
   "line_items": [
     {
-      "description": "Concise but clear description — aim for the style: 'Container Type - Service Type' (e.g. '8ft Dura Pipe - Exchange', 'Mixed Lamps - Full Service Charge', 'WEEE Magnum - Collection', 'Consignment Note'). Keep container size/type and service action. Max ~6 words. Do NOT include EWC codes or long waste descriptions.",
+      "description": "Style: 'Container - Service Type' e.g. '8ft Dura Pipe - Exchange', 'Mixed Lamps - Full Service Charge'. Max 6 words. No EWC codes.",
       "quantity":    1,
       "unit_price":  0.00,
       "line_total":  0.00
     }
   ],
-  "notes": "Any special instructions, access requirements, or important order notes. Empty string if none.",
-  "terms_important_info": "Verbatim bottom terms/footer/important-info block text, or empty string"
+  "notes": "Special instructions, access info, site contact details. Empty string if none.",
+  "terms_important_info": "Verbatim footer/terms block text, or empty string"
 }
 
-CRITICAL RULES:
-1. po_provider_name: scan the ENTIRE document — header logo, footer, terms, email domains, phrases like "[Company] employee" or "email to [company]@..." or "accept [Company] terms". The sender is almost always named in the footer terms or logo.
-2. quote_expiry_date: scan for ANY date paired with validity/expiry language. On broker POs this is often labelled "Quote expires" near the top.
-3. line_items descriptions: style as 'Container Type - Service Type' (e.g. '8ft Dura Pipe - Exchange', 'Mixed Lamps - Full Service Charge'). Max ~6 words. No EWC codes.
-4. For broker-format POs (e.g. Go Green "SupplierOrder" style) that have a "Pricing" section with "Transport Cost": create ONE line item using the container/service description and the Transport Cost value as unit_price. Set note_already_included to true because the transport cost already covers the consignment/transfer note.
-5. Do NOT add consignment notes or transfer notes to line_items yourself — the system handles this based on note_already_included.
-6. Use numeric types (not strings) for quantity, unit_price, and line_total.
-7. Return ONLY the JSON object — no markdown fences, no explanation."""
+RULES:
+- For POs with a 'Pricing / Transport Cost' section (broker-format): create ONE line item from the container+service description using Transport Cost as unit_price. Set note_already_included to true.
+- Do NOT add consignment or transfer notes as line items — the system adds these automatically.
+- Use numeric types for quantity, unit_price, line_total.
+- Return ONLY the JSON object — no markdown, no explanation."""
 
 INVALID_BILL_TO_PATTERNS = (
     "waste experts",
@@ -566,7 +573,11 @@ def extract(pdf_path: Path) -> dict:
 
     data = normalize_extracted_data(json.loads(raw))
 
-    # ── Broker detection: scan full PDF text against known broker list ────────
+    # ── DEBUG: print what Claude extracted ───────────────────────────────────
+    print(f"  [debug] Claude po_provider_name : {json.loads(raw).get('po_provider_name')}")
+    print(f"  [debug] Claude supplier_name    : {json.loads(raw).get('supplier_name')}")
+    print(f"  [debug] After normalize         : {data.get('supplier_name')}")
+    # ─────────────────────────────────────────────────────────────────────────
     # Extract raw text from the PDF for matching
     raw_pdf_text = _extract_pdf_text(pdf_path)
 
