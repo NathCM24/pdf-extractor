@@ -141,7 +141,24 @@
     }
     .toast.show { opacity: 1; }
 
-    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+    /* --- Line items --- */
+    .line-item-row {
+      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px;
+      align-items: end; padding: 6px 0; border-bottom: 1px solid #e0e6ed;
+    }
+    .line-item-row:last-child { border-bottom: none; }
+    .line-item-row input { font-size: 13px; padding: 8px 10px; }
+    .line-item-row .li-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #5a6e80; margin-bottom: 2px; }
+    .btn-remove {
+      border: none; background: #fee; color: #b42318; border-radius: 4px;
+      padding: 8px 10px; cursor: pointer; font-weight: 700; font-size: 13px;
+      font-family: 'Montserrat', sans-serif; transition: background .2s;
+    }
+    .btn-remove:hover { background: #fdd; }
+    @media (max-width: 760px) {
+      .grid { grid-template-columns: 1fr; }
+      .line-item-row { grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -244,6 +261,20 @@
               <option>Consignment Note</option>
               <option>Waste Transfer Note</option>
             </select>
+          </div>
+
+          <!-- ===== Products & Services ===== -->
+          <div class="section-title">Products &amp; Services</div>
+
+          <div class="full" id="line-items-container">
+            <!-- Line item rows are injected here by JS -->
+          </div>
+
+          <div class="full" style="display:flex; gap:10px; align-items:center; margin-bottom:4px;">
+            <button class="btn-outline" type="button" onclick="addLineItem()">+ Add Line Item</button>
+            <span style="margin-left:auto; font-weight:700; font-size:14px; color:#1e2e3d;">
+              Overall Total: <span id="overall_total_display">£0.00</span>
+            </span>
           </div>
 
           <!-- ===== Contact Info ===== -->
@@ -416,6 +447,66 @@
       return valid;
     }
 
+    /* ── Line items ── */
+    let lineItemCounter = 0;
+
+    function addLineItem(desc, qty, unitPrice, lineTotal) {
+      const container = document.getElementById('line-items-container');
+      const idx = lineItemCounter++;
+      const row = document.createElement('div');
+      row.className = 'line-item-row';
+      row.dataset.liIdx = idx;
+      row.innerHTML = `
+        <div><div class="li-label">Description</div><input type="text" class="li-desc" value="${(desc || '').replace(/"/g, '&quot;')}" /></div>
+        <div><div class="li-label">Quantity</div><input type="number" class="li-qty" value="${qty || 1}" min="0" step="1" onchange="recalcLineItem(this)" /></div>
+        <div><div class="li-label">Price / Unit</div><input type="number" class="li-unit" value="${unitPrice || 0}" min="0" step="0.01" onchange="recalcLineItem(this)" /></div>
+        <div><div class="li-label">Line Total</div><input type="number" class="li-total" value="${lineTotal || 0}" min="0" step="0.01" onchange="recalcOverallTotal()" /></div>
+        <div style="padding-bottom:1px;"><button class="btn-remove" type="button" onclick="removeLineItem(this)">&times;</button></div>
+      `;
+      container.appendChild(row);
+      recalcOverallTotal();
+    }
+
+    function removeLineItem(btn) {
+      btn.closest('.line-item-row').remove();
+      recalcOverallTotal();
+    }
+
+    function recalcLineItem(input) {
+      const row = input.closest('.line-item-row');
+      const qty = parseFloat(row.querySelector('.li-qty').value) || 0;
+      const unit = parseFloat(row.querySelector('.li-unit').value) || 0;
+      row.querySelector('.li-total').value = (qty * unit).toFixed(2);
+      recalcOverallTotal();
+    }
+
+    function recalcOverallTotal() {
+      let total = 0;
+      document.querySelectorAll('.line-item-row').forEach(row => {
+        total += parseFloat(row.querySelector('.li-total').value) || 0;
+      });
+      document.getElementById('overall_total_display').textContent = '£' + total.toFixed(2);
+    }
+
+    function getLineItems() {
+      const items = [];
+      document.querySelectorAll('.line-item-row').forEach(row => {
+        items.push({
+          description: row.querySelector('.li-desc').value.trim(),
+          quantity: parseFloat(row.querySelector('.li-qty').value) || 1,
+          unit_price: parseFloat(row.querySelector('.li-unit').value) || 0,
+          line_total: parseFloat(row.querySelector('.li-total').value) || 0
+        });
+      });
+      return items;
+    }
+
+    function clearLineItems() {
+      document.getElementById('line-items-container').innerHTML = '';
+      lineItemCounter = 0;
+      recalcOverallTotal();
+    }
+
     /* ── Fill form from extraction response ── */
     function fillForm(data) {
       [
@@ -440,10 +531,19 @@
 
       setField('supplier_address', '');
       validateAccount();
+
+      /* Populate line items */
+      clearLineItems();
+      const items = data.line_items || [];
+      items.forEach(item => {
+        addLineItem(item.description, item.quantity, item.unit_price, item.line_total);
+      });
     }
 
     /* ── Collect payload ── */
     function collectReviewPayload() {
+      const items = getLineItems();
+      const overallTotal = items.reduce((sum, i) => sum + (i.line_total || 0), 0);
       return {
         account_name: getField('account_name'),
         supplier_address: getField('supplier_address'),
@@ -462,7 +562,9 @@
         opening_times: getField('opening_times'),
         access: getField('access'),
         site_restrictions: getField('site_restrictions'),
-        special_instructions: getField('special_instructions')
+        special_instructions: getField('special_instructions'),
+        line_items: items,
+        overall_total: overallTotal
       };
     }
 
@@ -520,6 +622,7 @@
         account_name: 'Account Name',
         supplier_address: 'Bill To Address',
         purchase_order_number: 'Purchase Order Number',
+        service_description: 'Service Description',
         document_type: 'Document Type',
         site_contact: 'Site Contact',
         site_contact_number: 'Site Contact Number',
@@ -535,9 +638,19 @@
         site_restrictions: 'Site Restrictions',
         special_instructions: 'Special Instructions'
       };
-      const text = Object.entries(labels)
+      let text = Object.entries(labels)
         .map(([key, label]) => `${label}: ${payload[key] || '-'}`)
         .join('\n');
+
+      /* Append line items */
+      const items = payload.line_items || [];
+      if (items.length) {
+        text += '\n\nProducts & Services:';
+        items.forEach((item, i) => {
+          text += `\n  ${i + 1}. ${item.description || '-'} | Qty: ${item.quantity} | Unit: £${(item.unit_price || 0).toFixed(2)} | Total: £${(item.line_total || 0).toFixed(2)}`;
+        });
+        text += `\nOverall Total: £${(payload.overall_total || 0).toFixed(2)}`;
+      }
 
       navigator.clipboard.writeText(text).then(() => {
         showToast('All data copied to clipboard');
