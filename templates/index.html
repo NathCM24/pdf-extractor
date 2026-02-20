@@ -97,6 +97,7 @@
         </div>
 
         <div style="margin-top:14px; display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
+          <button class="btn" type="button" onclick="downloadReviewPDF()">Download PDF</button>
           <button class="btn" type="button" onclick="saveReview()">Save Review</button>
           <span class="pill">Extracted PDF includes selected note type</span>
           <span id="save-status" class="ok hidden">Review saved.</span>
@@ -185,6 +186,43 @@
         site_restrictions: getField('site_restrictions'),
         special_instructions: getField('special_instructions')
       };
+    }
+
+
+    async function downloadReviewPDF() {
+      const valid = validateAccount();
+      if (!valid) return;
+
+      const payload = collectReviewPayload();
+
+      try {
+        const resp = await fetch('/download-review-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: 'Unable to download PDF' }));
+          throw new Error(err.error || 'Unable to download PDF');
+        }
+
+        const blob = await resp.blob();
+        const disposition = resp.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="([^"]+)"/);
+        const filename = match ? match[1] : 'review.pdf';
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      } catch (err) {
+        alert(err.message);
+      }
     }
 
     async function saveReview() {

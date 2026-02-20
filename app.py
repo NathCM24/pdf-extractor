@@ -1,3 +1,13 @@
+from flask import Flask, jsonify, render_template, request, send_file
+import base64
+import json
+import os
+from datetime import datetime
+from io import BytesIO
+
+import anthropic
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 from flask import Flask, jsonify, render_template, request
 import base64
 import json
@@ -45,6 +55,67 @@ RULES:
 """
 
 
+
+
+def _build_review_pdf(payload: dict) -> BytesIO:
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    y = height - 50
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(40, y, "Waste Experts - Reviewed Extraction")
+    y -= 24
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(40, y, f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    y -= 22
+
+    fields = [
+        ("Account Name", payload.get("account_name")),
+        ("Bill To Address", payload.get("supplier_address")),
+        ("Purchase Order Number", payload.get("purchase_order_number")),
+        ("Document Type", payload.get("document_type")),
+        ("Site Contact", payload.get("site_contact")),
+        ("Site Contact Number", payload.get("site_contact_number")),
+        ("Site Contact Email", payload.get("site_contact_email")),
+        ("Secondary Site Contact", payload.get("secondary_site_contact")),
+        ("Secondary Site Contact Number", payload.get("secondary_site_contact_number")),
+        ("Secondary Site Contact Email", payload.get("secondary_site_contact_email")),
+        ("Site Name", payload.get("site_name")),
+        ("Site Address", payload.get("site_address")),
+        ("Site Postcode", payload.get("site_postcode")),
+        ("Opening Times", payload.get("opening_times")),
+        ("Access", payload.get("access")),
+        ("Site Restrictions", payload.get("site_restrictions")),
+        ("Special Instructions", payload.get("special_instructions")),
+    ]
+
+    for label, value in fields:
+        text = str(value or "")
+        if y < 90:
+            pdf.showPage()
+            y = height - 50
+            pdf.setFont("Helvetica", 10)
+
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(40, y, f"{label}:")
+        y -= 14
+
+        pdf.setFont("Helvetica", 10)
+        lines = text.splitlines() if text else ["-"]
+        for line in lines:
+            if y < 70:
+                pdf.showPage()
+                y = height - 50
+                pdf.setFont("Helvetica", 10)
+            pdf.drawString(55, y, line[:140])
+            y -= 12
+        y -= 4
+
+    pdf.save()
+    buffer.seek(0)
+    return buffer
+
 def _clean_json_payload(raw_text: str):
     payload = raw_text.strip()
     if "```" in payload and "{" in payload and "}" in payload:
@@ -85,6 +156,28 @@ def _normalise_data(data: dict):
         "supplier_found",
     ]
     return {key: data.get(key) for key in ordered_fields}
+
+
+
+
+@app.route("/download-review-pdf", methods=["POST"])
+def download_review_pdf():
+    payload = request.get_json(silent=True) or {}
+    account_name = (payload.get("account_name") or "").strip()
+    if account_name not in BROKERS:
+        return jsonify({"error": "Please choose supplier"}), 400
+
+    payload["supplier_address"] = payload.get("supplier_address") or BROKERS.get(account_name, "")
+
+    pdf_buffer = _build_review_pdf(payload)
+    safe_account = account_name.replace("/", "-").replace(" ", "_") or "review"
+    filename = f"{safe_account}_review.pdf"
+    return send_file(
+        pdf_buffer,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/pdf",
+    )
 
 
 @app.route("/save-review", methods=["POST"])
