@@ -1,246 +1,263 @@
-from flask import Flask, request, jsonify, render_template
-import anthropic
-import base64
-import os
-import json
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF Extractor - Waste Logics</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f4f7fb; color: #1e2e3d; }
+    .wrap { max-width: 980px; margin: 24px auto 48px; padding: 0 16px; }
+    .brand { text-align: center; margin: 6px 0 18px; }
+    .brand img { max-width: 320px; width: 100%; height: auto; }
+    .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin-bottom: 16px; }
+    .head { background: #1e2e3d; color: #fff; padding: 16px 20px; border-radius: 8px 8px 0 0; font-weight: 700; }
+    .body { padding: 16px 20px; }
+    .drop { border: 2px dashed #cfd8e3; border-radius: 8px; padding: 28px; text-align: center; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .full { grid-column: 1 / -1; }
+    label { font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    input, textarea, select { border: 1px solid #ccd6e2; border-radius: 6px; padding: 10px; font-size: 14px; }
+    textarea { min-height: 64px; resize: vertical; }
+    .hidden { display: none; }
+    .error { color: #b42318; font-weight: 700; margin-top: 4px; }
+    .ok { color: #246d19; font-weight: 700; margin-top: 4px; }
+    .btn { border: none; background: #8ec431; color: #fff; border-radius: 6px; padding: 10px 16px; font-weight: 700; cursor: pointer; }
+    .pill { display:inline-block; background:#f0f8e0; color:#3f5f08; border:1px solid #8ec431; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+    .hl { border: 2px solid #8ec431; box-shadow: 0 0 0 2px #f0f8e0 inset; }
+    @media (max-width: 760px){ .grid{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <img src="https://i0.wp.com/wasteexperts.co.uk/wp-content/uploads/2022/11/green-grey-logo-1080.png?w=1920&amp;ssl=1" alt="Waste Experts logo" />
+    </div>
 
-app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20MB
+    <div class="card">
+      <div class="head">Upload Purchase Order PDF</div>
+      <div class="body">
+        <div id="drop-zone" class="drop">
+          <p><strong>Drop a PDF here</strong> or choose a file</p>
+          <button class="btn" type="button" onclick="document.getElementById('file-input').click()">Choose PDF</button>
+          <input id="file-input" type="file" accept=".pdf" class="hidden" />
+          <p id="file-label"></p>
+        </div>
+      </div>
+    </div>
 
-# ─── Broker list with addresses ───────────────────────────────────────────────
-# Update addresses here as you gather them. Address is newline-separated.
-BROKERS = {
-    "ACM Environmental PLC": "",
-    "Acumen Waste Services": "",
-    "707 Ltd / Click Waste": "",
-    "Aqua Force Special Waste Ltd": "",
-    "AMA Waste": "",
-    "Associated Waste Management Ltd": "",
-    "Asprey St John & Co Ltd": "",
-    "Ash Waste Services Ltd": "",
-    "ACMS Waste Limited": "",
-    "A1 Chemical Waste Management Ltd": "",
-    "Alchemy Metals Ltd": "",
-    "Bakers Waste Services Ltd": "",
-    "Biffa Waste Services Limited": "Biffa House, Rigby Court\nWokingham\nBerkshire\nRG41 5BN",
-    "BW Skip Hire": "",
-    "Bywaters (Leyton) Limited": "",
-    "Bagnall & Morris Waste Services Ltd": "",
-    "Baileys Skip Hire and Recycling Ltd": "",
-    "Business Waste Ltd": "",
-    "Brown Recycling Ltd": "",
-    "BKP Waste & Recycling Ltd": "",
-    "Belford Bros Skip Hire Ltd": "",
-    "Countrystyle Recycling Ltd": "",
-    "Cartwrights Waste Disposal Services": "",
-    "C & M Waste Management Ltd": "",
-    "Change Waste Recycling Limited": "",
-    "Chloros Environmental Ltd": "",
-    "CHC Waste FM Ltd": "",
-    "Cleansing Service Group Ltd": "",
-    "Circle Waste Ltd": "",
-    "City Waste London Ltd": "",
-    "Cheshire Waste Skip Hire Limited": "",
-    "Circom Ltd": "",
-    "CITB": "",
-    "DP Skip Hire Ltd": "",
-    "Forward Environmental Ltd": "",
-    "EMN Plant Ltd": "",
-    "E-Cycle Limited": "",
-    "Enva England Ltd": "",
-    "Ellgia Ltd": "",
-    "Eco-Cycle Waste Management Ltd": "",
-    "Enva WEEE Recycling Scotland Ltd": "",
-    "FPWM Ltd / Footprint Recycling": "",
-    "Forward Waste Management Ltd": "",
-    "Fresh Start Waste Ltd": "",
-    "Forvis Mazars LLP": "",
-    "Greenzone Facilities Management Ltd": "",
-    "Greenway Environmental Ltd": "",
-    "GPT Waste Management Ltd": "",
-    "Go Green": "323 Bawtry Road\nDoncaster\nEngland DN4 7PB\nUnited Kingdom",
-    "Germstar UK Ltd": "",
-    "GD Environmental Services Ltd": "",
-    "Great Western Recycling Ltd": "",
-    "Grundon Waste Management Ltd": "",
-    "Gillett Environmental Ltd": "",
-    "Go For It Trading Ltd": "",
-    "Go 4 Greener Waste Management Ltd": "",
-    "Intelligent Waste Management Limited": "",
-    "J & B Recycling Ltd": "",
-    "Just Clear Ltd": "",
-    "Just A Step UK Ltd": "",
-    "J Dickinson & Sons (Horwich) Limited": "",
-    "Kenny Waste Management Ltd": "",
-    "Kane Management Consultancy Ltd": "",
-    "LSS Waste Management": "",
-    "LTL Systems Ltd": "",
-    "Mitie Waste & Environmental Services Limited": "1 Bartholomew Lane\nLondon\nEC2N 2AX",
-    "MJ Church Recycling Ltd": "",
-    "M & M Skip Hire Ltd": "",
-    "MVV Environment": "",
-    "Mick George Recycling Ltd": "",
-    "NWH Waste Services": "",
-    "Nationwide Waste Services Limited": "",
-    "Optima Health UK Ltd": "",
-    "Premier Waste Recycling Ltd": "",
-    "Pearce Recycling Company Ltd": "",
-    "Phoenix Environmental Management Ltd": "",
-    "Papilo Ltd": "",
-    "RFMW UK Ltd": "",
-    "Riverdale Paper PLC": "",
-    "Remondis Ltd": "",
-    "Roydon Resource Recovery Limited": "",
-    "Risinxtreme Limited": "",
-    "Recorra Ltd": "",
-    "Sackers Ltd": "",
-    "Suez Recycling and Recovery UK Ltd": "2100 Coventry Road\nSheldon\nBirmingham\nB26 3EA",
-    "Safety Kleen UK Limited": "",
-    "Mobius Environmental Ltd": "",
-    "Sustainable Waste Services": "",
-    "Select A Skip UK Ltd": "",
-    "Slicker Recycling Ltd": "",
-    "Sommers Waste Solutions Limited": "",
-    "Saica Natur UK Ltd": "",
-    "Site Clear Solutions Ltd": "",
-    "Sharp Brothers (Skips) Ltd": "",
-    "SLM Waste Management Limited": "",
-    "Shredall (East Midlands) Limited": "",
-    "Scott Waste Limited": "",
-    "Smiths (Gloucester) Ltd": "",
-    "Tradebe North West Ltd": "",
-    "The Waste Brokerage Co Ltd": "",
-    "T.Ward & Son Ltd": "",
-    "Terracycle UK Limited": "",
-    "UK Waste Solutions Ltd": "",
-    "UBT (EU) Ltd": "",
-    "Veolia ES (UK) Ltd": "Veolia House\n154A Pentonville Road\nLondon\nN1 9JE",
-    "Verto Recycle Ltd": "",
-    "Waste Management Facilities Ltd": "",
-    "Reconomy (UK) Ltd": "",
-    "Waterman Waste Management Ltd": "",
-    "Wastenot Ltd": "",
-    "Waste Wise Management Solutions": "",
-    "WEEE (Scotland) Ltd": "",
-    "WM101 Ltd": "",
-    "Whitkirk Waste Solutions Ltd": "",
-    "Williams Environmental Management Ltd": "",
-    "Wastesolve Limited": "",
-    "WMR Waste Solutions Ltd": "",
-    "Wheeldon Brothers Waste Ltd": "",
-    "Waste Cloud Limited": "",
-    "Yorwaste Ltd": "",
-    "Yes Waste Limited": "",
-}
+    <div id="loading" class="card hidden">
+      <div class="body">Extracting data from PDF…</div>
+    </div>
 
-EXTRACT_PROMPT = """You are extracting data from a supplier purchase order PDF sent to Waste Experts.
+    <div id="edit" class="card hidden">
+      <div class="head">Review &amp; Edit Extracted Data</div>
+      <div class="body">
+        <div class="grid">
+          <div class="field full">
+            <label for="account_name">Account Name (Waste Logics)</label>
+            <input id="account_name" list="account-list" autocomplete="off" placeholder="Start typing account name..." />
+            <datalist id="account-list"></datalist>
+            <div id="account-error" class="error hidden">Please choose supplier</div>
+          </div>
 
-STEP 1 — IDENTIFY THE SUPPLIER (Broker)
-Scan the ENTIRE document — logo, header, footer, terms, email addresses, phrases like "X Ltd employee", "email to X", "accept X terms & conditions", "Registered Office" — and match against this approved broker list:
+          <div class="field full">
+            <label>Bill To (Representative Address)</label>
+            <textarea id="supplier_address" placeholder="Supplier address will appear here"></textarea>
+          </div>
 
-ACM Environmental PLC, Acumen Waste Services, 707 Ltd, Click Waste, Aqua Force Special Waste Ltd, AMA Waste, Associated Waste Management Ltd, Asprey St John & Co Ltd, Ash Waste Services Ltd, ACMS Waste Limited, A1 Chemical Waste Management Ltd, Alchemy Metals Ltd, Bakers Waste Services Ltd, Biffa Waste Services Limited, BW Skip Hire, Bywaters (Leyton) Limited, Bagnall & Morris Waste Services Ltd, Baileys Skip Hire and Recycling Ltd, Business Waste Ltd, Brown Recycling Ltd, BKP Waste & Recycling Ltd, Belford Bros Skip Hire Ltd, Countrystyle Recycling Ltd, Cartwrights Waste Disposal Services, C & M Waste Management Ltd, Change Waste Recycling Limited, Chloros Environmental Ltd, CHC Waste FM Ltd, Cleansing Service Group Ltd, Circle Waste Ltd, City Waste London Ltd, Cheshire Waste Skip Hire Limited, Circom Ltd, CITB, DP Skip Hire Ltd, Forward Environmental Ltd, EMN Plant Ltd, E-Cycle Limited, Enva England Ltd, Ellgia Ltd, Eco-Cycle Waste Management Ltd, Enva WEEE Recycling Scotland Ltd, FPWM Ltd, Footprint Recycling, Forward Waste Management Ltd, Fresh Start Waste Ltd, Forvis Mazars LLP, Greenzone Facilities Management Ltd, Greenway Environmental Ltd, GPT Waste Management Ltd, Go Green, Germstar UK Ltd, GD Environmental Services Ltd, Great Western Recycling Ltd, Grundon Waste Management Ltd, Gillett Environmental Ltd, Go For It Trading Ltd, Go 4 Greener Waste Management Ltd, Intelligent Waste Management Limited, J & B Recycling Ltd, Just Clear Ltd, Just A Step UK Ltd, J Dickinson & Sons (Horwich) Limited, Kenny Waste Management Ltd, Kane Management Consultancy Ltd, LSS Waste Management, LTL Systems Ltd, Mitie Waste & Environmental Services Limited, Mitie, MJ Church Recycling Ltd, M & M Skip Hire Ltd, MVV Environment, Mick George Recycling Ltd, NWH Waste Services, Nationwide Waste Services Limited, Optima Health UK Ltd, Premier Waste Recycling Ltd, Pearce Recycling Company Ltd, Phoenix Environmental Management Ltd, Papilo Ltd, RFMW UK Ltd, Riverdale Paper PLC, Remondis Ltd, Roydon Resource Recovery Limited, Risinxtreme Limited, Recorra Ltd, Sackers Ltd, Suez Recycling and Recovery UK Ltd, Suez, Safety Kleen UK Limited, Mobius Environmental Ltd, Sustainable Waste Services, Select A Skip UK Ltd, Slicker Recycling Ltd, Sommers Waste Solutions Limited, Saica Natur UK Ltd, Site Clear Solutions Ltd, Sharp Brothers (Skips) Ltd, SLM Waste Management Limited, Shredall (East Midlands) Limited, Scott Waste Limited, Smiths (Gloucester) Ltd, Tradebe North West Ltd, The Waste Brokerage Co Ltd, T.Ward & Son Ltd, Terracycle UK Limited, UK Waste Solutions Ltd, UBT (EU) Ltd, Veolia ES (UK) Ltd, Verto Recycle Ltd, Waste Management Facilities Ltd, Reconomy (UK) Ltd, Waterman Waste Management Ltd, Wastenot Ltd, Waste Wise Management Solutions, WEEE (Scotland) Ltd, WM101 Ltd, Whitkirk Waste Solutions Ltd, Williams Environmental Management Ltd, Wastesolve Limited, WMR Waste Solutions Ltd, Wheeldon Brothers Waste Ltd, Waste Cloud Limited, Yorwaste Ltd, Yes Waste Limited
+          <div class="field">
+            <label>Purchase order number</label>
+            <input id="purchase_order_number" type="text" />
+          </div>
+          <div class="field">
+            <label>Document Type</label>
+            <select id="document_type" class="hl">
+              <option>Consignment Note</option>
+              <option>Waste Transfer Note</option>
+            </select>
+          </div>
 
-Set "supplier" to the BEST MATCHING name from the list. NEVER use: Waste Experts, Electrical Waste Recycling Group, or the waste producer/site company.
+          <div class="field"><label>Site contact</label><input id="site_contact" type="text" /></div>
+          <div class="field"><label>Site contact number</label><input id="site_contact_number" type="text" /></div>
+          <div class="field full"><label>Site contact email</label><input id="site_contact_email" type="email" /></div>
 
-STEP 2 — Extract all fields and return ONLY a valid JSON object:
+          <div class="field"><label>Secondary site contact</label><input id="secondary_site_contact" type="text" /></div>
+          <div class="field"><label>Secondary site contact number</label><input id="secondary_site_contact_number" type="text" /></div>
+          <div class="field full"><label>Secondary site contact email</label><input id="secondary_site_contact_email" type="email" /></div>
 
-{
-  "supplier": "Best matching broker name from the approved list, or null",
-  "purchase_order_number": "The PO or order reference number",
-  "site_contact": "Primary site contact full name, or null",
-  "site_contact_number": "Primary site contact phone number, or null",
-  "site_contact_email": "Primary site contact email address, or null",
-  "secondary_site_contact": "Secondary/alternative contact full name, or null",
-  "secondary_site_contact_number": "Secondary contact phone number, or null",
-  "secondary_site_contact_email": "Secondary contact email address, or null",
-  "site_name": "Name of the collection/service site (e.g. 'Garic Hire Ltd - Sandy')",
-  "site_address": "Full site street address, newline-separated (do NOT include postcode here)",
-  "site_postcode": "Site postcode only (e.g. SG19 1QY)",
-  "opening_times": "Site opening hours if explicitly stated, or null",
-  "access": "Access time window and day restrictions (e.g. '8am - 5pm Monday - Friday'), or null",
-  "site_restrictions": "PPE requirements, vehicle restrictions, height restrictions, or other site-specific rules, or null",
-  "special_instructions": "Order notes, amended orders, call-ahead instructions, or any other important notes, or null",
-  "waste_type": "Waste type or material as stated on the PO",
-  "ewc_code": "EWC code if present (e.g. '20.01.21*'). Codes ending in * are hazardous.",
-  "container_type": "Container type and size (e.g. 'Corrugated Flo Tube Pipe', '8ft Dura Pipe')",
-  "movement_type": "Movement type (e.g. 'Exchange', 'Collection', 'Removal')",
-  "transport_cost": 0.00,
-  "note_already_included": true
-}
+          <div class="field"><label>Site name</label><input id="site_name" type="text" /></div>
+          <div class="field"><label>Site postcode</label><input id="site_postcode" type="text" /></div>
+          <div class="field full"><label>Site address</label><textarea id="site_address"></textarea></div>
 
-RULES:
-- note_already_included: true if transport/service cost already includes consignment or transfer note fee. false if note must be added separately.
-- Use numeric type (not string) for transport_cost.
-- Return ONLY the JSON object — no markdown fences, no explanation."""
+          <div class="field"><label>Opening times</label><textarea id="opening_times"></textarea></div>
+          <div class="field"><label>Access</label><textarea id="access"></textarea></div>
+          <div class="field"><label>Site restrictions</label><textarea id="site_restrictions"></textarea></div>
+          <div class="field"><label>Special instructions</label><textarea id="special_instructions"></textarea></div>
+        </div>
 
+        <div style="margin-top:14px; display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
+          <button class="btn" type="button" onclick="saveReview()">Save Review</button>
+          <span class="pill">Extracted PDF includes selected note type</span>
+          <span id="save-status" class="ok hidden">Review saved.</span>
+        </div>
+      </div>
+    </div>
+  </div>
 
-@app.route('/')
-def index():
-    return render_template('index.html', brokers=json.dumps(list(BROKERS.keys())))
+  <script>
+    const BROKERS = {{ brokers_json|safe }};
+    const brokerNames = BROKERS.map(b => b.name);
+    const brokerAddressMap = Object.fromEntries(BROKERS.map(b => [b.name, b.address || '']));
 
+    const fileInput = document.getElementById('file-input');
+    const dropZone = document.getElementById('drop-zone');
 
-@app.route('/extract', methods=['POST'])
-def extract():
-    if 'pdf' not in request.files:
-        return jsonify({'error': 'No PDF uploaded'}), 400
+    function renderAccountOptions(term = '') {
+      const list = document.getElementById('account-list');
+      const q = term.trim().toLowerCase();
+      const matches = brokerNames.filter(name => name.toLowerCase().startsWith(q));
+      const options = (q ? matches : brokerNames).slice(0, 50);
+      list.innerHTML = options.map(name => `<option value="${name}"></option>`).join('');
+    }
 
-    pdf_file = request.files['pdf']
-    pdf_bytes = pdf_file.read()
-    b64 = base64.standard_b64encode(pdf_bytes).decode()
+    function setField(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.value = value || '';
+    }
 
-    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
-    if not api_key:
-        return jsonify({'error': 'ANTHROPIC_API_KEY not set'}), 500
+    function getField(id) {
+      const el = document.getElementById(id);
+      return el ? el.value.trim() : '';
+    }
 
-    client = anthropic.Anthropic(api_key=api_key)
+    function fillForm(data) {
+      const extractedAccount = data.supplier || data.account_name || '';
+      [
+        'purchase_order_number','site_contact','site_contact_number','site_contact_email',
+        'secondary_site_contact','secondary_site_contact_number','secondary_site_contact_email',
+        'site_name','site_address','site_postcode','opening_times','access','site_restrictions','special_instructions'
+      ].forEach(key => setField(key, data[key]));
 
-    try:
-        resp = client.messages.create(
-            model='claude-opus-4-6',
-            max_tokens=2000,
-            messages=[{
-                'role': 'user',
-                'content': [
-                    {
-                        'type': 'document',
-                        'source': {
-                            'type': 'base64',
-                            'media_type': 'application/pdf',
-                            'data': b64,
-                        },
-                    },
-                    {'type': 'text', 'text': EXTRACT_PROMPT},
-                ],
-            }],
-        )
+      setField('account_name', extractedAccount);
+      const docType = data.document_type === 'Waste Transfer Note' ? 'Waste Transfer Note' : 'Consignment Note';
+      setField('document_type', docType);
+      updateSupplierAddress();
+      validateAccount();
+    }
 
-        raw = resp.content[0].text.strip()
-        if '```' in raw:
-            raw = raw[raw.find('{'):raw.rfind('}') + 1]
+    function updateSupplierAddress() {
+      const account = getField('account_name');
+      const current = getField('supplier_address');
+      const suggested = brokerAddressMap[account] || '';
+      if (!current || current === suggested || brokerNames.includes(account)) {
+        setField('supplier_address', suggested);
+      }
+    }
 
-        data = json.loads(raw)
+    function validateAccount() {
+      const account = getField('account_name');
+      const valid = brokerNames.includes(account);
+      document.getElementById('account-error').classList.toggle('hidden', valid);
+      if (!valid) {
+        document.getElementById('supplier_address').value = '';
+      }
+      return valid;
+    }
 
-        supplier = data.get('supplier') or ''
-        data['supplier_address'] = BROKERS.get(supplier, '')
-        data['supplier_found'] = bool(supplier and supplier in BROKERS)
+    function collectReviewPayload() {
+      return {
+        account_name: getField('account_name'),
+        supplier_address: getField('supplier_address'),
+        purchase_order_number: getField('purchase_order_number'),
+        document_type: getField('document_type'),
+        site_contact: getField('site_contact'),
+        site_contact_number: getField('site_contact_number'),
+        site_contact_email: getField('site_contact_email'),
+        secondary_site_contact: getField('secondary_site_contact'),
+        secondary_site_contact_number: getField('secondary_site_contact_number'),
+        secondary_site_contact_email: getField('secondary_site_contact_email'),
+        site_name: getField('site_name'),
+        site_address: getField('site_address'),
+        site_postcode: getField('site_postcode'),
+        opening_times: getField('opening_times'),
+        access: getField('access'),
+        site_restrictions: getField('site_restrictions'),
+        special_instructions: getField('special_instructions')
+      };
+    }
 
-        return jsonify({'success': True, 'data': data})
+    async function saveReview() {
+      const valid = validateAccount();
+      const status = document.getElementById('save-status');
+      status.classList.add('hidden');
+      if (!valid) return;
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+      const payload = collectReviewPayload();
 
+      try {
+        const resp = await fetch('/save-review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const json = await resp.json();
+        if (!resp.ok || json.error) throw new Error(json.error || 'Unable to save review');
 
-@app.route('/broker-address', methods=['GET'])
-def broker_address():
-    name = request.args.get('name', '')
-    address = BROKERS.get(name, '')
-    return jsonify({'name': name, 'address': address})
+        window.lastReviewedPayload = json.data || payload;
+        status.textContent = json.message || 'Review saved.';
+        status.classList.remove('hidden');
+        setTimeout(() => status.classList.add('hidden'), 2500);
+      } catch (err) {
+        alert(err.message);
+      }
+    }
 
+    async function uploadAndExtract(file) {
+      document.getElementById('file-label').textContent = file.name;
+      document.getElementById('loading').classList.remove('hidden');
+      document.getElementById('edit').classList.add('hidden');
 
-@app.route('/brokers', methods=['GET'])
-def get_brokers():
-    return jsonify({'brokers': [{'name': k, 'address': v} for k, v in BROKERS.items()]})
+      const fd = new FormData();
+      fd.append('pdf', file);
 
+      try {
+        const resp = await fetch('/extract', { method: 'POST', body: fd });
+        const json = await resp.json();
+        if (!resp.ok || json.error) throw new Error(json.error || 'Extraction failed');
+        fillForm(json.data || {});
+        document.getElementById('edit').classList.remove('hidden');
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        document.getElementById('loading').classList.add('hidden');
+      }
+    }
 
-if __name__ == '__main__':
-    app.run(debug=True)
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); });
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file && file.name.toLowerCase().endsWith('.pdf')) uploadAndExtract(file);
+    });
+    fileInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (file) uploadAndExtract(file);
+    });
+
+    const accountInput = document.getElementById('account_name');
+    accountInput.addEventListener('focus', () => renderAccountOptions(accountInput.value));
+    accountInput.addEventListener('input', () => {
+      renderAccountOptions(accountInput.value);
+      updateSupplierAddress();
+      validateAccount();
+    });
+    accountInput.addEventListener('change', () => {
+      updateSupplierAddress();
+      validateAccount();
+    });
+
+    renderAccountOptions('');
+  </script>
+</body>
+</html>
