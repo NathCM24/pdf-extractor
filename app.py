@@ -76,20 +76,18 @@ RULES:
 
 # ─── Brand constants ──────────────────────────────────────────────────────────
 
-DARK_BG = colors.HexColor("#1e1e2e")
-DARK_CARD = colors.HexColor("#2a2a3d")
-GREEN = colors.HexColor("#7ac943")
-GREEN_DARK = colors.HexColor("#5a9e2e")
+NAVY = colors.HexColor("#1e2e3d")
+GREEN = colors.HexColor("#8ec431")
+GREEN_PALE = colors.HexColor("#f0f8e0")
 WHITE = colors.white
-LIGHT_ROW = colors.HexColor("#f4f6f9")
-ALT_ROW = colors.HexColor("#e9ecf1")
-MID_GREY = colors.HexColor("#3a3a50")
-TEXT_DARK = colors.HexColor("#1e1e2e")
-TEXT_LIGHT = colors.HexColor("#e0e0e8")
-LABEL_GREY = colors.HexColor("#9ca3af")
-BORDER_CLR = colors.HexColor("#3a3a50")
-BG_BOX = colors.HexColor("#2a2a3d")
-SECTION_BG = colors.HexColor("#252538")
+LIGHT_ROW = colors.HexColor("#f4f7fb")
+MID_GREY = colors.HexColor("#dde4ec")
+TEXT_DARK = colors.HexColor("#1e2e3d")
+TEXT_BODY = colors.HexColor("#2d3748")
+LABEL_GREY = colors.HexColor("#718096")
+BORDER_CLR = colors.HexColor("#c8d6e5")
+BG_BOX = colors.HexColor("#f4f7fb")
+SECTION_BG = colors.HexColor("#e8edf2")
 
 PAGE_W, PAGE_H = A4
 MARGIN = 14 * mm
@@ -232,12 +230,10 @@ def _build_review_pdf(payload: dict) -> BytesIO:
         nonlocal y
         y -= delta
 
-    def draw_page_bg():
-        """Full-page dark background + green accent bar at top."""
-        c.setFillColor(DARK_BG)
-        c.rect(0, 0, PAGE_W, PAGE_H, stroke=0, fill=1)
+    def draw_top_border():
+        """Green accent bar at top of page."""
         c.setFillColor(GREEN)
-        c.rect(0, PAGE_H - 4, PAGE_W, 4, stroke=0, fill=1)
+        c.rect(0, PAGE_H - 5, PAGE_W, 5, stroke=0, fill=1)
 
     def draw_footer():
         c.setStrokeColor(MID_GREY)
@@ -259,15 +255,15 @@ def _build_review_pdf(payload: dict) -> BytesIO:
         draw_footer()
         c.showPage()
         y = PAGE_H - MARGIN
-        draw_page_bg()
+        draw_top_border()
 
     def section_label(x, sy, text):
         c.setFont(FONT_B, 7)
-        c.setFillColor(GREEN)
+        c.setFillColor(NAVY)
         c.drawString(x, sy, text.upper())
 
     # ── Page background ──────────────────────────────────────────────────
-    draw_page_bg()
+    draw_top_border()
 
     # ── Logo (centred) ────────────────────────────────────────────────────
     logo_h = 16 * mm
@@ -292,7 +288,7 @@ def _build_review_pdf(payload: dict) -> BytesIO:
     service_desc = (payload.get("service_description") or "").strip()
     if service_desc:
         title_text = service_desc.upper()
-        c.setFillColor(WHITE)
+        c.setFillColor(NAVY)
         font_size = 16
         while font_size > 9 and c.stringWidth(title_text, FONT_XB, font_size) > CONTENT_W:
             font_size -= 0.5
@@ -318,11 +314,11 @@ def _build_review_pdf(payload: dict) -> BytesIO:
     supplier_address = (payload.get("supplier_address") or "").strip()
 
     c.setFont(FONT_B, 10)
-    c.setFillColor(WHITE)
+    c.setFillColor(NAVY)
     c.drawString(col1_x, y, account_name)
     down(5 * mm)
     c.setFont(FONT_R, 9)
-    c.setFillColor(TEXT_LIGHT)
+    c.setFillColor(TEXT_BODY)
     if supplier_address:
         for al in [l.strip() for l in supplier_address.split("\n") if l.strip()][:6]:
             c.drawString(col1_x, y, al)
@@ -334,11 +330,11 @@ def _build_review_pdf(payload: dict) -> BytesIO:
     section_label(col2_x, y, "From")
     y -= 4.5 * mm
     c.setFont(FONT_B, 10)
-    c.setFillColor(WHITE)
+    c.setFillColor(NAVY)
     c.drawString(col2_x, y, "Waste Experts")
     y -= 5 * mm
     c.setFont(FONT_R, 9)
-    c.setFillColor(TEXT_LIGHT)
+    c.setFillColor(TEXT_BODY)
     for we_line in WE_ADDRESS:
         c.drawString(col2_x, y, we_line)
         y -= 4.5 * mm
@@ -350,13 +346,13 @@ def _build_review_pdf(payload: dict) -> BytesIO:
     # ── Prepared By row ───────────────────────────────────────────────────
     prep_h = 17 * mm
     ensure_space(prep_h + 6 * mm)
-    _rounded_rect(c, MARGIN, y - prep_h, CONTENT_W, prep_h, fill=DARK_CARD)
+    _rounded_rect(c, MARGIN, y - prep_h, CONTENT_W, prep_h, fill=BG_BOX, stroke=MID_GREY)
     section_label(MARGIN + 3 * mm, y - 4 * mm, "Prepared By")
     c.setFont(FONT_B, 9)
-    c.setFillColor(WHITE)
+    c.setFillColor(NAVY)
     c.drawString(MARGIN + 3 * mm, y - 9 * mm, PREPARED_BY["name"])
     c.setFont(FONT_R, 8.5)
-    c.setFillColor(TEXT_LIGHT)
+    c.setFillColor(TEXT_BODY)
     c.drawString(MARGIN + 3 * mm, y - 14 * mm, PREPARED_BY["title"])
     c.drawRightString(
         PAGE_W - MARGIN - 3 * mm,
@@ -371,30 +367,52 @@ def _build_review_pdf(payload: dict) -> BytesIO:
     box_h = 13 * mm
     ensure_space(box_h + 8 * mm)
 
-    _rounded_rect(c, MARGIN, y - box_h, box_w, box_h, fill=DARK_CARD, stroke=MID_GREY)
+    _rounded_rect(c, MARGIN, y - box_h, box_w, box_h, fill=BG_BOX, stroke=MID_GREY)
     section_label(MARGIN + 3 * mm, y - 4.5 * mm, "Reference")
     c.setFont(FONT_B, 11)
-    c.setFillColor(WHITE)
+    c.setFillColor(NAVY)
     c.drawString(MARGIN + 3 * mm, y - 9.5 * mm, payload.get("purchase_order_number") or "\u2014")
 
     dt_x = MARGIN + box_w + box_gap
-    _rounded_rect(c, dt_x, y - box_h, box_w, box_h, fill=DARK_CARD, stroke=MID_GREY)
+    _rounded_rect(c, dt_x, y - box_h, box_w, box_h, fill=BG_BOX, stroke=MID_GREY)
     section_label(dt_x + 3 * mm, y - 4.5 * mm, "Document Type")
     c.setFont(FONT_B, 10)
-    c.setFillColor(WHITE)
+    c.setFillColor(NAVY)
     c.drawString(dt_x + 3 * mm, y - 9.5 * mm, payload.get("document_type") or "\u2014")
 
     ex_x = MARGIN + 2 * (box_w + box_gap)
-    _rounded_rect(c, ex_x, y - box_h, box_w, box_h, fill=DARK_CARD, stroke=MID_GREY)
+    _rounded_rect(c, ex_x, y - box_h, box_w, box_h, fill=BG_BOX, stroke=MID_GREY)
     section_label(ex_x + 3 * mm, y - 4.5 * mm, "Quote Valid Until")
     c.setFont(FONT_B, 11)
-    c.setFillColor(WHITE)
+    c.setFillColor(NAVY)
     c.drawString(ex_x + 3 * mm, y - 9.5 * mm, "\u2014")
 
     down(box_h + 8 * mm)
 
     # ── Products & Services table ─────────────────────────────────────────
-    line_items = payload.get("line_items") or []
+    line_items = list(payload.get("line_items") or [])
+
+    # Inject document type as a line item
+    doc_type = (payload.get("document_type") or "").strip()
+    if doc_type:
+        note_names = {"consignment note", "waste transfer note"}
+        already_listed = any(
+            (it.get("description") or "").strip().lower() in note_names
+            for it in line_items
+        )
+        if not already_listed:
+            has_quote = any(float(it.get("unit_price") or 0) > 0 for it in line_items)
+            if has_quote:
+                line_items.append({
+                    "description": doc_type, "quantity": 1,
+                    "unit_price": 0, "line_total": 0,
+                })
+            else:
+                line_items.append({
+                    "description": doc_type, "quantity": 1,
+                    "unit_price": 40.00, "line_total": 40.00,
+                })
+
     if line_items:
         ps_col_w = [CONTENT_W * 0.50, CONTENT_W * 0.11, CONTENT_W * 0.19, CONTENT_W * 0.20]
         ps_headers = ["PRODUCTS & SERVICES", "QTY", "PRICE / UNIT", "LINE TOTAL"]
@@ -444,7 +462,7 @@ def _build_review_pdf(payload: dict) -> BytesIO:
 
             grand_total += total
 
-            row_fill = DARK_CARD if idx % 2 == 0 else SECTION_BG
+            row_fill = LIGHT_ROW if idx % 2 == 0 else WHITE
             c.setFillColor(row_fill)
             c.rect(MARGIN, y - ps_row_h, CONTENT_W, ps_row_h, fill=1, stroke=0)
             c.setStrokeColor(MID_GREY)
@@ -461,24 +479,32 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             if desc_str != desc and len(desc_str) > 1:
                 desc_str = desc_str[:-1] + "\u2026"
 
-            c.setFillColor(TEXT_LIGHT)
+            c.setFillColor(TEXT_BODY)
             c.drawString(MARGIN + 3 * mm, text_y, desc_str)
 
+            is_doc_line = desc.strip().lower() in {"consignment note", "waste transfer note"}
             rx = MARGIN + ps_col_w[0]
             c.setFont(FONT_R, 9)
             c.drawRightString(rx + ps_col_w[1] - 3 * mm, text_y,
                               str(int(qty_f) if qty_f == int(qty_f) else qty_f))
             rx += ps_col_w[1]
-            c.drawRightString(rx + ps_col_w[2] - 3 * mm, text_y, _money(unit))
-            rx += ps_col_w[2]
-            c.setFont(FONT_B, 9)
-            c.setFillColor(GREEN)
-            c.drawRightString(rx + ps_col_w[3] - 3 * mm, text_y, _money(total))
+            if is_doc_line and unit == 0:
+                c.setFillColor(LABEL_GREY)
+                c.drawRightString(rx + ps_col_w[2] - 3 * mm, text_y, "\u2014")
+                rx += ps_col_w[2]
+                c.setFont(FONT_B, 9)
+                c.drawRightString(rx + ps_col_w[3] - 3 * mm, text_y, "\u2014")
+            else:
+                c.drawRightString(rx + ps_col_w[2] - 3 * mm, text_y, _money(unit))
+                rx += ps_col_w[2]
+                c.setFont(FONT_B, 9)
+                c.setFillColor(NAVY)
+                c.drawRightString(rx + ps_col_w[3] - 3 * mm, text_y, _money(total))
 
             down(ps_row_h)
 
-        # Overall total row
-        overall_total = float(payload.get("overall_total") or grand_total)
+        # Overall total row — use grand_total which includes any doc type charge
+        overall_total = grand_total
         tot_row_h = 10 * mm
         ensure_space(tot_row_h)
         _rounded_rect(c, MARGIN, y - tot_row_h, CONTENT_W, tot_row_h, r=2 * mm, fill=GREEN)
@@ -520,7 +546,7 @@ def _build_review_pdf(payload: dict) -> BytesIO:
 
     row_index = 0
     for section_title, fields in sections:
-        # Section header — dark with green text
+        # Section header
         ensure_space(section_hdr_h + row_h)
         c.setFillColor(SECTION_BG)
         c.rect(MARGIN, y - section_hdr_h, CONTENT_W, section_hdr_h, fill=1, stroke=0)
@@ -528,7 +554,7 @@ def _build_review_pdf(payload: dict) -> BytesIO:
         c.setLineWidth(0.3)
         c.line(MARGIN, y - section_hdr_h, MARGIN + CONTENT_W, y - section_hdr_h)
         c.setFont(FONT_B, 7.5)
-        c.setFillColor(GREEN)
+        c.setFillColor(LABEL_GREY)
         c.drawString(MARGIN + 4 * mm, y - section_hdr_h + 2 * mm, section_title)
         down(section_hdr_h)
 
@@ -547,8 +573,8 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             this_row_h = max(row_h, len(value_lines) * 4 * mm + 4 * mm)
             ensure_space(this_row_h)
 
-            # Alternate row shading — dark tones
-            row_fill = DARK_CARD if row_index % 2 == 0 else SECTION_BG
+            # Alternate row shading
+            row_fill = LIGHT_ROW if row_index % 2 == 0 else WHITE
             c.setFillColor(row_fill)
             c.rect(MARGIN, y - this_row_h, CONTENT_W, this_row_h, fill=1, stroke=0)
 
@@ -560,15 +586,15 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             # Vertical divider
             c.line(MARGIN + label_col_w, y, MARGIN + label_col_w, y - this_row_h)
 
-            # Label text (bold, green)
+            # Label text (bold, navy)
             c.setFont(FONT_B, 9)
-            c.setFillColor(GREEN)
+            c.setFillColor(NAVY)
             label_y = y - (this_row_h / 2) - 1 * mm if len(value_lines) <= 1 else y - 5 * mm
             c.drawString(MARGIN + 4 * mm, label_y, field_label)
 
-            # Value text (white)
+            # Value text
             c.setFont(FONT_R, 9)
-            c.setFillColor(TEXT_LIGHT)
+            c.setFillColor(TEXT_BODY)
             val_y = y - 5 * mm
             for vl in value_lines:
                 c.drawString(MARGIN + label_col_w + 4 * mm, val_y, vl)
@@ -578,7 +604,7 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             row_index += 1
 
     # Table bottom border
-    c.setStrokeColor(GREEN)
+    c.setStrokeColor(MID_GREY)
     c.setLineWidth(0.5)
     c.line(MARGIN, y, MARGIN + CONTENT_W, y)
 
@@ -593,13 +619,13 @@ def _build_review_pdf(payload: dict) -> BytesIO:
 
     _rounded_rect(
         c, MARGIN, y - comm_content_h, CONTENT_W, comm_content_h,
-        fill=DARK_CARD, stroke=MID_GREY, lw=1,
+        stroke=BORDER_CLR, lw=1.5,
     )
     section_label(MARGIN + 4 * mm, y - 5 * mm, "Caveats / Comments")
 
     if note_lines:
         c.setFont(FONT_R, 9)
-        c.setFillColor(TEXT_LIGHT)
+        c.setFillColor(TEXT_BODY)
         note_y = y - 11 * mm
         for nl in note_lines:
             c.drawString(MARGIN + 4 * mm, note_y, nl)
