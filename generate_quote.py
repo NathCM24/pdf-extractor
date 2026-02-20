@@ -159,8 +159,8 @@ def ensure_fonts():
 EXTRACT_PROMPT = """Extract all of the following fields from this PDF document and return ONLY a valid JSON object.
 
 {
-  "po_provider_name":    "The company who SENT this PO to us. Look for: (1) company name in the page header/logo, (2) phrases like 'Go Green Ltd employee', 'email to operations@gogreen.co.uk', 'accept Go Green Ltd terms', (3) the domain of any email address present (e.g. @gogreen.co.uk → Go Green, @mitie.com → Mitie, @suez.com → Suez, @businesswaste.co.uk → Business Waste), (4) Registered Office company name in footer. NEVER use Waste Experts, Electrical Waste Recycling Group, or the waste producer/site as the sender.",
-  "po_provider_address": "Postal address of the PO sender. Look in: Registered Office block in footer, header address block, or terms section. Newline-separated, or null.",
+  "po_provider_name":    "The company who SENT this PO to us. Look for: (1) company name printed prominently at the top-left of the document or as a header/logo label, (2) phrases like 'Go Green Ltd employee', 'email to operations@gogreen.co.uk', 'accept Go Green Ltd terms & conditions', (3) the domain of any email address present (e.g. @gogreen.co.uk → Go Green, @mitie.com → Mitie, @suez.com → Suez, @businesswaste.co.uk → Business Waste), (4) Registered Office company name in footer. Return the plain trading name only (e.g. 'Go Green', not 'Go Green Ltd'). NEVER use Waste Experts, Electrical Waste Recycling Group, or the waste producer/site as the sender.",
+  "po_provider_address": "Full postal address of the PO sender, formatted exactly as it appears on the document (street, city, county, postcode, country on separate lines). Look in the document header near the company name first, then footer Registered Office block. Return newline-separated string, or null.",
   "po_provider_email":   "Email address belonging to the PO sender's domain (not wasteexperts.co.uk), or null.",
 
   "supplier_name":       "Same as po_provider_name",
@@ -178,7 +178,7 @@ EXTRACT_PROMPT = """Extract all of the following fields from this PDF document a
   "site_postcode":    "Postcode of the collection/site location (e.g. SG19 1QY), or null",
   "line_items": [
     {
-      "description": "SHORT description — max 5 words. Examples: 'Dura Pipe Exchange', 'Mixed Lamps Service', 'WEEE Magnum Collection', 'Consignment Note'. Strip out repetitive or redundant words.",
+      "description": "Concise but clear description — aim for the style: 'Container Type - Service Type' (e.g. '8ft Dura Pipe - Exchange', 'Mixed Lamps - Full Service Charge', 'WEEE Magnum - Collection', 'Consignment Note'). Keep container size/type and service action. Max ~6 words. Do NOT include EWC codes or long waste descriptions.",
       "quantity":    1,
       "unit_price":  0.00,
       "line_total":  0.00
@@ -595,9 +595,9 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     c.setFillColor(TEXT_GREY)
     addr_lines = [
         l.strip()
-        for l in (supplier_address or "").replace(", ", "\n").split("\n")
+        for l in (supplier_address or "").split("\n")
         if l.strip()
-    ][:5]
+    ][:6]
     for al in addr_lines:
         c.drawString(col1_x, y, al)
         down(4.5 * mm)
