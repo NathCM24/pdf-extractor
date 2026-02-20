@@ -1,570 +1,246 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Supplier Order Extractor — Waste Experts</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+from flask import Flask, request, jsonify, render_template
+import anthropic
+import base64
+import os
+import json
 
-  body {
-    font-family: 'Segoe UI', Arial, sans-serif;
-    background: #f0f4f8;
-    min-height: 100vh;
-    color: #2d3748;
-  }
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20MB
 
-  /* Header */
-  .header {
-    background: #1a3a5c;
-    padding: 18px 32px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  .header h1 { color: #fff; font-size: 20px; font-weight: 600; }
-  .header p  { color: #a8c4e0; font-size: 13px; margin-top: 2px; }
+# ─── Broker list with addresses ───────────────────────────────────────────────
+# Update addresses here as you gather them. Address is newline-separated.
+BROKERS = {
+    "ACM Environmental PLC": "",
+    "Acumen Waste Services": "",
+    "707 Ltd / Click Waste": "",
+    "Aqua Force Special Waste Ltd": "",
+    "AMA Waste": "",
+    "Associated Waste Management Ltd": "",
+    "Asprey St John & Co Ltd": "",
+    "Ash Waste Services Ltd": "",
+    "ACMS Waste Limited": "",
+    "A1 Chemical Waste Management Ltd": "",
+    "Alchemy Metals Ltd": "",
+    "Bakers Waste Services Ltd": "",
+    "Biffa Waste Services Limited": "Biffa House, Rigby Court\nWokingham\nBerkshire\nRG41 5BN",
+    "BW Skip Hire": "",
+    "Bywaters (Leyton) Limited": "",
+    "Bagnall & Morris Waste Services Ltd": "",
+    "Baileys Skip Hire and Recycling Ltd": "",
+    "Business Waste Ltd": "",
+    "Brown Recycling Ltd": "",
+    "BKP Waste & Recycling Ltd": "",
+    "Belford Bros Skip Hire Ltd": "",
+    "Countrystyle Recycling Ltd": "",
+    "Cartwrights Waste Disposal Services": "",
+    "C & M Waste Management Ltd": "",
+    "Change Waste Recycling Limited": "",
+    "Chloros Environmental Ltd": "",
+    "CHC Waste FM Ltd": "",
+    "Cleansing Service Group Ltd": "",
+    "Circle Waste Ltd": "",
+    "City Waste London Ltd": "",
+    "Cheshire Waste Skip Hire Limited": "",
+    "Circom Ltd": "",
+    "CITB": "",
+    "DP Skip Hire Ltd": "",
+    "Forward Environmental Ltd": "",
+    "EMN Plant Ltd": "",
+    "E-Cycle Limited": "",
+    "Enva England Ltd": "",
+    "Ellgia Ltd": "",
+    "Eco-Cycle Waste Management Ltd": "",
+    "Enva WEEE Recycling Scotland Ltd": "",
+    "FPWM Ltd / Footprint Recycling": "",
+    "Forward Waste Management Ltd": "",
+    "Fresh Start Waste Ltd": "",
+    "Forvis Mazars LLP": "",
+    "Greenzone Facilities Management Ltd": "",
+    "Greenway Environmental Ltd": "",
+    "GPT Waste Management Ltd": "",
+    "Go Green": "323 Bawtry Road\nDoncaster\nEngland DN4 7PB\nUnited Kingdom",
+    "Germstar UK Ltd": "",
+    "GD Environmental Services Ltd": "",
+    "Great Western Recycling Ltd": "",
+    "Grundon Waste Management Ltd": "",
+    "Gillett Environmental Ltd": "",
+    "Go For It Trading Ltd": "",
+    "Go 4 Greener Waste Management Ltd": "",
+    "Intelligent Waste Management Limited": "",
+    "J & B Recycling Ltd": "",
+    "Just Clear Ltd": "",
+    "Just A Step UK Ltd": "",
+    "J Dickinson & Sons (Horwich) Limited": "",
+    "Kenny Waste Management Ltd": "",
+    "Kane Management Consultancy Ltd": "",
+    "LSS Waste Management": "",
+    "LTL Systems Ltd": "",
+    "Mitie Waste & Environmental Services Limited": "1 Bartholomew Lane\nLondon\nEC2N 2AX",
+    "MJ Church Recycling Ltd": "",
+    "M & M Skip Hire Ltd": "",
+    "MVV Environment": "",
+    "Mick George Recycling Ltd": "",
+    "NWH Waste Services": "",
+    "Nationwide Waste Services Limited": "",
+    "Optima Health UK Ltd": "",
+    "Premier Waste Recycling Ltd": "",
+    "Pearce Recycling Company Ltd": "",
+    "Phoenix Environmental Management Ltd": "",
+    "Papilo Ltd": "",
+    "RFMW UK Ltd": "",
+    "Riverdale Paper PLC": "",
+    "Remondis Ltd": "",
+    "Roydon Resource Recovery Limited": "",
+    "Risinxtreme Limited": "",
+    "Recorra Ltd": "",
+    "Sackers Ltd": "",
+    "Suez Recycling and Recovery UK Ltd": "2100 Coventry Road\nSheldon\nBirmingham\nB26 3EA",
+    "Safety Kleen UK Limited": "",
+    "Mobius Environmental Ltd": "",
+    "Sustainable Waste Services": "",
+    "Select A Skip UK Ltd": "",
+    "Slicker Recycling Ltd": "",
+    "Sommers Waste Solutions Limited": "",
+    "Saica Natur UK Ltd": "",
+    "Site Clear Solutions Ltd": "",
+    "Sharp Brothers (Skips) Ltd": "",
+    "SLM Waste Management Limited": "",
+    "Shredall (East Midlands) Limited": "",
+    "Scott Waste Limited": "",
+    "Smiths (Gloucester) Ltd": "",
+    "Tradebe North West Ltd": "",
+    "The Waste Brokerage Co Ltd": "",
+    "T.Ward & Son Ltd": "",
+    "Terracycle UK Limited": "",
+    "UK Waste Solutions Ltd": "",
+    "UBT (EU) Ltd": "",
+    "Veolia ES (UK) Ltd": "Veolia House\n154A Pentonville Road\nLondon\nN1 9JE",
+    "Verto Recycle Ltd": "",
+    "Waste Management Facilities Ltd": "",
+    "Reconomy (UK) Ltd": "",
+    "Waterman Waste Management Ltd": "",
+    "Wastenot Ltd": "",
+    "Waste Wise Management Solutions": "",
+    "WEEE (Scotland) Ltd": "",
+    "WM101 Ltd": "",
+    "Whitkirk Waste Solutions Ltd": "",
+    "Williams Environmental Management Ltd": "",
+    "Wastesolve Limited": "",
+    "WMR Waste Solutions Ltd": "",
+    "Wheeldon Brothers Waste Ltd": "",
+    "Waste Cloud Limited": "",
+    "Yorwaste Ltd": "",
+    "Yes Waste Limited": "",
+}
 
-  /* Layout */
-  .container { max-width: 960px; margin: 0 auto; padding: 32px 20px; }
+EXTRACT_PROMPT = """You are extracting data from a supplier purchase order PDF sent to Waste Experts.
 
-  /* Upload card */
-  .upload-card {
-    background: #fff;
-    border-radius: 12px;
-    padding: 40px;
-    text-align: center;
-    border: 2px dashed #cbd5e0;
-    transition: border-color 0.2s, background 0.2s;
-    cursor: pointer;
-    margin-bottom: 24px;
-  }
-  .upload-card.drag-over {
-    border-color: #1a3a5c;
-    background: #f0f4f8;
-  }
-  .upload-icon { font-size: 48px; margin-bottom: 16px; }
-  .upload-card h2 { font-size: 18px; color: #1a3a5c; margin-bottom: 8px; }
-  .upload-card p  { color: #718096; font-size: 14px; margin-bottom: 20px; }
+STEP 1 — IDENTIFY THE SUPPLIER (Broker)
+Scan the ENTIRE document — logo, header, footer, terms, email addresses, phrases like "X Ltd employee", "email to X", "accept X terms & conditions", "Registered Office" — and match against this approved broker list:
 
-  .btn {
-    display: inline-block;
-    padding: 12px 28px;
-    border-radius: 8px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    border: none;
-    transition: opacity 0.2s;
-  }
-  .btn:hover { opacity: 0.88; }
-  .btn-primary { background: #1a3a5c; color: #fff; }
-  .btn-green   { background: #38a169; color: #fff; }
-  .btn-outline { background: #fff; color: #1a3a5c; border: 2px solid #1a3a5c; }
+ACM Environmental PLC, Acumen Waste Services, 707 Ltd, Click Waste, Aqua Force Special Waste Ltd, AMA Waste, Associated Waste Management Ltd, Asprey St John & Co Ltd, Ash Waste Services Ltd, ACMS Waste Limited, A1 Chemical Waste Management Ltd, Alchemy Metals Ltd, Bakers Waste Services Ltd, Biffa Waste Services Limited, BW Skip Hire, Bywaters (Leyton) Limited, Bagnall & Morris Waste Services Ltd, Baileys Skip Hire and Recycling Ltd, Business Waste Ltd, Brown Recycling Ltd, BKP Waste & Recycling Ltd, Belford Bros Skip Hire Ltd, Countrystyle Recycling Ltd, Cartwrights Waste Disposal Services, C & M Waste Management Ltd, Change Waste Recycling Limited, Chloros Environmental Ltd, CHC Waste FM Ltd, Cleansing Service Group Ltd, Circle Waste Ltd, City Waste London Ltd, Cheshire Waste Skip Hire Limited, Circom Ltd, CITB, DP Skip Hire Ltd, Forward Environmental Ltd, EMN Plant Ltd, E-Cycle Limited, Enva England Ltd, Ellgia Ltd, Eco-Cycle Waste Management Ltd, Enva WEEE Recycling Scotland Ltd, FPWM Ltd, Footprint Recycling, Forward Waste Management Ltd, Fresh Start Waste Ltd, Forvis Mazars LLP, Greenzone Facilities Management Ltd, Greenway Environmental Ltd, GPT Waste Management Ltd, Go Green, Germstar UK Ltd, GD Environmental Services Ltd, Great Western Recycling Ltd, Grundon Waste Management Ltd, Gillett Environmental Ltd, Go For It Trading Ltd, Go 4 Greener Waste Management Ltd, Intelligent Waste Management Limited, J & B Recycling Ltd, Just Clear Ltd, Just A Step UK Ltd, J Dickinson & Sons (Horwich) Limited, Kenny Waste Management Ltd, Kane Management Consultancy Ltd, LSS Waste Management, LTL Systems Ltd, Mitie Waste & Environmental Services Limited, Mitie, MJ Church Recycling Ltd, M & M Skip Hire Ltd, MVV Environment, Mick George Recycling Ltd, NWH Waste Services, Nationwide Waste Services Limited, Optima Health UK Ltd, Premier Waste Recycling Ltd, Pearce Recycling Company Ltd, Phoenix Environmental Management Ltd, Papilo Ltd, RFMW UK Ltd, Riverdale Paper PLC, Remondis Ltd, Roydon Resource Recovery Limited, Risinxtreme Limited, Recorra Ltd, Sackers Ltd, Suez Recycling and Recovery UK Ltd, Suez, Safety Kleen UK Limited, Mobius Environmental Ltd, Sustainable Waste Services, Select A Skip UK Ltd, Slicker Recycling Ltd, Sommers Waste Solutions Limited, Saica Natur UK Ltd, Site Clear Solutions Ltd, Sharp Brothers (Skips) Ltd, SLM Waste Management Limited, Shredall (East Midlands) Limited, Scott Waste Limited, Smiths (Gloucester) Ltd, Tradebe North West Ltd, The Waste Brokerage Co Ltd, T.Ward & Son Ltd, Terracycle UK Limited, UK Waste Solutions Ltd, UBT (EU) Ltd, Veolia ES (UK) Ltd, Verto Recycle Ltd, Waste Management Facilities Ltd, Reconomy (UK) Ltd, Waterman Waste Management Ltd, Wastenot Ltd, Waste Wise Management Solutions, WEEE (Scotland) Ltd, WM101 Ltd, Whitkirk Waste Solutions Ltd, Williams Environmental Management Ltd, Wastesolve Limited, WMR Waste Solutions Ltd, Wheeldon Brothers Waste Ltd, Waste Cloud Limited, Yorwaste Ltd, Yes Waste Limited
 
-  #file-input { display: none; }
-  #selected-file {
-    margin-top: 12px;
-    font-size: 13px;
-    color: #38a169;
-    font-weight: 600;
-    min-height: 20px;
-  }
+Set "supplier" to the BEST MATCHING name from the list. NEVER use: Waste Experts, Electrical Waste Recycling Group, or the waste producer/site company.
 
-  /* Loading */
-  .loading {
-    display: none;
-    text-align: center;
-    padding: 40px;
-    background: #fff;
-    border-radius: 12px;
-    margin-bottom: 24px;
-  }
-  .spinner {
-    width: 48px; height: 48px;
-    border: 4px solid #e2e8f0;
-    border-top-color: #1a3a5c;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin: 0 auto 16px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
+STEP 2 — Extract all fields and return ONLY a valid JSON object:
 
-  /* Review banner */
-  .review-banner {
-    background: #fff3cd;
-    border: 2px solid #ffc107;
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin-bottom: 20px;
-    display: none;
-  }
-  .review-banner strong { color: #856404; }
-  .review-banner ul { color: #856404; margin-top: 8px; padding-left: 20px; }
-  .review-banner li { font-size: 14px; margin-top: 4px; }
+{
+  "supplier": "Best matching broker name from the approved list, or null",
+  "purchase_order_number": "The PO or order reference number",
+  "site_contact": "Primary site contact full name, or null",
+  "site_contact_number": "Primary site contact phone number, or null",
+  "site_contact_email": "Primary site contact email address, or null",
+  "secondary_site_contact": "Secondary/alternative contact full name, or null",
+  "secondary_site_contact_number": "Secondary contact phone number, or null",
+  "secondary_site_contact_email": "Secondary contact email address, or null",
+  "site_name": "Name of the collection/service site (e.g. 'Garic Hire Ltd - Sandy')",
+  "site_address": "Full site street address, newline-separated (do NOT include postcode here)",
+  "site_postcode": "Site postcode only (e.g. SG19 1QY)",
+  "opening_times": "Site opening hours if explicitly stated, or null",
+  "access": "Access time window and day restrictions (e.g. '8am - 5pm Monday - Friday'), or null",
+  "site_restrictions": "PPE requirements, vehicle restrictions, height restrictions, or other site-specific rules, or null",
+  "special_instructions": "Order notes, amended orders, call-ahead instructions, or any other important notes, or null",
+  "waste_type": "Waste type or material as stated on the PO",
+  "ewc_code": "EWC code if present (e.g. '20.01.21*'). Codes ending in * are hazardous.",
+  "container_type": "Container type and size (e.g. 'Corrugated Flo Tube Pipe', '8ft Dura Pipe')",
+  "movement_type": "Movement type (e.g. 'Exchange', 'Collection', 'Removal')",
+  "transport_cost": 0.00,
+  "note_already_included": true
+}
 
-  /* Results */
-  .results-card {
-    background: #fff;
-    border-radius: 12px;
-    overflow: hidden;
-    margin-bottom: 24px;
-    display: none;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  }
-  .results-header {
-    background: #1a3a5c;
-    padding: 16px 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .results-header h2 { color: #fff; font-size: 16px; }
-  .results-header span { color: #a8c4e0; font-size: 13px; }
+RULES:
+- note_already_included: true if transport/service cost already includes consignment or transfer note fee. false if note must be added separately.
+- Use numeric type (not string) for transport_cost.
+- Return ONLY the JSON object — no markdown fences, no explanation."""
 
-  /* Field groups */
-  .field-group {
-    border-bottom: 1px solid #f0f4f8;
-    padding: 0;
-  }
-  .group-title {
-    background: #f7fafc;
-    padding: 10px 24px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: #718096;
-    border-bottom: 1px solid #e2e8f0;
-  }
-  .fields-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0;
-  }
-  .field {
-    padding: 14px 24px;
-    border-right: 1px solid #f0f4f8;
-    border-bottom: 1px solid #f0f4f8;
-    position: relative;
-  }
-  .field:nth-child(even) { border-right: none; }
-  .field.full-width {
-    grid-column: 1 / -1;
-    border-right: none;
-  }
-  .field-label {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #a0aec0;
-    margin-bottom: 4px;
-  }
-  .field-value {
-    font-size: 14px;
-    color: #2d3748;
-    font-weight: 500;
-    line-height: 1.4;
-  }
-  .field-value.empty { color: #cbd5e0; font-style: italic; font-weight: 400; }
-  .field-value.money { color: #276749; font-weight: 700; }
 
-  /* Copy button on each field */
-  .copy-btn {
-    position: absolute;
-    top: 12px; right: 12px;
-    background: #edf2f7;
-    border: none;
-    border-radius: 4px;
-    padding: 3px 8px;
-    font-size: 11px;
-    cursor: pointer;
-    color: #4a5568;
-    display: none;
-  }
-  .field:hover .copy-btn { display: block; }
-  .copy-btn:hover { background: #e2e8f0; }
+@app.route('/')
+def index():
+    return render_template('index.html', brokers=json.dumps(list(BROKERS.keys())))
 
-  /* Actions */
-  .actions {
-    display: flex;
-    gap: 12px;
-    padding: 20px 24px;
-    background: #f7fafc;
-    flex-wrap: wrap;
-  }
 
-  /* Error */
-  .error-card {
-    background: #fff5f5;
-    border: 2px solid #fc8181;
-    border-radius: 10px;
-    padding: 20px 24px;
-    margin-bottom: 24px;
-    display: none;
-    color: #c53030;
-  }
+@app.route('/extract', methods=['POST'])
+def extract():
+    if 'pdf' not in request.files:
+        return jsonify({'error': 'No PDF uploaded'}), 400
 
-  @media (max-width: 600px) {
-    .fields-grid { grid-template-columns: 1fr; }
-    .field { border-right: none; }
-    .field.full-width { grid-column: 1; }
-    .actions { flex-direction: column; }
-    .btn { width: 100%; text-align: center; }
-  }
-</style>
-</head>
-<body>
+    pdf_file = request.files['pdf']
+    pdf_bytes = pdf_file.read()
+    b64 = base64.standard_b64encode(pdf_bytes).decode()
 
-<div class="header">
-  <div>
-    <h1>📄 Supplier Order Extractor</h1>
-    <p>Upload a supplier purchase order PDF → extract fields → download for HubSpot</p>
-  </div>
-</div>
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if not api_key:
+        return jsonify({'error': 'ANTHROPIC_API_KEY not set'}), 500
 
-<div class="container">
+    client = anthropic.Anthropic(api_key=api_key)
 
-  <!-- Upload -->
-  <div class="upload-card" id="drop-zone">
-    <div class="upload-icon">📂</div>
-    <h2>Drop a supplier PDF here</h2>
-    <p>Supports purchase orders from Go Green, Mitie, Suez, and other brokers</p>
-    <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
-      Choose PDF
-    </button>
-    <input type="file" id="file-input" accept=".pdf">
-    <div id="selected-file"></div>
-  </div>
+    try:
+        resp = client.messages.create(
+            model='claude-opus-4-6',
+            max_tokens=2000,
+            messages=[{
+                'role': 'user',
+                'content': [
+                    {
+                        'type': 'document',
+                        'source': {
+                            'type': 'base64',
+                            'media_type': 'application/pdf',
+                            'data': b64,
+                        },
+                    },
+                    {'type': 'text', 'text': EXTRACT_PROMPT},
+                ],
+            }],
+        )
 
-  <!-- Error -->
-  <div class="error-card" id="error-card"></div>
+        raw = resp.content[0].text.strip()
+        if '```' in raw:
+            raw = raw[raw.find('{'):raw.rfind('}') + 1]
 
-  <!-- Loading -->
-  <div class="loading" id="loading">
-    <div class="spinner"></div>
-    <p style="color:#718096;font-size:15px;">Reading PDF and extracting fields...</p>
-    <p style="color:#a0aec0;font-size:13px;margin-top:6px;">This usually takes 5–10 seconds</p>
-  </div>
+        data = json.loads(raw)
 
-  <!-- Review banner -->
-  <div class="review-banner" id="review-banner">
-    <strong>⚠️ Review Required</strong>
-    <ul id="review-list"></ul>
-  </div>
+        supplier = data.get('supplier') or ''
+        data['supplier_address'] = BROKERS.get(supplier, '')
+        data['supplier_found'] = bool(supplier and supplier in BROKERS)
 
-  <!-- Results -->
-  <div class="results-card" id="results-card">
-    <div class="results-header">
-      <h2 id="results-title">Extracted Order Data</h2>
-      <span id="results-meta"></span>
-    </div>
+        return jsonify({'success': True, 'data': data})
 
-    <!-- Order Info -->
-    <div class="field-group">
-      <div class="group-title">Order Information</div>
-      <div class="fields-grid">
-        <div class="field" id="f-client_name">
-          <div class="field-label">Client / Broker</div>
-          <div class="field-value" id="v-client_name">—</div>
-          <button class="copy-btn" onclick="copyField('client_name')">Copy</button>
-        </div>
-        <div class="field" id="f-order_number">
-          <div class="field-label">Order Number</div>
-          <div class="field-value" id="v-order_number">—</div>
-          <button class="copy-btn" onclick="copyField('order_number')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Order Raised Date</div>
-          <div class="field-value" id="v-order_raised_date">—</div>
-          <button class="copy-btn" onclick="copyField('order_raised_date')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Job Date</div>
-          <div class="field-value" id="v-job_date">—</div>
-          <button class="copy-btn" onclick="copyField('job_date')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Movement Type</div>
-          <div class="field-value" id="v-movement_type">—</div>
-          <button class="copy-btn" onclick="copyField('movement_type')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Container Type</div>
-          <div class="field-value" id="v-container_type">—</div>
-          <button class="copy-btn" onclick="copyField('container_type')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Waste Type</div>
-          <div class="field-value" id="v-waste_type">—</div>
-          <button class="copy-btn" onclick="copyField('waste_type')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">EWC Code</div>
-          <div class="field-value" id="v-ewc_code">—</div>
-          <button class="copy-btn" onclick="copyField('ewc_code')">Copy</button>
-        </div>
-      </div>
-    </div>
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-    <!-- Site Info -->
-    <div class="field-group">
-      <div class="group-title">Site Information</div>
-      <div class="fields-grid">
-        <div class="field">
-          <div class="field-label">Waste Producer</div>
-          <div class="field-value" id="v-waste_producer">—</div>
-          <button class="copy-btn" onclick="copyField('waste_producer')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Site Name</div>
-          <div class="field-value" id="v-site_name">—</div>
-          <button class="copy-btn" onclick="copyField('site_name')">Copy</button>
-        </div>
-        <div class="field full-width">
-          <div class="field-label">Site Address</div>
-          <div class="field-value" id="v-site_address">—</div>
-          <button class="copy-btn" onclick="copyField('site_address')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Site Postcode</div>
-          <div class="field-value" id="v-site_postcode">—</div>
-          <button class="copy-btn" onclick="copyField('site_postcode')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Access Times</div>
-          <div class="field-value" id="v-access_times">—</div>
-          <button class="copy-btn" onclick="copyField('access_times')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Site Contact Name</div>
-          <div class="field-value" id="v-site_contact_name">—</div>
-          <button class="copy-btn" onclick="copyField('site_contact_name')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Site Contact Number</div>
-          <div class="field-value" id="v-site_contact_number">—</div>
-          <button class="copy-btn" onclick="copyField('site_contact_number')">Copy</button>
-        </div>
-      </div>
-    </div>
 
-    <!-- Pricing -->
-    <div class="field-group">
-      <div class="group-title">Pricing</div>
-      <div class="fields-grid">
-        <div class="field">
-          <div class="field-label">Transport Cost</div>
-          <div class="field-value money" id="v-transport_cost">—</div>
-          <button class="copy-btn" onclick="copyField('transport_cost')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Total Cost</div>
-          <div class="field-value money" id="v-total_cost">—</div>
-          <button class="copy-btn" onclick="copyField('total_cost')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Per Hour Cost</div>
-          <div class="field-value" id="v-per_hour_cost">—</div>
-          <button class="copy-btn" onclick="copyField('per_hour_cost')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Per Tonne Cost</div>
-          <div class="field-value" id="v-per_tonne_cost">—</div>
-          <button class="copy-btn" onclick="copyField('per_tonne_cost')">Copy</button>
-        </div>
-      </div>
-    </div>
+@app.route('/broker-address', methods=['GET'])
+def broker_address():
+    name = request.args.get('name', '')
+    address = BROKERS.get(name, '')
+    return jsonify({'name': name, 'address': address})
 
-    <!-- Compliance -->
-    <div class="field-group">
-      <div class="group-title">Compliance & Facility</div>
-      <div class="fields-grid">
-        <div class="field">
-          <div class="field-label">Facility Name</div>
-          <div class="field-value" id="v-facility_name">—</div>
-          <button class="copy-btn" onclick="copyField('facility_name')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">Broker Contact Email</div>
-          <div class="field-value" id="v-broker_contact_email">—</div>
-          <button class="copy-btn" onclick="copyField('broker_contact_email')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">WCL Number</div>
-          <div class="field-value" id="v-wcl_number">—</div>
-          <button class="copy-btn" onclick="copyField('wcl_number')">Copy</button>
-        </div>
-        <div class="field">
-          <div class="field-label">WML Number</div>
-          <div class="field-value" id="v-wml_number">—</div>
-          <button class="copy-btn" onclick="copyField('wml_number')">Copy</button>
-        </div>
-        <div class="field full-width">
-          <div class="field-label">Order Notes</div>
-          <div class="field-value" id="v-order_notes">—</div>
-          <button class="copy-btn" onclick="copyField('order_notes')">Copy</button>
-        </div>
-      </div>
-    </div>
 
-    <!-- Actions -->
-    <div class="actions">
-      <button class="btn btn-green" onclick="downloadCSV()">⬇ Download CSV for HubSpot</button>
-      <button class="btn btn-outline" onclick="resetTool()">Upload Another PDF</button>
-    </div>
-  </div>
+@app.route('/brokers', methods=['GET'])
+def get_brokers():
+    return jsonify({'brokers': [{'name': k, 'address': v} for k, v in BROKERS.items()]})
 
-</div>
 
-<script>
-  let extractedData = null;
-
-  // Drag and drop
-  const dropZone = document.getElementById('drop-zone');
-  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file && file.name.toLowerCase().endsWith('.pdf')) {
-      processFile(file);
-    } else {
-      showError('Please drop a PDF file.');
-    }
-  });
-
-  document.getElementById('file-input').addEventListener('change', e => {
-    if (e.target.files[0]) processFile(e.target.files[0]);
-  });
-
-  function processFile(file) {
-    document.getElementById('selected-file').textContent = `📎 ${file.name}`;
-    uploadAndExtract(file);
-  }
-
-  async function uploadAndExtract(file) {
-    showLoading(true);
-    hideError();
-    hideResults();
-
-    const formData = new FormData();
-    formData.append('pdf', file);
-
-    try {
-      const response = await fetch('/extract', { method: 'POST', body: formData });
-      const result = await response.json();
-
-      if (!response.ok || result.error) {
-        showError(result.error || 'Extraction failed. Please try again.');
-        return;
-      }
-
-      extractedData = result.data;
-      displayResults(result.data);
-
-    } catch (err) {
-      showError('Network error. Please check your connection and try again.');
-    } finally {
-      showLoading(false);
-    }
-  }
-
-  function displayResults(data) {
-    const fields = [
-      'client_name','order_number','order_raised_date','job_date',
-      'movement_type','container_type','waste_type','ewc_code',
-      'waste_producer','site_name','site_address','site_postcode',
-      'access_times','site_contact_name','site_contact_number',
-      'transport_cost','total_cost','per_hour_cost','per_tonne_cost',
-      'facility_name','broker_contact_email','wcl_number','wml_number','order_notes'
-    ];
-
-    fields.forEach(key => {
-      const el = document.getElementById('v-' + key);
-      if (!el) return;
-      const val = data[key];
-      if (val === null || val === undefined || val === '' || val === 0 || val === '0' || val === '0.00') {
-        el.textContent = 'Not found';
-        el.classList.add('empty');
-        el.classList.remove('money');
-      } else {
-        const isMoney = ['transport_cost','total_cost','per_hour_cost','per_tonne_cost'].includes(key);
-        el.textContent = isMoney && val ? `£${parseFloat(val).toFixed(2)}` : val;
-        el.classList.remove('empty');
-      }
-    });
-
-    // Title
-    const client = data.client_name || 'Unknown Client';
-    const orderNum = data.order_number || '';
-    document.getElementById('results-title').textContent = `${client} — Order ${orderNum}`;
-    document.getElementById('results-meta').textContent = `Extracted ${data._extracted_at}`;
-
-    // Review banner
-    if (data.requires_review && data.review_notes && data.review_notes.length > 0) {
-      const banner = document.getElementById('review-banner');
-      const list = document.getElementById('review-list');
-      list.innerHTML = data.review_notes.map(n => `<li>${n}</li>`).join('');
-      banner.style.display = 'block';
-    }
-
-    document.getElementById('results-card').style.display = 'block';
-  }
-
-  function copyField(key) {
-    const el = document.getElementById('v-' + key);
-    if (!el || el.classList.contains('empty')) return;
-    navigator.clipboard.writeText(el.textContent).then(() => {
-      const btn = el.parentElement.querySelector('.copy-btn');
-      const orig = btn.textContent;
-      btn.textContent = 'Copied!';
-      btn.style.background = '#c6f6d5';
-      setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 1500);
-    });
-  }
-
-  async function downloadCSV() {
-    if (!extractedData) return;
-    const response = await fetch('/download-csv', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: extractedData })
-    });
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `order-extract-${extractedData.order_number || 'unknown'}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function resetTool() {
-    extractedData = null;
-    document.getElementById('selected-file').textContent = '';
-    document.getElementById('file-input').value = '';
-    document.getElementById('review-banner').style.display = 'none';
-    document.getElementById('review-list').innerHTML = '';
-    hideResults();
-    hideError();
-  }
-
-  function showLoading(show) {
-    document.getElementById('loading').style.display = show ? 'block' : 'none';
-    document.getElementById('drop-zone').style.display = show ? 'none' : 'block';
-  }
-
-  function showError(msg) {
-    const el = document.getElementById('error-card');
-    el.textContent = '⚠️ ' + msg;
-    el.style.display = 'block';
-  }
-
-  function hideError() { document.getElementById('error-card').style.display = 'none'; }
-  function hideResults() { document.getElementById('results-card').style.display = 'none'; }
-</script>
-</body>
-</html>
+if __name__ == '__main__':
+    app.run(debug=True)
