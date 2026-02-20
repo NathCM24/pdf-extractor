@@ -9,38 +9,40 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    body { font-family: 'Montserrat', sans-serif; margin: 0; background: #f4f7fb; color: #1e2e3d; }
+    body { font-family: 'Montserrat', sans-serif; margin: 0; background: #1e2e3d; color: #e8ecf1; }
     .wrap { max-width: 980px; margin: 24px auto 48px; padding: 0 16px; }
     .brand { text-align: center; margin: 6px 0 18px; }
     .brand img { max-width: 320px; width: 100%; height: auto; }
 
     /* --- Cards --- */
-    .card { background: #fff; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin-bottom: 16px; }
-    .head { background: #1e2e3d; color: #fff; padding: 16px 20px; border-radius: 4px 4px 0 0; font-weight: 700; font-size: 15px; }
+    .card { background: #253a4d; border-radius: 4px; box-shadow: 0 2px 12px rgba(0,0,0,.25); margin-bottom: 16px; border: 1px solid #2f4a60; }
+    .head { background: #8ec431; color: #fff; padding: 16px 20px; border-radius: 3px 3px 0 0; font-weight: 700; font-size: 15px; }
     .body { padding: 16px 20px; }
 
     /* --- Drop zone --- */
-    .drop { border: 2px dashed #cfd8e3; border-radius: 4px; padding: 28px; text-align: center; transition: border-color .2s; }
-    .drop.drag-over { border-color: #8ec431; background: #f8fdf0; }
-    .drop p { margin: 0 0 10px; }
+    .drop { border: 2px dashed #3d5a73; border-radius: 4px; padding: 28px; text-align: center; transition: border-color .2s, background .2s; }
+    .drop.drag-over { border-color: #8ec431; background: rgba(142,196,49,.1); }
+    .drop p { margin: 0 0 10px; color: #c0cdd8; }
 
     /* --- Grid / fields --- */
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .field { display: flex; flex-direction: column; gap: 4px; position: relative; }
     .full { grid-column: 1 / -1; }
-    label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: #5a6e80; }
+    label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: #8ec431; }
     input, textarea, select {
-      border: 1px solid #e0e6ed; border-radius: 4px; padding: 10px 12px;
+      border: 1px solid #3d5a73; border-radius: 4px; padding: 10px 12px;
       font-size: 14px; font-family: 'Montserrat', sans-serif;
-      background: #fafbfc; transition: border-color .2s, box-shadow .2s;
+      background: #1e2e3d; color: #e8ecf1; transition: border-color .2s, box-shadow .2s;
     }
     input:focus, textarea:focus, select:focus {
-      outline: none; border-color: #8ec431; box-shadow: 0 0 0 2px rgba(142,196,49,.15);
+      outline: none; border-color: #8ec431; box-shadow: 0 0 0 2px rgba(142,196,49,.2);
     }
+    input::placeholder, textarea::placeholder { color: #5a7a94; }
     textarea { min-height: 64px; resize: vertical; }
+    select option { background: #1e2e3d; color: #e8ecf1; }
     .hidden { display: none; }
-    .error { color: #b42318; font-weight: 700; margin-top: 4px; font-size: 12px; }
-    .ok { color: #246d19; font-weight: 700; margin-top: 4px; font-size: 13px; }
+    .error { color: #f87171; font-weight: 700; margin-top: 4px; font-size: 12px; }
+    .ok { color: #8ec431; font-weight: 700; margin-top: 4px; font-size: 13px; }
 
     /* --- Buttons --- */
     .btn {
@@ -50,55 +52,56 @@
       transition: background .2s;
     }
     .btn:hover { background: #7ab328; }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
     .btn-outline {
-      border: 1px solid #8ec431; background: #fff; color: #3f5f08;
+      border: 1px solid #8ec431; background: transparent; color: #8ec431;
       border-radius: 4px; padding: 10px 18px; font-weight: 700;
       cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 13px;
-      transition: background .2s;
+      transition: background .2s, color .2s;
     }
-    .btn-outline:hover { background: #f0f8e0; }
-    .pill { display: inline-block; background: #f0f8e0; color: #3f5f08; border: 1px solid #8ec431; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; }
-    .hl { border: 2px solid #8ec431; box-shadow: 0 0 0 2px #f0f8e0 inset; }
+    .btn-outline:hover { background: rgba(142,196,49,.15); color: #a5d84e; }
+    .pill { display: inline-block; background: rgba(142,196,49,.15); color: #8ec431; border: 1px solid #8ec431; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; }
+    .hl { border: 2px solid #8ec431; box-shadow: 0 0 0 2px rgba(142,196,49,.15) inset; }
 
     /* --- Typeahead dropdown --- */
     .typeahead-wrap { position: relative; }
     .typeahead-list {
       position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
       max-height: 220px; overflow-y: auto;
-      background: #fff; border: 1px solid #dde3ea; border-radius: 4px;
-      box-shadow: 0 6px 20px rgba(0,0,0,.12);
+      background: #253a4d; border: 1px solid #3d5a73; border-radius: 4px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.35);
       display: none;
     }
     .typeahead-list.open { display: block; }
     .typeahead-item {
-      padding: 9px 12px; cursor: pointer; font-size: 13px;
-      border-bottom: 1px solid #f0f2f5; transition: background .1s;
+      padding: 9px 12px; cursor: pointer; font-size: 13px; color: #c0cdd8;
+      border-bottom: 1px solid #2f4a60; transition: background .1s;
     }
     .typeahead-item:last-child { border-bottom: none; }
-    .typeahead-item:hover, .typeahead-item.active { background: #f0f8e0; }
-    .typeahead-item mark { background: #d4edaa; border-radius: 2px; padding: 0 1px; }
+    .typeahead-item:hover, .typeahead-item.active { background: rgba(142,196,49,.15); color: #fff; }
+    .typeahead-item mark { background: rgba(142,196,49,.35); color: #fff; border-radius: 2px; padding: 0 1px; }
 
     /* --- Skeleton loader --- */
     .skeleton-card { margin-bottom: 16px; }
     .skeleton-header {
-      background: linear-gradient(90deg, #e2e8ef 25%, #f0f4f8 50%, #e2e8ef 75%);
+      background: linear-gradient(90deg, #2f4a60 25%, #3d5a73 50%, #2f4a60 75%);
       background-size: 200% 100%;
       animation: shimmer 1.5s ease-in-out infinite;
       height: 48px; border-radius: 4px 4px 0 0;
     }
-    .skeleton-body { padding: 20px; background: #fff; border-radius: 0 0 4px 4px; }
+    .skeleton-body { padding: 20px; background: #253a4d; border-radius: 0 0 4px 4px; }
     .skeleton-row {
       display: flex; gap: 12px; margin-bottom: 14px;
     }
     .skeleton-field { flex: 1; }
     .skeleton-label {
       height: 10px; width: 40%; border-radius: 4px; margin-bottom: 8px;
-      background: linear-gradient(90deg, #e2e8ef 25%, #f0f4f8 50%, #e2e8ef 75%);
+      background: linear-gradient(90deg, #2f4a60 25%, #3d5a73 50%, #2f4a60 75%);
       background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite;
     }
     .skeleton-input {
       height: 38px; border-radius: 4px;
-      background: linear-gradient(90deg, #e2e8ef 25%, #f0f4f8 50%, #e2e8ef 75%);
+      background: linear-gradient(90deg, #2f4a60 25%, #3d5a73 50%, #2f4a60 75%);
       background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite;
     }
     .skeleton-full { grid-column: 1 / -1; }
@@ -119,7 +122,7 @@
     /* --- Section headers inside the result card --- */
     .section-title {
       font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
-      color: #1e2e3d; border-bottom: 2px solid #8ec431; padding-bottom: 4px;
+      color: #fff; border-bottom: 2px solid #8ec431; padding-bottom: 4px;
       margin: 18px 0 10px; grid-column: 1 / -1;
     }
     .section-title:first-child { margin-top: 0; }
@@ -129,13 +132,13 @@
       display: flex; align-items: center; justify-content: space-between;
       flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
     }
-    .doc-header h2 { margin: 0; font-size: 18px; font-weight: 700; color: #1e2e3d; }
-    .doc-header .doc-meta { font-size: 12px; color: #5a6e80; }
+    .doc-header h2 { margin: 0; font-size: 18px; font-weight: 700; color: #fff; }
+    .doc-header .doc-meta { font-size: 12px; color: #8aa3b8; }
 
     /* --- Copy toast --- */
     .toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-      background: #1e2e3d; color: #fff; padding: 10px 20px; border-radius: 4px;
+      background: #8ec431; color: #fff; padding: 10px 20px; border-radius: 4px;
       font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .3s;
       pointer-events: none; z-index: 999;
     }
@@ -144,17 +147,17 @@
     /* --- Line items --- */
     .line-item-row {
       display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px;
-      align-items: end; padding: 6px 0; border-bottom: 1px solid #e0e6ed;
+      align-items: end; padding: 6px 0; border-bottom: 1px solid #2f4a60;
     }
     .line-item-row:last-child { border-bottom: none; }
     .line-item-row input { font-size: 13px; padding: 8px 10px; }
-    .line-item-row .li-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #5a6e80; margin-bottom: 2px; }
+    .line-item-row .li-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #8aa3b8; margin-bottom: 2px; }
     .btn-remove {
-      border: none; background: #fee; color: #b42318; border-radius: 4px;
+      border: none; background: rgba(180,35,24,.2); color: #f87171; border-radius: 4px;
       padding: 8px 10px; cursor: pointer; font-weight: 700; font-size: 13px;
       font-family: 'Montserrat', sans-serif; transition: background .2s;
     }
-    .btn-remove:hover { background: #fdd; }
+    .btn-remove:hover { background: rgba(180,35,24,.35); }
     @media (max-width: 760px) {
       .grid { grid-template-columns: 1fr; }
       .line-item-row { grid-template-columns: 1fr 1fr; }
@@ -272,7 +275,7 @@
 
           <div class="full" style="display:flex; gap:10px; align-items:center; margin-bottom:4px;">
             <button class="btn-outline" type="button" onclick="addLineItem()">+ Add Line Item</button>
-            <span style="margin-left:auto; font-weight:700; font-size:14px; color:#1e2e3d;">
+            <span style="margin-left:auto; font-weight:700; font-size:14px; color:#8ec431;">
               Overall Total: <span id="overall_total_display">£0.00</span>
             </span>
           </div>
