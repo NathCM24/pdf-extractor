@@ -1,246 +1,280 @@
-from flask import Flask, request, jsonify, render_template
-import anthropic
+from flask import Flask, jsonify, render_template, request
 import base64
-import os
 import json
+import os
+
+import anthropic
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20MB
+app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
 
-# ─── Broker list with addresses ───────────────────────────────────────────────
-# Update addresses here as you gather them. Address is newline-separated.
-BROKERS = {
-    "ACM Environmental PLC": "",
-    "Acumen Waste Services": "",
-    "707 Ltd / Click Waste": "",
-    "Aqua Force Special Waste Ltd": "",
-    "AMA Waste": "",
-    "Associated Waste Management Ltd": "",
-    "Asprey St John & Co Ltd": "",
-    "Ash Waste Services Ltd": "",
-    "ACMS Waste Limited": "",
-    "A1 Chemical Waste Management Ltd": "",
-    "Alchemy Metals Ltd": "",
-    "Bakers Waste Services Ltd": "",
-    "Biffa Waste Services Limited": "Biffa House, Rigby Court\nWokingham\nBerkshire\nRG41 5BN",
-    "BW Skip Hire": "",
-    "Bywaters (Leyton) Limited": "",
-    "Bagnall & Morris Waste Services Ltd": "",
-    "Baileys Skip Hire and Recycling Ltd": "",
-    "Business Waste Ltd": "",
-    "Brown Recycling Ltd": "",
-    "BKP Waste & Recycling Ltd": "",
-    "Belford Bros Skip Hire Ltd": "",
-    "Countrystyle Recycling Ltd": "",
-    "Cartwrights Waste Disposal Services": "",
-    "C & M Waste Management Ltd": "",
-    "Change Waste Recycling Limited": "",
-    "Chloros Environmental Ltd": "",
-    "CHC Waste FM Ltd": "",
-    "Cleansing Service Group Ltd": "",
-    "Circle Waste Ltd": "",
-    "City Waste London Ltd": "",
-    "Cheshire Waste Skip Hire Limited": "",
-    "Circom Ltd": "",
-    "CITB": "",
-    "DP Skip Hire Ltd": "",
-    "Forward Environmental Ltd": "",
-    "EMN Plant Ltd": "",
-    "E-Cycle Limited": "",
-    "Enva England Ltd": "",
-    "Ellgia Ltd": "",
-    "Eco-Cycle Waste Management Ltd": "",
-    "Enva WEEE Recycling Scotland Ltd": "",
-    "FPWM Ltd / Footprint Recycling": "",
-    "Forward Waste Management Ltd": "",
-    "Fresh Start Waste Ltd": "",
-    "Forvis Mazars LLP": "",
-    "Greenzone Facilities Management Ltd": "",
-    "Greenway Environmental Ltd": "",
-    "GPT Waste Management Ltd": "",
-    "Go Green": "323 Bawtry Road\nDoncaster\nEngland DN4 7PB\nUnited Kingdom",
-    "Germstar UK Ltd": "",
-    "GD Environmental Services Ltd": "",
-    "Great Western Recycling Ltd": "",
-    "Grundon Waste Management Ltd": "",
-    "Gillett Environmental Ltd": "",
-    "Go For It Trading Ltd": "",
-    "Go 4 Greener Waste Management Ltd": "",
-    "Intelligent Waste Management Limited": "",
-    "J & B Recycling Ltd": "",
-    "Just Clear Ltd": "",
-    "Just A Step UK Ltd": "",
-    "J Dickinson & Sons (Horwich) Limited": "",
-    "Kenny Waste Management Ltd": "",
-    "Kane Management Consultancy Ltd": "",
-    "LSS Waste Management": "",
-    "LTL Systems Ltd": "",
-    "Mitie Waste & Environmental Services Limited": "1 Bartholomew Lane\nLondon\nEC2N 2AX",
-    "MJ Church Recycling Ltd": "",
-    "M & M Skip Hire Ltd": "",
-    "MVV Environment": "",
-    "Mick George Recycling Ltd": "",
-    "NWH Waste Services": "",
-    "Nationwide Waste Services Limited": "",
-    "Optima Health UK Ltd": "",
-    "Premier Waste Recycling Ltd": "",
-    "Pearce Recycling Company Ltd": "",
-    "Phoenix Environmental Management Ltd": "",
-    "Papilo Ltd": "",
-    "RFMW UK Ltd": "",
-    "Riverdale Paper PLC": "",
-    "Remondis Ltd": "",
-    "Roydon Resource Recovery Limited": "",
-    "Risinxtreme Limited": "",
-    "Recorra Ltd": "",
-    "Sackers Ltd": "",
-    "Suez Recycling and Recovery UK Ltd": "2100 Coventry Road\nSheldon\nBirmingham\nB26 3EA",
-    "Safety Kleen UK Limited": "",
-    "Mobius Environmental Ltd": "",
-    "Sustainable Waste Services": "",
-    "Select A Skip UK Ltd": "",
-    "Slicker Recycling Ltd": "",
-    "Sommers Waste Solutions Limited": "",
-    "Saica Natur UK Ltd": "",
-    "Site Clear Solutions Ltd": "",
-    "Sharp Brothers (Skips) Ltd": "",
-    "SLM Waste Management Limited": "",
-    "Shredall (East Midlands) Limited": "",
-    "Scott Waste Limited": "",
-    "Smiths (Gloucester) Ltd": "",
-    "Tradebe North West Ltd": "",
-    "The Waste Brokerage Co Ltd": "",
-    "T.Ward & Son Ltd": "",
-    "Terracycle UK Limited": "",
-    "UK Waste Solutions Ltd": "",
-    "UBT (EU) Ltd": "",
-    "Veolia ES (UK) Ltd": "Veolia House\n154A Pentonville Road\nLondon\nN1 9JE",
-    "Verto Recycle Ltd": "",
-    "Waste Management Facilities Ltd": "",
-    "Reconomy (UK) Ltd": "",
-    "Waterman Waste Management Ltd": "",
-    "Wastenot Ltd": "",
-    "Waste Wise Management Solutions": "",
-    "WEEE (Scotland) Ltd": "",
-    "WM101 Ltd": "",
-    "Whitkirk Waste Solutions Ltd": "",
-    "Williams Environmental Management Ltd": "",
-    "Wastesolve Limited": "",
-    "WMR Waste Solutions Ltd": "",
-    "Wheeldon Brothers Waste Ltd": "",
-    "Waste Cloud Limited": "",
-    "Yorwaste Ltd": "",
-    "Yes Waste Limited": "",
+ACCOUNT_NAMES = [
+    "ACM ENVIRONMENTAL PLC",
+    "ACUMEN WASTE SERVICES",
+    "707 LTD - CLICK WASTE",
+    "AQUA FORCE SPECIAL WASTE LTD",
+    "AMA WASTE",
+    "ASSOCIATED WASTE MANAGEMENT LTD",
+    "ASPREY ST JOHN & CO LTD",
+    "ASH WASTE SERVICES LTD",
+    "ACMS WASTE LIMITED",
+    "A1 CHEMICAL WASTE MANAGEMENT LTD",
+    "ALCHEMY METALS LTD",
+    "BAKERS WASTE SERVICES LTD",
+    "BIFFA WASTE SERVICES LIMITED",
+    "BW SKIP HIRE",
+    "BYWATERS (LEYTON) LIMITED",
+    "BAGNALL & MORRIS WASTE SERVICES LTD",
+    "BAILEYS SKIP HIRE AND RECYCLING LTD",
+    "BUSINESS WASTE LTD",
+    "BROWN RECYCLING LTD",
+    "BKP WASTE & RECYCLING LTD",
+    "BELFORD BROS SKIP HIRE LTD",
+    "COUNTRYSTYLE RECYCLING LTD",
+    "CARTWRIGHTS WASTE DISPOSAL SERVICES",
+    "C & M WASTE MANAGEMENT LTD",
+    "CHANGE WASTE RECYCLING LIMITED",
+    "CHLOROS ENVIRONMENTAL LTD",
+    "CHC WASTE FM LTD",
+    "CLEANSING SERVICE GROUP LTD",
+    "CIRCLE WASTE LTD",
+    "CITY WASTE LONDON LTD",
+    "CHESHIRE WASTE SKIP HIRE LIMITED",
+    "CIRCOM LTD",
+    "CITB",
+    "DP SKIP HIRE LTD",
+    "FORWARD ENVIRONMENTAL LTD",
+    "EMN PLANT LTD",
+    "E-CYCLE LIMITED",
+    "ENVA ENGLAND LTD",
+    "ELLGIA LTD",
+    "ECO-CYCLE WASTE MANAGEMENT LTD",
+    "ENVA WEEE RECYCLING SCOTLAND LTD",
+    "FPWM LTD T/A FOOTPRINT RECYCLING",
+    "FORWARD WASTE MANAGEMENT LTD",
+    "FRESH START WASTE LTD",
+    "FORVIS MAZARS LLP",
+    "GREENZONE FACILITIES MANAGEMENT LTD",
+    "GREENWAY ENVIRONMENTAL LTD",
+    "GPT WASTE MANAGEMENT LTD",
+    "GO GREEN",
+    "GERMSTAR UK LTD",
+    "GD ENVIRONMENTAL SERVICES LTD",
+    "GREAT WESTERN RECYCLING LTD",
+    "GRUNDON WASTE MANAGEMENT LTD",
+    "GILLETT ENVIRONMENTAL LTD",
+    "GO FOR IT TRADING LTD",
+    "GO 4 GREENER WASTE MANAGEMENT LTD",
+    "INTELLIGENT WASTE MANAGEMENT LIMITED",
+    "J & B RECYCLING LTD",
+    "JUST CLEAR LTD.",
+    "JUST A STEP UK LTD",
+    "J DICKINSON & SONS (HORWICH) LIMITED",
+    "KENNY WASTE MANAGEMENT LTD",
+    "KANE MANAGEMENT CONSULTANCY LTD",
+    "LSS WASTE MANAGEMENT",
+    "LTL SYSTEMS LTD",
+    "MITIE WASTE & ENVIRONMENTAL SERVICES LIMITED",
+    "M J CHURCH RECYCLING LTD",
+    "M & M SKIP HIRE LTD",
+    "MVV ENVIRONMENT",
+    "MICK GEORGE RECYCLING LTD",
+    "NWH WASTE SERVICES",
+    "NATIONWIDE WASTE SERVICES LIMITED",
+    "OPTIMA HEALTH UK LTD",
+    "PREMIER WASTE RECYCLING LTD",
+    "PEARCE RECYCLING COMPANY LTD",
+    "PHOENIX ENVIRONMENTAL MANAGEMENT LTD",
+    "PAPILO LTD",
+    "RFMW UK LTD",
+    "RIVERDALE PAPER PLC",
+    "REMONDIS LTD",
+    "ROYDON RESOURCE RECOVERY LIMITED",
+    "RISINXTREME LIMITED",
+    "RECORRA LTD",
+    "SACKERS LTD",
+    "SUEZ RECYCLING AND RECOVERY UK LTD",
+    "SAFETY KLEEN UK LIMITED",
+    "MOBIUS ENVIRONMENTAL LTD",
+    "SUSTAINABLE WASTE SERVICES",
+    "SELECT A SKIP UK LTD",
+    "SLICKER RECYCLING LTD",
+    "SOMMERS WASTE SOLUTIONS LIMITED",
+    "SAICA NATUR UK LTD",
+    "SITE CLEAR SOLUTIONS LTD",
+    "SHARP BROTHERS (SKIPS) LTD",
+    "SLM WASTE MANAGEMENT LIMITED",
+    "SHREDALL (EAST MIDLANDS) LIMITED",
+    "SCOTT WASTE LIMITED",
+    "SMITHS (GLOUCESTER) LTD.",
+    "TRADEBE NORTH WEST LTD",
+    "THE WASTE BROKERAGE CO LTD",
+    "T.WARD & SON LTD",
+    "TERRACYCLE UK LIMITED",
+    "UK WASTE SOLUTIONS LTD",
+    "UBT (EU) LTD",
+    "VEOLIA ES (UK) LTD",
+    "VERTO RECYCLE LTD",
+    "WASTE MANAGEMENT FACILITIES LTD",
+    "RECONOMY (UK) LTD",
+    "WATERMAN WASTE MANAGEMENT LTD",
+    "WASTENOT LTD",
+    "WASTE WISE MANAGEMENT SOLUTIONS",
+    "WEEE (SCOTLAND) LTD",
+    "WM101 LTD",
+    "WHITKIRK WASTE SOLUTIONS LTD",
+    "WILLIAMS ENVIRONMENTAL MANAGEMENT LTD",
+    "WASTESOLVE LIMITED",
+    "WMR WASTE SOLUTIONS LTD",
+    "WHEELDON BROTHERS WASTE LTD",
+    "WASTE CLOUD LIMITED",
+    "YORWASTE LTD",
+    "YES WASTE LIMITED",
+]
+
+ADDRESS_OVERRIDES = {
+    "BIFFA WASTE SERVICES LIMITED": "Biffa House, Rigby Court\nWokingham\nBerkshire\nRG41 5BN",
+    "GO GREEN": "323 Bawtry Road\nDoncaster\nEngland DN4 7PB\nUnited Kingdom",
+    "MITIE WASTE & ENVIRONMENTAL SERVICES LIMITED": "1 Bartholomew Lane\nLondon\nEC2N 2AX",
+    "SUEZ RECYCLING AND RECOVERY UK LTD": "2100 Coventry Road\nSheldon\nBirmingham\nB26 3EA",
+    "VEOLIA ES (UK) LTD": "Veolia House\n154A Pentonville Road\nLondon\nN1 9JE",
 }
 
-EXTRACT_PROMPT = """You are extracting data from a supplier purchase order PDF sent to Waste Experts.
+BROKERS = {name: ADDRESS_OVERRIDES.get(name, "") for name in ACCOUNT_NAMES}
+BROKER_LIST_TEXT = ", ".join(BROKERS.keys())
 
-STEP 1 — IDENTIFY THE SUPPLIER (Broker)
-Scan the ENTIRE document — logo, header, footer, terms, email addresses, phrases like "X Ltd employee", "email to X", "accept X terms & conditions", "Registered Office" — and match against this approved broker list:
+EXTRACT_PROMPT = f"""You are extracting data from a supplier purchase order PDF sent to Waste Logics.
 
-ACM Environmental PLC, Acumen Waste Services, 707 Ltd, Click Waste, Aqua Force Special Waste Ltd, AMA Waste, Associated Waste Management Ltd, Asprey St John & Co Ltd, Ash Waste Services Ltd, ACMS Waste Limited, A1 Chemical Waste Management Ltd, Alchemy Metals Ltd, Bakers Waste Services Ltd, Biffa Waste Services Limited, BW Skip Hire, Bywaters (Leyton) Limited, Bagnall & Morris Waste Services Ltd, Baileys Skip Hire and Recycling Ltd, Business Waste Ltd, Brown Recycling Ltd, BKP Waste & Recycling Ltd, Belford Bros Skip Hire Ltd, Countrystyle Recycling Ltd, Cartwrights Waste Disposal Services, C & M Waste Management Ltd, Change Waste Recycling Limited, Chloros Environmental Ltd, CHC Waste FM Ltd, Cleansing Service Group Ltd, Circle Waste Ltd, City Waste London Ltd, Cheshire Waste Skip Hire Limited, Circom Ltd, CITB, DP Skip Hire Ltd, Forward Environmental Ltd, EMN Plant Ltd, E-Cycle Limited, Enva England Ltd, Ellgia Ltd, Eco-Cycle Waste Management Ltd, Enva WEEE Recycling Scotland Ltd, FPWM Ltd, Footprint Recycling, Forward Waste Management Ltd, Fresh Start Waste Ltd, Forvis Mazars LLP, Greenzone Facilities Management Ltd, Greenway Environmental Ltd, GPT Waste Management Ltd, Go Green, Germstar UK Ltd, GD Environmental Services Ltd, Great Western Recycling Ltd, Grundon Waste Management Ltd, Gillett Environmental Ltd, Go For It Trading Ltd, Go 4 Greener Waste Management Ltd, Intelligent Waste Management Limited, J & B Recycling Ltd, Just Clear Ltd, Just A Step UK Ltd, J Dickinson & Sons (Horwich) Limited, Kenny Waste Management Ltd, Kane Management Consultancy Ltd, LSS Waste Management, LTL Systems Ltd, Mitie Waste & Environmental Services Limited, Mitie, MJ Church Recycling Ltd, M & M Skip Hire Ltd, MVV Environment, Mick George Recycling Ltd, NWH Waste Services, Nationwide Waste Services Limited, Optima Health UK Ltd, Premier Waste Recycling Ltd, Pearce Recycling Company Ltd, Phoenix Environmental Management Ltd, Papilo Ltd, RFMW UK Ltd, Riverdale Paper PLC, Remondis Ltd, Roydon Resource Recovery Limited, Risinxtreme Limited, Recorra Ltd, Sackers Ltd, Suez Recycling and Recovery UK Ltd, Suez, Safety Kleen UK Limited, Mobius Environmental Ltd, Sustainable Waste Services, Select A Skip UK Ltd, Slicker Recycling Ltd, Sommers Waste Solutions Limited, Saica Natur UK Ltd, Site Clear Solutions Ltd, Sharp Brothers (Skips) Ltd, SLM Waste Management Limited, Shredall (East Midlands) Limited, Scott Waste Limited, Smiths (Gloucester) Ltd, Tradebe North West Ltd, The Waste Brokerage Co Ltd, T.Ward & Son Ltd, Terracycle UK Limited, UK Waste Solutions Ltd, UBT (EU) Ltd, Veolia ES (UK) Ltd, Verto Recycle Ltd, Waste Management Facilities Ltd, Reconomy (UK) Ltd, Waterman Waste Management Ltd, Wastenot Ltd, Waste Wise Management Solutions, WEEE (Scotland) Ltd, WM101 Ltd, Whitkirk Waste Solutions Ltd, Williams Environmental Management Ltd, Wastesolve Limited, WMR Waste Solutions Ltd, Wheeldon Brothers Waste Ltd, Waste Cloud Limited, Yorwaste Ltd, Yes Waste Limited
+STEP 1 — IDENTIFY THE SUPPLIER
+Scan the ENTIRE document and match supplier against this approved account list:
+{BROKER_LIST_TEXT}
 
-Set "supplier" to the BEST MATCHING name from the list. NEVER use: Waste Experts, Electrical Waste Recycling Group, or the waste producer/site company.
-
-STEP 2 — Extract all fields and return ONLY a valid JSON object:
-
-{
-  "supplier": "Best matching broker name from the approved list, or null",
-  "purchase_order_number": "The PO or order reference number",
-  "site_contact": "Primary site contact full name, or null",
-  "site_contact_number": "Primary site contact phone number, or null",
-  "site_contact_email": "Primary site contact email address, or null",
-  "secondary_site_contact": "Secondary/alternative contact full name, or null",
-  "secondary_site_contact_number": "Secondary contact phone number, or null",
-  "secondary_site_contact_email": "Secondary contact email address, or null",
-  "site_name": "Name of the collection/service site (e.g. 'Garic Hire Ltd - Sandy')",
-  "site_address": "Full site street address, newline-separated (do NOT include postcode here)",
-  "site_postcode": "Site postcode only (e.g. SG19 1QY)",
-  "opening_times": "Site opening hours if explicitly stated, or null",
-  "access": "Access time window and day restrictions (e.g. '8am - 5pm Monday - Friday'), or null",
-  "site_restrictions": "PPE requirements, vehicle restrictions, height restrictions, or other site-specific rules, or null",
-  "special_instructions": "Order notes, amended orders, call-ahead instructions, or any other important notes, or null",
-  "waste_type": "Waste type or material as stated on the PO",
-  "ewc_code": "EWC code if present (e.g. '20.01.21*'). Codes ending in * are hazardous.",
-  "container_type": "Container type and size (e.g. 'Corrugated Flo Tube Pipe', '8ft Dura Pipe')",
-  "movement_type": "Movement type (e.g. 'Exchange', 'Collection', 'Removal')",
-  "transport_cost": 0.00,
-  "note_already_included": true
-}
+STEP 2 — Return ONLY valid JSON with this shape:
+{{
+  "account_name": "Waste Logics",
+  "supplier": "Best matching supplier from approved list, or null",
+  "purchase_order_number": "PO/order reference, or null",
+  "site_contact": "Primary contact, or null",
+  "site_contact_number": "Primary contact number, or null",
+  "site_contact_email": "Primary contact email, or null",
+  "secondary_site_contact": "Secondary contact, or null",
+  "secondary_site_contact_number": "Secondary contact number, or null",
+  "secondary_site_contact_email": "Secondary contact email, or null",
+  "site_name": "Site name, or null",
+  "site_address": "Site address excluding postcode, newline separated, or null",
+  "site_postcode": "Site postcode, or null",
+  "opening_times": "Opening hours, or null",
+  "access": "Access details, or null",
+  "site_restrictions": "Site restrictions, or null",
+  "special_instructions": "Special instructions/notes, or null",
+  "document_type": "Consignment Note or Waste Transfer Note if explicitly stated, else null"
+}}
 
 RULES:
-- note_already_included: true if transport/service cost already includes consignment or transfer note fee. false if note must be added separately.
-- Use numeric type (not string) for transport_cost.
-- Return ONLY the JSON object — no markdown fences, no explanation."""
+- Use null when a value is genuinely not found.
+- Return JSON only. No markdown. No explanation.
+"""
 
 
-@app.route('/')
+def _clean_json_payload(raw_text: str):
+    payload = raw_text.strip()
+    if "```" in payload and "{" in payload and "}" in payload:
+        payload = payload[payload.find("{") : payload.rfind("}") + 1]
+    return json.loads(payload)
+
+
+def _normalise_data(data: dict):
+    supplier = (data.get("supplier") or "").strip()
+    if supplier not in BROKERS:
+        supplier = ""
+
+    data["account_name"] = data.get("account_name") or "Waste Logics"
+    data["supplier"] = supplier
+    data["supplier_found"] = bool(supplier)
+    data["supplier_address"] = BROKERS.get(supplier, "")
+    data["document_type"] = data.get("document_type") or "Consignment Note"
+
+    ordered_fields = [
+        "account_name",
+        "supplier",
+        "purchase_order_number",
+        "site_contact",
+        "site_contact_number",
+        "site_contact_email",
+        "secondary_site_contact",
+        "secondary_site_contact_number",
+        "secondary_site_contact_email",
+        "site_name",
+        "site_address",
+        "site_postcode",
+        "opening_times",
+        "access",
+        "site_restrictions",
+        "special_instructions",
+        "document_type",
+        "supplier_address",
+        "supplier_found",
+    ]
+    return {key: data.get(key) for key in ordered_fields}
+
+
+@app.route("/")
 def index():
-    return render_template('index.html', brokers=json.dumps(list(BROKERS.keys())))
+    brokers = [{"name": name, "address": address} for name, address in BROKERS.items()]
+    return render_template("index.html", brokers_json=json.dumps(brokers))
 
 
-@app.route('/extract', methods=['POST'])
+@app.route("/extract", methods=["POST"])
 def extract():
-    if 'pdf' not in request.files:
-        return jsonify({'error': 'No PDF uploaded'}), 400
+    if "pdf" not in request.files:
+        return jsonify({"error": "No PDF uploaded"}), 400
 
-    pdf_file = request.files['pdf']
-    pdf_bytes = pdf_file.read()
-    b64 = base64.standard_b64encode(pdf_bytes).decode()
-
-    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        return jsonify({'error': 'ANTHROPIC_API_KEY not set'}), 500
+        return jsonify({"error": "ANTHROPIC_API_KEY not set"}), 500
 
+    pdf_bytes = request.files["pdf"].read()
+    b64_pdf = base64.standard_b64encode(pdf_bytes).decode()
     client = anthropic.Anthropic(api_key=api_key)
 
     try:
         resp = client.messages.create(
-            model='claude-opus-4-6',
-            max_tokens=2000,
-            messages=[{
-                'role': 'user',
-                'content': [
-                    {
-                        'type': 'document',
-                        'source': {
-                            'type': 'base64',
-                            'media_type': 'application/pdf',
-                            'data': b64,
+            model="claude-opus-4-1",
+            max_tokens=1800,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "document",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "application/pdf",
+                                "data": b64_pdf,
+                            },
                         },
-                    },
-                    {'type': 'text', 'text': EXTRACT_PROMPT},
-                ],
-            }],
+                        {"type": "text", "text": EXTRACT_PROMPT},
+                    ],
+                }
+            ],
         )
 
-        raw = resp.content[0].text.strip()
-        if '```' in raw:
-            raw = raw[raw.find('{'):raw.rfind('}') + 1]
-
-        data = json.loads(raw)
-
-        supplier = data.get('supplier') or ''
-        data['supplier_address'] = BROKERS.get(supplier, '')
-        data['supplier_found'] = bool(supplier and supplier in BROKERS)
-
-        return jsonify({'success': True, 'data': data})
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        parsed = _clean_json_payload(resp.content[0].text)
+        return jsonify({"success": True, "data": _normalise_data(parsed)})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
-@app.route('/broker-address', methods=['GET'])
-def broker_address():
-    name = request.args.get('name', '')
-    address = BROKERS.get(name, '')
-    return jsonify({'name': name, 'address': address})
-
-
-@app.route('/brokers', methods=['GET'])
+@app.route("/brokers", methods=["GET"])
 def get_brokers():
-    return jsonify({'brokers': [{'name': k, 'address': v} for k, v in BROKERS.items()]})
+    return jsonify({"brokers": [{"name": name, "address": addr} for name, addr in BROKERS.items()]})
 
 
-if __name__ == '__main__':
+@app.route("/broker-address", methods=["GET"])
+def broker_address():
+    name = request.args.get("name", "")
+    return jsonify({"name": name, "address": BROKERS.get(name, "")})
+
+
+if __name__ == "__main__":
     app.run(debug=True)
