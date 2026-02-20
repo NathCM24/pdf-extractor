@@ -436,41 +436,42 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
             remote_logo_reader = False
         return remote_logo_reader or None
 
-    def draw_brand_logo(x, top_y, logo_h, draw=True):
-        sources = []
+    def get_brand_logo_reader():
         if logo_path.exists():
-            sources.append(str(logo_path))
-        remote_logo = get_remote_logo_reader()
-        if remote_logo:
-            sources.append(remote_logo)
-
-        for source in sources:
             try:
-                img = source if hasattr(source, "getSize") else ImageReader(source)
-                iw, ih = img.getSize()
-                logo_w = logo_h * (iw / ih)
-                if draw:
-                    c.drawImage(
-                        img,
-                        x,
-                        top_y - logo_h,
-                        width=logo_w,
-                        height=logo_h,
-                        preserveAspectRatio=True,
-                        mask="auto",
-                    )
-                return logo_w
+                return ImageReader(str(logo_path))
             except Exception:
-                continue
-        return None
+                pass
+        return get_remote_logo_reader()
+
+    def draw_brand_logo(logo_reader, x, top_y, logo_h, draw=True):
+        if not logo_reader:
+            return None
+        try:
+            iw, ih = logo_reader.getSize()
+            logo_w = logo_h * (iw / ih)
+            if draw:
+                c.drawImage(
+                    logo_reader,
+                    x,
+                    top_y - logo_h,
+                    width=logo_w,
+                    height=logo_h,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
+            return logo_w
+        except Exception:
+            return None
 
     draw_top_border()
 
     # ── Logo (centered at top) ─────────────────────────────────────────────
     logo_h = 16 * mm
-    top_logo_w = draw_brand_logo(0, y, logo_h, draw=False)
+    top_logo = get_brand_logo_reader()
+    top_logo_w = draw_brand_logo(top_logo, 0, y, logo_h, draw=False)
     if top_logo_w is not None:
-        draw_brand_logo((PAGE_W - top_logo_w) / 2, y, logo_h)
+        draw_brand_logo(top_logo, (PAGE_W - top_logo_w) / 2, y, logo_h)
     else:
         c.setFont(FONT_XB, 11)
         c.setFillColor(NAVY)
