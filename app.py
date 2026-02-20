@@ -8,12 +8,6 @@ from io import BytesIO
 import anthropic
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from flask import Flask, jsonify, render_template, request
-import base64
-import json
-import os
-
-import anthropic
 
 from brokers import BROKERS, BROKER_LIST_TEXT
 
@@ -125,12 +119,10 @@ def _clean_json_payload(raw_text: str):
 
 def _normalise_data(data: dict):
     supplier = (data.get("supplier") or "").strip()
-    if supplier not in BROKERS:
-        supplier = ""
 
     data["supplier"] = supplier
-    data["account_name"] = supplier or data.get("account_name") or ""
-    data["supplier_found"] = bool(supplier)
+    data["account_name"] = ""  # User must select via typeahead
+    data["supplier_found"] = bool(supplier and supplier in BROKERS)
     data["supplier_address"] = BROKERS.get(supplier, "")
     data["document_type"] = data.get("document_type") or "Consignment Note"
 

@@ -4,28 +4,144 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PDF Extractor - Waste Logics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet" />
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f4f7fb; color: #1e2e3d; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: 'Montserrat', sans-serif; margin: 0; background: #f4f7fb; color: #1e2e3d; }
     .wrap { max-width: 980px; margin: 24px auto 48px; padding: 0 16px; }
     .brand { text-align: center; margin: 6px 0 18px; }
     .brand img { max-width: 320px; width: 100%; height: auto; }
-    .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin-bottom: 16px; }
-    .head { background: #1e2e3d; color: #fff; padding: 16px 20px; border-radius: 8px 8px 0 0; font-weight: 700; }
+
+    /* --- Cards --- */
+    .card { background: #fff; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin-bottom: 16px; }
+    .head { background: #1e2e3d; color: #fff; padding: 16px 20px; border-radius: 4px 4px 0 0; font-weight: 700; font-size: 15px; }
     .body { padding: 16px 20px; }
-    .drop { border: 2px dashed #cfd8e3; border-radius: 8px; padding: 28px; text-align: center; }
+
+    /* --- Drop zone --- */
+    .drop { border: 2px dashed #cfd8e3; border-radius: 4px; padding: 28px; text-align: center; transition: border-color .2s; }
+    .drop.drag-over { border-color: #8ec431; background: #f8fdf0; }
+    .drop p { margin: 0 0 10px; }
+
+    /* --- Grid / fields --- */
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field { display: flex; flex-direction: column; gap: 4px; position: relative; }
     .full { grid-column: 1 / -1; }
-    label { font-size: 12px; font-weight: 700; text-transform: uppercase; }
-    input, textarea, select { border: 1px solid #ccd6e2; border-radius: 6px; padding: 10px; font-size: 14px; }
+    label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: #5a6e80; }
+    input, textarea, select {
+      border: 1px solid #e0e6ed; border-radius: 4px; padding: 10px 12px;
+      font-size: 14px; font-family: 'Montserrat', sans-serif;
+      background: #fafbfc; transition: border-color .2s, box-shadow .2s;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none; border-color: #8ec431; box-shadow: 0 0 0 2px rgba(142,196,49,.15);
+    }
     textarea { min-height: 64px; resize: vertical; }
     .hidden { display: none; }
-    .error { color: #b42318; font-weight: 700; margin-top: 4px; }
-    .ok { color: #246d19; font-weight: 700; margin-top: 4px; }
-    .btn { border: none; background: #8ec431; color: #fff; border-radius: 6px; padding: 10px 16px; font-weight: 700; cursor: pointer; }
-    .pill { display:inline-block; background:#f0f8e0; color:#3f5f08; border:1px solid #8ec431; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+    .error { color: #b42318; font-weight: 700; margin-top: 4px; font-size: 12px; }
+    .ok { color: #246d19; font-weight: 700; margin-top: 4px; font-size: 13px; }
+
+    /* --- Buttons --- */
+    .btn {
+      border: none; background: #8ec431; color: #fff; border-radius: 4px;
+      padding: 10px 18px; font-weight: 700; cursor: pointer;
+      font-family: 'Montserrat', sans-serif; font-size: 13px;
+      transition: background .2s;
+    }
+    .btn:hover { background: #7ab328; }
+    .btn-outline {
+      border: 1px solid #8ec431; background: #fff; color: #3f5f08;
+      border-radius: 4px; padding: 10px 18px; font-weight: 700;
+      cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 13px;
+      transition: background .2s;
+    }
+    .btn-outline:hover { background: #f0f8e0; }
+    .pill { display: inline-block; background: #f0f8e0; color: #3f5f08; border: 1px solid #8ec431; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; }
     .hl { border: 2px solid #8ec431; box-shadow: 0 0 0 2px #f0f8e0 inset; }
-    @media (max-width: 760px){ .grid{ grid-template-columns:1fr; } }
+
+    /* --- Typeahead dropdown --- */
+    .typeahead-wrap { position: relative; }
+    .typeahead-list {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+      max-height: 220px; overflow-y: auto;
+      background: #fff; border: 1px solid #dde3ea; border-radius: 4px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.12);
+      display: none;
+    }
+    .typeahead-list.open { display: block; }
+    .typeahead-item {
+      padding: 9px 12px; cursor: pointer; font-size: 13px;
+      border-bottom: 1px solid #f0f2f5; transition: background .1s;
+    }
+    .typeahead-item:last-child { border-bottom: none; }
+    .typeahead-item:hover, .typeahead-item.active { background: #f0f8e0; }
+    .typeahead-item mark { background: #d4edaa; border-radius: 2px; padding: 0 1px; }
+
+    /* --- Skeleton loader --- */
+    .skeleton-card { margin-bottom: 16px; }
+    .skeleton-header {
+      background: linear-gradient(90deg, #e2e8ef 25%, #f0f4f8 50%, #e2e8ef 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s ease-in-out infinite;
+      height: 48px; border-radius: 4px 4px 0 0;
+    }
+    .skeleton-body { padding: 20px; background: #fff; border-radius: 0 0 4px 4px; }
+    .skeleton-row {
+      display: flex; gap: 12px; margin-bottom: 14px;
+    }
+    .skeleton-field { flex: 1; }
+    .skeleton-label {
+      height: 10px; width: 40%; border-radius: 4px; margin-bottom: 8px;
+      background: linear-gradient(90deg, #e2e8ef 25%, #f0f4f8 50%, #e2e8ef 75%);
+      background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite;
+    }
+    .skeleton-input {
+      height: 38px; border-radius: 4px;
+      background: linear-gradient(90deg, #e2e8ef 25%, #f0f4f8 50%, #e2e8ef 75%);
+      background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite;
+    }
+    .skeleton-full { grid-column: 1 / -1; }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* --- Fade-in animation --- */
+    .fade-in {
+      animation: fadeInUp .45s ease-out both;
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* --- Section headers inside the result card --- */
+    .section-title {
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
+      color: #1e2e3d; border-bottom: 2px solid #8ec431; padding-bottom: 4px;
+      margin: 18px 0 10px; grid-column: 1 / -1;
+    }
+    .section-title:first-child { margin-top: 0; }
+
+    /* --- Document header row --- */
+    .doc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+    }
+    .doc-header h2 { margin: 0; font-size: 18px; font-weight: 700; color: #1e2e3d; }
+    .doc-header .doc-meta { font-size: 12px; color: #5a6e80; }
+
+    /* --- Copy toast --- */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #1e2e3d; color: #fff; padding: 10px 20px; border-radius: 4px;
+      font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .3s;
+      pointer-events: none; z-index: 999;
+    }
+    .toast.show { opacity: 1; }
+
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -34,6 +150,7 @@
       <img src="https://i0.wp.com/wasteexperts.co.uk/wp-content/uploads/2022/11/green-grey-logo-1080.png?w=1920&amp;ssl=1" alt="Waste Experts logo" />
     </div>
 
+    <!-- Upload card -->
     <div class="card">
       <div class="head">Upload Purchase Order PDF</div>
       <div class="body">
@@ -41,24 +158,74 @@
           <p><strong>Drop a PDF here</strong> or choose a file</p>
           <button class="btn" type="button" onclick="document.getElementById('file-input').click()">Choose PDF</button>
           <input id="file-input" type="file" accept=".pdf" class="hidden" />
-          <p id="file-label"></p>
+          <p id="file-label" style="margin-top:8px; font-size:13px; color:#5a6e80;"></p>
         </div>
       </div>
     </div>
 
-    <div id="loading" class="card hidden">
-      <div class="body">Extracting data from PDF…</div>
+    <!-- Skeleton loading state -->
+    <div id="loading" class="card skeleton-card hidden">
+      <div class="skeleton-header"></div>
+      <div class="skeleton-body">
+        <div class="skeleton-row">
+          <div class="skeleton-field"><div class="skeleton-label"></div><div class="skeleton-input"></div></div>
+        </div>
+        <div class="skeleton-row">
+          <div class="skeleton-field"><div class="skeleton-label"></div><div class="skeleton-input"></div></div>
+          <div class="skeleton-field"><div class="skeleton-label"></div><div class="skeleton-input"></div></div>
+        </div>
+        <div class="skeleton-row">
+          <div class="skeleton-field"><div class="skeleton-label"></div><div class="skeleton-input"></div></div>
+          <div class="skeleton-field"><div class="skeleton-label"></div><div class="skeleton-input"></div></div>
+        </div>
+        <div class="skeleton-row">
+          <div class="skeleton-field"><div class="skeleton-label"></div><div class="skeleton-input"></div></div>
+        </div>
+        <div class="skeleton-row">
+          <div class="skeleton-field"><div class="skeleton-label"></div><div class="skeleton-input"></div></div>
+          <div class="skeleton-field"><div class="skeleton-label"></div><div class="skeleton-input"></div></div>
+        </div>
+        <div class="skeleton-row">
+          <div class="skeleton-field"><div class="skeleton-label"></div><div class="skeleton-input"></div></div>
+        </div>
+        <div class="skeleton-row">
+          <div class="skeleton-field"><div class="skeleton-label"></div><div class="skeleton-input"></div></div>
+          <div class="skeleton-field"><div class="skeleton-label"></div><div class="skeleton-input"></div></div>
+        </div>
+        <p style="text-align:center; color:#8a9bb0; font-size:13px; margin:14px 0 0;">Extracting data from PDF&hellip;</p>
+      </div>
     </div>
 
+    <!-- Extracted data card -->
     <div id="edit" class="card hidden">
-      <div class="head">Review &amp; Edit Extracted Data</div>
+      <div class="head">Extracted Order Data</div>
       <div class="body">
+
+        <!-- Document header -->
+        <div class="doc-header">
+          <h2 id="doc-title">Purchase Order</h2>
+          <span class="doc-meta" id="doc-supplier-label"></span>
+        </div>
+
         <div class="grid">
-          <div class="field full">
+
+          <!-- ===== Supplier / Account ===== -->
+          <div class="section-title">Supplier &amp; Reference</div>
+
+          <div class="field full typeahead-wrap">
             <label for="account_name">Account Name (Waste Logics)</label>
-            <input id="account_name" list="account-list" autocomplete="off" placeholder="Start typing account name..." />
-            <datalist id="account-list"></datalist>
-            <div id="account-error" class="error hidden">Please choose supplier</div>
+            <input id="account_name" type="text" autocomplete="off" placeholder="Enter your supplier here..." />
+            <div id="typeahead-dropdown" class="typeahead-list"></div>
+            <div id="account-error" class="error hidden">Please choose a valid supplier from the list</div>
+          </div>
+
+          <div class="field">
+            <label>Supplier (From)</label>
+            <input id="supplier" type="text" />
+          </div>
+          <div class="field">
+            <label>Purchase Order Number</label>
+            <input id="purchase_order_number" type="text" />
           </div>
 
           <div class="field full">
@@ -67,10 +234,6 @@
           </div>
 
           <div class="field">
-            <label>Purchase order number</label>
-            <input id="purchase_order_number" type="text" />
-          </div>
-          <div class="field">
             <label>Document Type</label>
             <select id="document_type" class="hl">
               <option>Consignment Note</option>
@@ -78,27 +241,38 @@
             </select>
           </div>
 
-          <div class="field"><label>Site contact</label><input id="site_contact" type="text" /></div>
-          <div class="field"><label>Site contact number</label><input id="site_contact_number" type="text" /></div>
-          <div class="field full"><label>Site contact email</label><input id="site_contact_email" type="email" /></div>
+          <!-- ===== Contact Info ===== -->
+          <div class="section-title">Contact Information</div>
 
-          <div class="field"><label>Secondary site contact</label><input id="secondary_site_contact" type="text" /></div>
-          <div class="field"><label>Secondary site contact number</label><input id="secondary_site_contact_number" type="text" /></div>
-          <div class="field full"><label>Secondary site contact email</label><input id="secondary_site_contact_email" type="email" /></div>
+          <div class="field"><label>Site Contact</label><input id="site_contact" type="text" /></div>
+          <div class="field"><label>Site Contact Number</label><input id="site_contact_number" type="text" /></div>
+          <div class="field full"><label>Site Contact Email</label><input id="site_contact_email" type="email" /></div>
 
-          <div class="field"><label>Site name</label><input id="site_name" type="text" /></div>
-          <div class="field"><label>Site postcode</label><input id="site_postcode" type="text" /></div>
-          <div class="field full"><label>Site address</label><textarea id="site_address"></textarea></div>
+          <div class="field"><label>Secondary Site Contact</label><input id="secondary_site_contact" type="text" /></div>
+          <div class="field"><label>Secondary Site Contact Number</label><input id="secondary_site_contact_number" type="text" /></div>
+          <div class="field full"><label>Secondary Site Contact Email</label><input id="secondary_site_contact_email" type="email" /></div>
 
-          <div class="field"><label>Opening times</label><textarea id="opening_times"></textarea></div>
+          <!-- ===== Site Info ===== -->
+          <div class="section-title">Site Information</div>
+
+          <div class="field"><label>Site Name (Bill To)</label><input id="site_name" type="text" /></div>
+          <div class="field"><label>Site Postcode</label><input id="site_postcode" type="text" /></div>
+          <div class="field full"><label>Site Address</label><textarea id="site_address"></textarea></div>
+
+          <!-- ===== Instructions ===== -->
+          <div class="section-title">Access &amp; Instructions</div>
+
+          <div class="field"><label>Opening Times</label><textarea id="opening_times"></textarea></div>
           <div class="field"><label>Access</label><textarea id="access"></textarea></div>
-          <div class="field"><label>Site restrictions</label><textarea id="site_restrictions"></textarea></div>
-          <div class="field"><label>Special instructions</label><textarea id="special_instructions"></textarea></div>
+          <div class="field"><label>Site Restrictions</label><textarea id="site_restrictions"></textarea></div>
+          <div class="field"><label>Special Instructions</label><textarea id="special_instructions"></textarea></div>
         </div>
 
-        <div style="margin-top:14px; display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
+        <!-- Action bar -->
+        <div style="margin-top:18px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
           <button class="btn" type="button" onclick="downloadReviewPDF()">Download PDF</button>
           <button class="btn" type="button" onclick="saveReview()">Save Review</button>
+          <button class="btn-outline" type="button" onclick="copyAllToClipboard()">Copy All Data</button>
           <span class="pill">Extracted PDF includes selected note type</span>
           <span id="save-status" class="ok hidden">Review saved.</span>
         </div>
@@ -106,47 +280,118 @@
     </div>
   </div>
 
+  <!-- Toast notification -->
+  <div id="toast" class="toast"></div>
+
   <script>
+    /* ── Broker data from Flask ── */
     const BROKERS = {{ brokers_json|safe }};
     const brokerNames = BROKERS.map(b => b.name);
     const brokerAddressMap = Object.fromEntries(BROKERS.map(b => [b.name, b.address || '']));
 
-    const fileInput = document.getElementById('file-input');
-    const dropZone = document.getElementById('drop-zone');
+    /* ── DOM refs ── */
+    const fileInput    = document.getElementById('file-input');
+    const dropZone     = document.getElementById('drop-zone');
+    const accountInput = document.getElementById('account_name');
+    const dropdown     = document.getElementById('typeahead-dropdown');
+    let activeIdx      = -1;
 
-    function renderAccountOptions(term = '') {
-      const list = document.getElementById('account-list');
-      const q = term.trim().toLowerCase();
-      const matches = brokerNames.filter(name => name.toLowerCase().startsWith(q));
-      const options = (q ? matches : brokerNames).slice(0, 50);
-      list.innerHTML = options.map(name => `<option value="${name}"></option>`).join('');
-    }
-
+    /* ── Helpers ── */
     function setField(id, value) {
       const el = document.getElementById(id);
       if (el) el.value = value || '';
     }
-
     function getField(id) {
       const el = document.getElementById(id);
       return el ? el.value.trim() : '';
     }
 
-    function fillForm(data) {
-      const extractedAccount = data.supplier || data.account_name || '';
-      [
-        'purchase_order_number','site_contact','site_contact_number','site_contact_email',
-        'secondary_site_contact','secondary_site_contact_number','secondary_site_contact_email',
-        'site_name','site_address','site_postcode','opening_times','access','site_restrictions','special_instructions'
-      ].forEach(key => setField(key, data[key]));
+    /* ── Typeahead dropdown ── */
+    function renderDropdown(term) {
+      const q = (term || '').trim().toLowerCase();
+      let matches = brokerNames;
+      if (q) {
+        matches = brokerNames.filter(name => name.toLowerCase().includes(q));
+      }
+      matches = matches.slice(0, 40);
+      activeIdx = -1;
 
-      setField('account_name', extractedAccount);
-      const docType = data.document_type === 'Waste Transfer Note' ? 'Waste Transfer Note' : 'Consignment Note';
-      setField('document_type', docType);
+      if (matches.length === 0) {
+        dropdown.innerHTML = '<div class="typeahead-item" style="color:#8a9bb0; cursor:default;">No matching suppliers</div>';
+        dropdown.classList.add('open');
+        return;
+      }
+
+      dropdown.innerHTML = matches.map((name, i) => {
+        let display = name;
+        if (q) {
+          const idx = name.toLowerCase().indexOf(q);
+          if (idx !== -1) {
+            display = name.substring(0, idx)
+              + '<mark>' + name.substring(idx, idx + q.length) + '</mark>'
+              + name.substring(idx + q.length);
+          }
+        }
+        return `<div class="typeahead-item" data-index="${i}" data-value="${name}">${display}</div>`;
+      }).join('');
+
+      dropdown.classList.add('open');
+    }
+
+    function closeDropdown() {
+      setTimeout(() => {
+        dropdown.classList.remove('open');
+        activeIdx = -1;
+      }, 150);
+    }
+
+    function selectSupplier(name) {
+      accountInput.value = name;
+      dropdown.classList.remove('open');
       updateSupplierAddress();
       validateAccount();
     }
 
+    dropdown.addEventListener('mousedown', e => {
+      const item = e.target.closest('.typeahead-item');
+      if (item && item.dataset.value) {
+        e.preventDefault();
+        selectSupplier(item.dataset.value);
+      }
+    });
+
+    accountInput.addEventListener('focus', () => renderDropdown(accountInput.value));
+    accountInput.addEventListener('input', () => {
+      renderDropdown(accountInput.value);
+      updateSupplierAddress();
+      validateAccount();
+    });
+    accountInput.addEventListener('blur', closeDropdown);
+    accountInput.addEventListener('keydown', e => {
+      const items = dropdown.querySelectorAll('.typeahead-item[data-value]');
+      if (!items.length) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIdx = Math.min(activeIdx + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+        items[activeIdx].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIdx = Math.max(activeIdx - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+        items[activeIdx].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (activeIdx >= 0 && activeIdx < items.length) {
+          selectSupplier(items[activeIdx].dataset.value);
+        }
+      } else if (e.key === 'Escape') {
+        dropdown.classList.remove('open');
+      }
+    });
+
+    /* ── Address / validation ── */
     function updateSupplierAddress() {
       const account = getField('account_name');
       const current = getField('supplier_address');
@@ -166,6 +411,33 @@
       return valid;
     }
 
+    /* ── Fill form from extraction response ── */
+    function fillForm(data) {
+      [
+        'supplier', 'purchase_order_number',
+        'site_contact', 'site_contact_number', 'site_contact_email',
+        'secondary_site_contact', 'secondary_site_contact_number', 'secondary_site_contact_email',
+        'site_name', 'site_address', 'site_postcode',
+        'opening_times', 'access', 'site_restrictions', 'special_instructions'
+      ].forEach(key => setField(key, data[key]));
+
+      /* Account name left blank — user must select via typeahead */
+      setField('account_name', '');
+
+      const docType = data.document_type === 'Waste Transfer Note' ? 'Waste Transfer Note' : 'Consignment Note';
+      setField('document_type', docType);
+
+      /* Update document header */
+      const supplierName = data.supplier || 'Unknown Supplier';
+      const poNum = data.purchase_order_number || '';
+      document.getElementById('doc-title').textContent = 'Purchase Order' + (poNum ? ' — ' + poNum : '');
+      document.getElementById('doc-supplier-label').textContent = 'From: ' + supplierName;
+
+      setField('supplier_address', '');
+      validateAccount();
+    }
+
+    /* ── Collect payload ── */
     function collectReviewPayload() {
       return {
         account_name: getField('account_name'),
@@ -188,51 +460,38 @@
       };
     }
 
-
+    /* ── Download PDF ── */
     async function downloadReviewPDF() {
-      const valid = validateAccount();
-      if (!valid) return;
-
+      if (!validateAccount()) return;
       const payload = collectReviewPayload();
-
       try {
         const resp = await fetch('/download-review-pdf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({ error: 'Unable to download PDF' }));
           throw new Error(err.error || 'Unable to download PDF');
         }
-
         const blob = await resp.blob();
         const disposition = resp.headers.get('Content-Disposition') || '';
         const match = disposition.match(/filename="([^"]+)"/);
         const filename = match ? match[1] : 'review.pdf';
-
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 2000);
-      } catch (err) {
-        alert(err.message);
-      }
+      } catch (err) { alert(err.message); }
     }
 
+    /* ── Save review ── */
     async function saveReview() {
-      const valid = validateAccount();
+      if (!validateAccount()) return;
       const status = document.getElementById('save-status');
       status.classList.add('hidden');
-      if (!valid) return;
-
       const payload = collectReviewPayload();
-
       try {
         const resp = await fetch('/save-review', {
           method: 'POST',
@@ -241,20 +500,65 @@
         });
         const json = await resp.json();
         if (!resp.ok || json.error) throw new Error(json.error || 'Unable to save review');
-
         window.lastReviewedPayload = json.data || payload;
         status.textContent = json.message || 'Review saved.';
         status.classList.remove('hidden');
         setTimeout(() => status.classList.add('hidden'), 2500);
-      } catch (err) {
-        alert(err.message);
-      }
+      } catch (err) { alert(err.message); }
     }
 
+    /* ── Copy all data to clipboard ── */
+    function copyAllToClipboard() {
+      const payload = collectReviewPayload();
+      const labels = {
+        account_name: 'Account Name',
+        supplier_address: 'Bill To Address',
+        purchase_order_number: 'Purchase Order Number',
+        document_type: 'Document Type',
+        site_contact: 'Site Contact',
+        site_contact_number: 'Site Contact Number',
+        site_contact_email: 'Site Contact Email',
+        secondary_site_contact: 'Secondary Site Contact',
+        secondary_site_contact_number: 'Secondary Site Contact Number',
+        secondary_site_contact_email: 'Secondary Site Contact Email',
+        site_name: 'Site Name',
+        site_address: 'Site Address',
+        site_postcode: 'Site Postcode',
+        opening_times: 'Opening Times',
+        access: 'Access',
+        site_restrictions: 'Site Restrictions',
+        special_instructions: 'Special Instructions'
+      };
+      const text = Object.entries(labels)
+        .map(([key, label]) => `${label}: ${payload[key] || '-'}`)
+        .join('\n');
+
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('All data copied to clipboard');
+      }).catch(() => {
+        /* Fallback for older browsers */
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('All data copied to clipboard');
+      });
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    /* ── Upload & extract ── */
     async function uploadAndExtract(file) {
       document.getElementById('file-label').textContent = file.name;
       document.getElementById('loading').classList.remove('hidden');
       document.getElementById('edit').classList.add('hidden');
+      document.getElementById('edit').classList.remove('fade-in');
 
       const fd = new FormData();
       fd.append('pdf', file);
@@ -265,6 +569,10 @@
         if (!resp.ok || json.error) throw new Error(json.error || 'Extraction failed');
         fillForm(json.data || {});
         document.getElementById('edit').classList.remove('hidden');
+        /* Trigger fade-in on next frame */
+        requestAnimationFrame(() => {
+          document.getElementById('edit').classList.add('fade-in');
+        });
       } catch (err) {
         alert(err.message);
       } finally {
@@ -272,9 +580,17 @@
       }
     }
 
-    dropZone.addEventListener('dragover', e => { e.preventDefault(); });
+    /* ── Drag & drop ── */
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
     dropZone.addEventListener('drop', e => {
       e.preventDefault();
+      dropZone.classList.remove('drag-over');
       const file = e.dataTransfer.files[0];
       if (file && file.name.toLowerCase().endsWith('.pdf')) uploadAndExtract(file);
     });
@@ -282,20 +598,6 @@
       const file = e.target.files[0];
       if (file) uploadAndExtract(file);
     });
-
-    const accountInput = document.getElementById('account_name');
-    accountInput.addEventListener('focus', () => renderAccountOptions(accountInput.value));
-    accountInput.addEventListener('input', () => {
-      renderAccountOptions(accountInput.value);
-      updateSupplierAddress();
-      validateAccount();
-    });
-    accountInput.addEventListener('change', () => {
-      updateSupplierAddress();
-      validateAccount();
-    });
-
-    renderAccountOptions('');
   </script>
 </body>
 </html>
