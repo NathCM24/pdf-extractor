@@ -50,11 +50,24 @@ STEP 2 — Return ONLY valid JSON with this shape:
   "access": "Access details, or null",
   "site_restrictions": "Site restrictions, or null",
   "special_instructions": "Special instructions/notes, or null",
-  "document_type": "Consignment Note or Waste Transfer Note if explicitly stated, else null"
+  "document_type": "Consignment Note or Waste Transfer Note if explicitly stated, else null",
+  "line_items": [
+    {{
+      "description": "Product or service description (e.g. '8ft Dura Pipe - Exchange'). Max 8 words.",
+      "quantity": 1,
+      "unit_price": 0.00,
+      "line_total": 0.00
+    }}
+  ],
+  "overall_total": 0.00
 }}
 
 RULES:
 - Use null when a value is genuinely not found.
+- Use numeric types for quantity, unit_price, line_total, overall_total.
+- Extract ALL line items from the products/services/pricing table.
+- If only one service with a transport/pricing cost, create one line item.
+- overall_total is the sum of all line_total values.
 - Return JSON only. No markdown. No explanation.
 """
 
@@ -75,7 +88,7 @@ BG_BOX = colors.HexColor("#f0f4f8")
 SECTION_BG = colors.HexColor("#e8edf2")
 
 PAGE_W, PAGE_H = A4
-MARGIN = 18 * mm
+MARGIN = 14 * mm
 CONTENT_W = PAGE_W - 2 * MARGIN
 RADIUS = 2 * mm
 
@@ -268,22 +281,17 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             pass
     down(logo_h + 6 * mm)
 
-    # ── Title ─────────────────────────────────────────────────────────────
-    site_name = (payload.get("site_name") or "").strip() or "Unknown"
-    site_postcode = (payload.get("site_postcode") or "").strip() or "Unknown"
+    # ── Title (use service description if available, omit otherwise) ────
     service_desc = (payload.get("service_description") or "").strip()
     if service_desc:
-        title_text = f"{site_name} - {service_desc} - {site_postcode}".upper()
-    else:
-        title_text = f"{site_name} | {site_postcode}".upper()
-
-    c.setFillColor(NAVY)
-    font_size = 16
-    while font_size > 9 and c.stringWidth(title_text, FONT_XB, font_size) > CONTENT_W:
-        font_size -= 0.5
-    c.setFont(FONT_XB, font_size)
-    c.drawCentredString(PAGE_W / 2, y, title_text)
-    down(6 * mm)
+        title_text = service_desc.upper()
+        c.setFillColor(NAVY)
+        font_size = 16
+        while font_size > 9 and c.stringWidth(title_text, FONT_XB, font_size) > CONTENT_W:
+            font_size -= 0.5
+        c.setFont(FONT_XB, font_size)
+        c.drawCentredString(PAGE_W / 2, y, title_text)
+        down(6 * mm)
 
     # ── Full-width horizontal rule ────────────────────────────────────────
     c.setStrokeColor(GREEN)
@@ -369,6 +377,102 @@ def _build_review_pdf(payload: dict) -> BytesIO:
     c.drawString(ex_x + 3 * mm, y - 9.5 * mm, "\u2014")
 
     down(box_h + 8 * mm)
+
+    # ── Products & Services table ─────────────────────────────────────────
+    line_items = payload.get("line_items") or []
+    if line_items:
+        ps_col_w = [CONTENT_W * 0.50, CONTENT_W * 0.11, CONTENT_W * 0.19, CONTENT_W * 0.20]
+        ps_headers = ["PRODUCTS & SERVICES", "QTY", "PRICE / UNIT", "LINE TOTAL"]
+        ps_hdr_h = 9 * mm
+        ps_row_h = 8 * mm
+
+        def draw_ps_header():
+            nonlocal y
+            _rounded_rect(c, MARGIN, y - ps_hdr_h, CONTENT_W, ps_hdr_h, r=2 * mm, fill=NAVY)
+            c.setFont(FONT_B, 8)
+            c.setFillColor(WHITE)
+            hx = MARGIN + 3 * mm
+            for i, hdr in enumerate(ps_headers):
+                if i == 0:
+                    c.drawString(hx, y - ps_hdr_h + 2.5 * mm, hdr)
+                else:
+                    c.drawRightString(hx + ps_col_w[i] - 3 * mm, y - ps_hdr_h + 2.5 * mm, hdr)
+                hx += ps_col_w[i]
+            down(ps_hdr_h)
+
+        ensure_space(ps_hdr_h)
+        draw_ps_header()
+
+        def _money(val):
+            try:
+                return f"\u00a3{float(val):,.2f}"
+            except (TypeError, ValueError):
+                return "\u00a30.00"
+
+        grand_total = 0.0
+        for idx, item in enumerate(line_items):
+            ensure_space(ps_row_h)
+
+            desc = str(item.get("description") or "")
+            try:
+                qty_f = float(item.get("quantity") or 1)
+            except (TypeError, ValueError):
+                qty_f = 1.0
+            try:
+                unit = float(item.get("unit_price") or 0)
+            except (TypeError, ValueError):
+                unit = 0.0
+            try:
+                total = float(item.get("line_total") or (qty_f * unit))
+            except (TypeError, ValueError):
+                total = qty_f * unit
+
+            grand_total += total
+
+            row_fill = LIGHT_ROW if idx % 2 == 0 else WHITE
+            c.setFillColor(row_fill)
+            c.rect(MARGIN, y - ps_row_h, CONTENT_W, ps_row_h, fill=1, stroke=0)
+            c.setStrokeColor(MID_GREY)
+            c.setLineWidth(0.3)
+            c.line(MARGIN, y - ps_row_h, MARGIN + CONTENT_W, y - ps_row_h)
+
+            text_y = y - ps_row_h + 2.5 * mm
+            max_desc = ps_col_w[0] - 6 * mm
+
+            desc_str = desc
+            c.setFont(FONT_R, 9)
+            while desc_str and c.stringWidth(desc_str, FONT_R, 9) > max_desc:
+                desc_str = desc_str[:-1]
+            if desc_str != desc and len(desc_str) > 1:
+                desc_str = desc_str[:-1] + "\u2026"
+
+            c.setFillColor(TEXT_GREY)
+            c.drawString(MARGIN + 3 * mm, text_y, desc_str)
+
+            rx = MARGIN + ps_col_w[0]
+            c.setFont(FONT_R, 9)
+            c.drawRightString(rx + ps_col_w[1] - 3 * mm, text_y,
+                              str(int(qty_f) if qty_f == int(qty_f) else qty_f))
+            rx += ps_col_w[1]
+            c.drawRightString(rx + ps_col_w[2] - 3 * mm, text_y, _money(unit))
+            rx += ps_col_w[2]
+            c.setFont(FONT_B, 9)
+            c.drawRightString(rx + ps_col_w[3] - 3 * mm, text_y, _money(total))
+
+            down(ps_row_h)
+
+        # Overall total row
+        overall_total = float(payload.get("overall_total") or grand_total)
+        tot_row_h = 10 * mm
+        ensure_space(tot_row_h)
+        _rounded_rect(c, MARGIN, y - tot_row_h, CONTENT_W, tot_row_h, r=2 * mm, fill=GREEN)
+        c.setFont(FONT_B, 10)
+        c.setFillColor(WHITE)
+        c.drawString(MARGIN + 5 * mm, y - tot_row_h + 3 * mm, "TOTAL")
+        c.setFont(FONT_XB, 12)
+        c.setFillColor(NAVY)
+        c.drawRightString(PAGE_W - MARGIN - 5 * mm, y - tot_row_h + 3 * mm, _money(overall_total))
+        down(tot_row_h + 8 * mm)
 
     # ── Main data table ───────────────────────────────────────────────────
     label_col_w = CONTENT_W * 0.38
@@ -513,6 +617,28 @@ def _normalise_data(data: dict):
     data["supplier_address"] = BROKERS.get(supplier, "")
     data["document_type"] = data.get("document_type") or "Consignment Note"
 
+    # Normalise line_items
+    line_items = data.get("line_items") or []
+    for item in line_items:
+        try:
+            item["quantity"] = float(item.get("quantity") or 1)
+        except (TypeError, ValueError):
+            item["quantity"] = 1.0
+        try:
+            item["unit_price"] = float(item.get("unit_price") or 0)
+        except (TypeError, ValueError):
+            item["unit_price"] = 0.0
+        try:
+            item["line_total"] = float(item.get("line_total") or item["quantity"] * item["unit_price"])
+        except (TypeError, ValueError):
+            item["line_total"] = item["quantity"] * item["unit_price"]
+        item["description"] = str(item.get("description") or "")
+
+    try:
+        overall_total = float(data.get("overall_total") or sum(i["line_total"] for i in line_items))
+    except (TypeError, ValueError):
+        overall_total = sum(i["line_total"] for i in line_items)
+
     ordered_fields = [
         "account_name",
         "supplier",
@@ -535,7 +661,10 @@ def _normalise_data(data: dict):
         "supplier_address",
         "supplier_found",
     ]
-    return {key: data.get(key) for key in ordered_fields}
+    result = {key: data.get(key) for key in ordered_fields}
+    result["line_items"] = line_items
+    result["overall_total"] = overall_total
+    return result
 
 
 
@@ -551,10 +680,10 @@ def download_review_pdf():
 
     pdf_buffer = _build_review_pdf(payload)
 
-    # Filename: {Account Name} - {Service Description} - {Site Postcode}.pdf
+    # Filename: use service description as the core name
+    service_desc = (payload.get("service_description") or "").strip()
     safe_account = _sanitise_filename(account_name) or "Unknown"
     safe_postcode = _sanitise_filename((payload.get("site_postcode") or "").strip()) or "Unknown"
-    service_desc = (payload.get("service_description") or "").strip()
     if service_desc:
         safe_service = _sanitise_filename(service_desc)
         filename = f"{safe_account} - {safe_service} - {safe_postcode}.pdf"
