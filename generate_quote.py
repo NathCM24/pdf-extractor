@@ -529,11 +529,13 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     # Right – From
     y = addr_top
     label(c, col2_x, y, "From")
-    y -= 4.5 * mm
-    c.setFont(FONT_B, 10)
-    c.setFillColor(NAVY)
-    c.drawString(col2_x, y, "Waste Experts")
-    y -= 5 * mm
+    y -= 3.5 * mm
+    from_logo_h = 7 * mm
+    if draw_brand_logo(col2_x, y, from_logo_h) is None:
+        c.setFont(FONT_B, 10)
+        c.setFillColor(NAVY)
+        c.drawString(col2_x, y - from_logo_h + 2 * mm, "LOGO")
+    y -= from_logo_h + 2 * mm
     c.setFont(FONT_R, 9)
     c.setFillColor(TEXT_GREY)
     for we_line in WE_ADDRESS:
