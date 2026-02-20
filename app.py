@@ -8,6 +8,12 @@ from io import BytesIO
 import anthropic
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from flask import Flask, jsonify, render_template, request
+import base64
+import json
+import os
+
+import anthropic
 
 from brokers import BROKERS, BROKER_LIST_TEXT
 
