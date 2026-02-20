@@ -63,7 +63,7 @@
 
           <div class="field full">
             <label>Bill To (Representative Address)</label>
-            <textarea id="supplier_address" readonly placeholder="Supplier address will appear here"></textarea>
+            <textarea id="supplier_address" placeholder="Supplier address will appear here"></textarea>
           </div>
 
           <div class="field">
@@ -132,7 +132,7 @@
     }
 
     function fillForm(data) {
-      const extractedAccount = data.account_name || data.supplier || '';
+      const extractedAccount = data.supplier || data.account_name || '';
       [
         'purchase_order_number','site_contact','site_contact_number','site_contact_email',
         'secondary_site_contact','secondary_site_contact_number','secondary_site_contact_email',
@@ -148,7 +148,11 @@
 
     function updateSupplierAddress() {
       const account = getField('account_name');
-      setField('supplier_address', brokerAddressMap[account] || '');
+      const current = getField('supplier_address');
+      const suggested = brokerAddressMap[account] || '';
+      if (!current || current === suggested || brokerNames.includes(account)) {
+        setField('supplier_address', suggested);
+      }
     }
 
     function validateAccount() {
@@ -183,16 +187,30 @@
       };
     }
 
-    function saveReview() {
+    async function saveReview() {
       const valid = validateAccount();
       const status = document.getElementById('save-status');
       status.classList.add('hidden');
       if (!valid) return;
+
       const payload = collectReviewPayload();
-      window.lastReviewedPayload = payload;
-      status.textContent = 'Review saved.';
-      status.classList.remove('hidden');
-      setTimeout(() => status.classList.add('hidden'), 2500);
+
+      try {
+        const resp = await fetch('/save-review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const json = await resp.json();
+        if (!resp.ok || json.error) throw new Error(json.error || 'Unable to save review');
+
+        window.lastReviewedPayload = json.data || payload;
+        status.textContent = json.message || 'Review saved.';
+        status.classList.remove('hidden');
+        setTimeout(() => status.classList.add('hidden'), 2500);
+      } catch (err) {
+        alert(err.message);
+      }
     }
 
     async function uploadAndExtract(file) {
