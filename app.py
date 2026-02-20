@@ -151,7 +151,7 @@ Scan the ENTIRE document and match supplier against this approved account list:
 
 STEP 2 — Return ONLY valid JSON with this shape:
 {{
-  "account_name": "Waste Logics",
+  "account_name": "Account/client/supplier name from approved list, or null",
   "supplier": "Best matching supplier from approved list, or null",
   "purchase_order_number": "PO/order reference, or null",
   "site_contact": "Primary contact, or null",
@@ -188,8 +188,8 @@ def _normalise_data(data: dict):
     if supplier not in BROKERS:
         supplier = ""
 
-    data["account_name"] = data.get("account_name") or "Waste Logics"
     data["supplier"] = supplier
+    data["account_name"] = supplier or data.get("account_name") or ""
     data["supplier_found"] = bool(supplier)
     data["supplier_address"] = BROKERS.get(supplier, "")
     data["document_type"] = data.get("document_type") or "Consignment Note"

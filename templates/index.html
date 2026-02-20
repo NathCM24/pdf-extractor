@@ -7,6 +7,8 @@
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f4f7fb; color: #1e2e3d; }
     .wrap { max-width: 980px; margin: 24px auto 48px; padding: 0 16px; }
+    .brand { text-align: center; margin: 6px 0 18px; }
+    .brand img { max-width: 320px; width: 100%; height: auto; }
     .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin-bottom: 16px; }
     .head { background: #1e2e3d; color: #fff; padding: 16px 20px; border-radius: 8px 8px 0 0; font-weight: 700; }
     .body { padding: 16px 20px; }
@@ -19,6 +21,7 @@
     textarea { min-height: 64px; resize: vertical; }
     .hidden { display: none; }
     .error { color: #b42318; font-weight: 700; margin-top: 4px; }
+    .ok { color: #246d19; font-weight: 700; margin-top: 4px; }
     .btn { border: none; background: #8ec431; color: #fff; border-radius: 6px; padding: 10px 16px; font-weight: 700; cursor: pointer; }
     .pill { display:inline-block; background:#f0f8e0; color:#3f5f08; border:1px solid #8ec431; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; }
     .hl { border: 2px solid #8ec431; box-shadow: 0 0 0 2px #f0f8e0 inset; }
@@ -27,6 +30,10 @@
 </head>
 <body>
   <div class="wrap">
+    <div class="brand">
+      <img src="https://i0.wp.com/wasteexperts.co.uk/wp-content/uploads/2022/11/green-grey-logo-1080.png?w=1920&amp;ssl=1" alt="Waste Experts logo" />
+    </div>
+
     <div class="card">
       <div class="head">Upload Purchase Order PDF</div>
       <div class="body">
@@ -47,15 +54,11 @@
       <div class="head">Review &amp; Edit Extracted Data</div>
       <div class="body">
         <div class="grid">
-          <div class="field">
-            <label>Account Name (Waste Logics)</label>
-            <input id="account_name" type="text" />
-          </div>
-          <div class="field">
-            <label for="supplier">Client / Supplier Name</label>
-            <input id="supplier" list="supplier-list" autocomplete="off" placeholder="Start typing supplier..." />
-            <datalist id="supplier-list"></datalist>
-            <div id="supplier-error" class="error hidden">Please choose supplier</div>
+          <div class="field full">
+            <label for="account_name">Account Name (Waste Logics)</label>
+            <input id="account_name" list="account-list" autocomplete="off" placeholder="Start typing account name..." />
+            <datalist id="account-list"></datalist>
+            <div id="account-error" class="error hidden">Please choose supplier</div>
           </div>
 
           <div class="field full">
@@ -93,9 +96,10 @@
           <div class="field"><label>Special instructions</label><textarea id="special_instructions"></textarea></div>
         </div>
 
-        <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
-          <button class="btn" type="button" onclick="validateSupplier()">Save Review</button>
+        <div style="margin-top:14px; display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
+          <button class="btn" type="button" onclick="saveReview()">Save Review</button>
           <span class="pill">Extracted PDF includes selected note type</span>
+          <span id="save-status" class="ok hidden">Review saved.</span>
         </div>
       </div>
     </div>
@@ -109,8 +113,8 @@
     const fileInput = document.getElementById('file-input');
     const dropZone = document.getElementById('drop-zone');
 
-    function renderSupplierOptions(term = '') {
-      const list = document.getElementById('supplier-list');
+    function renderAccountOptions(term = '') {
+      const list = document.getElementById('account-list');
       const q = term.trim().toLowerCase();
       const matches = brokerNames.filter(name => name.toLowerCase().startsWith(q));
       const options = (q ? matches : brokerNames).slice(0, 50);
@@ -122,32 +126,73 @@
       if (el) el.value = value || '';
     }
 
+    function getField(id) {
+      const el = document.getElementById(id);
+      return el ? el.value.trim() : '';
+    }
+
     function fillForm(data) {
+      const extractedAccount = data.account_name || data.supplier || '';
       [
-        'account_name','supplier','purchase_order_number','site_contact','site_contact_number','site_contact_email',
+        'purchase_order_number','site_contact','site_contact_number','site_contact_email',
         'secondary_site_contact','secondary_site_contact_number','secondary_site_contact_email',
         'site_name','site_address','site_postcode','opening_times','access','site_restrictions','special_instructions'
       ].forEach(key => setField(key, data[key]));
 
+      setField('account_name', extractedAccount);
       const docType = data.document_type === 'Waste Transfer Note' ? 'Waste Transfer Note' : 'Consignment Note';
       setField('document_type', docType);
       updateSupplierAddress();
-      validateSupplier();
+      validateAccount();
     }
 
     function updateSupplierAddress() {
-      const supplier = document.getElementById('supplier').value.trim();
-      setField('supplier_address', brokerAddressMap[supplier] || '');
+      const account = getField('account_name');
+      setField('supplier_address', brokerAddressMap[account] || '');
     }
 
-    function validateSupplier() {
-      const supplier = document.getElementById('supplier').value.trim();
-      const valid = brokerNames.includes(supplier);
-      document.getElementById('supplier-error').classList.toggle('hidden', valid);
+    function validateAccount() {
+      const account = getField('account_name');
+      const valid = brokerNames.includes(account);
+      document.getElementById('account-error').classList.toggle('hidden', valid);
       if (!valid) {
         document.getElementById('supplier_address').value = '';
       }
       return valid;
+    }
+
+    function collectReviewPayload() {
+      return {
+        account_name: getField('account_name'),
+        supplier_address: getField('supplier_address'),
+        purchase_order_number: getField('purchase_order_number'),
+        document_type: getField('document_type'),
+        site_contact: getField('site_contact'),
+        site_contact_number: getField('site_contact_number'),
+        site_contact_email: getField('site_contact_email'),
+        secondary_site_contact: getField('secondary_site_contact'),
+        secondary_site_contact_number: getField('secondary_site_contact_number'),
+        secondary_site_contact_email: getField('secondary_site_contact_email'),
+        site_name: getField('site_name'),
+        site_address: getField('site_address'),
+        site_postcode: getField('site_postcode'),
+        opening_times: getField('opening_times'),
+        access: getField('access'),
+        site_restrictions: getField('site_restrictions'),
+        special_instructions: getField('special_instructions')
+      };
+    }
+
+    function saveReview() {
+      const valid = validateAccount();
+      const status = document.getElementById('save-status');
+      status.classList.add('hidden');
+      if (!valid) return;
+      const payload = collectReviewPayload();
+      window.lastReviewedPayload = payload;
+      status.textContent = 'Review saved.';
+      status.classList.remove('hidden');
+      setTimeout(() => status.classList.add('hidden'), 2500);
     }
 
     async function uploadAndExtract(file) {
@@ -182,19 +227,19 @@
       if (file) uploadAndExtract(file);
     });
 
-    const supplierInput = document.getElementById('supplier');
-    supplierInput.addEventListener('focus', () => renderSupplierOptions(supplierInput.value));
-    supplierInput.addEventListener('input', () => {
-      renderSupplierOptions(supplierInput.value);
+    const accountInput = document.getElementById('account_name');
+    accountInput.addEventListener('focus', () => renderAccountOptions(accountInput.value));
+    accountInput.addEventListener('input', () => {
+      renderAccountOptions(accountInput.value);
       updateSupplierAddress();
-      validateSupplier();
+      validateAccount();
     });
-    supplierInput.addEventListener('change', () => {
+    accountInput.addEventListener('change', () => {
       updateSupplierAddress();
-      validateSupplier();
+      validateAccount();
     });
 
-    renderSupplierOptions('');
+    renderAccountOptions('');
   </script>
 </body>
 </html>
