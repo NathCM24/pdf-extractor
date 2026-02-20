@@ -22,6 +22,7 @@ import base64
 import argparse
 import urllib.request
 import re
+import io
 from pathlib import Path
 
 # ─── dependency guard ────────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ LABEL_GREY  = colors.HexColor("#718096")
 GREEN_LIGHT = colors.HexColor("#e8f5d0")
 BORDER_CLR  = colors.HexColor("#c8d6e5")
 BG_BOX      = colors.HexColor("#f0f4f8")
+BRAND_LOGO_URL = "https://i0.wp.com/wasteexperts.co.uk/wp-content/uploads/2022/11/green-grey-logo-1080.png?w=1920&ssl=1"
 
 # ─── layout ──────────────────────────────────────────────────────────────────
 
@@ -385,10 +387,15 @@ def label(c, x, y, text):
 def generate_pdf(data: dict, logo_path: Path, out_path: Path):
     c = rl_canvas.Canvas(str(out_path), pagesize=A4)
     y = PAGE_H - MARGIN  # cursor starts at top
+    remote_logo_reader = None
 
     def down(delta):
         nonlocal y
         y -= delta
+
+    def draw_top_border():
+        c.setFillColor(GREEN)
+        c.rect(0, PAGE_H - 5, PAGE_W, 5, stroke=0, fill=1)
 
     def draw_footer():
         c.setStrokeColor(MID_GREY)
@@ -411,36 +418,63 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
         draw_footer()
         c.showPage()
         y = PAGE_H - MARGIN
+        draw_top_border()
         c.setFont(FONT_R, 9)
         c.setFillColor(TEXT_GREY)
         c.setStrokeColor(MID_GREY)
         if redraw:
             redraw()
 
-    # ── Logo ────────────────────────────────────────────────────────────────
-    logo_h = 16 * mm
-    if logo_path.exists():
+    def get_remote_logo_reader():
+        nonlocal remote_logo_reader
+        if remote_logo_reader is not None:
+            return remote_logo_reader
         try:
-            img = ImageReader(str(logo_path))
-            iw, ih = img.getSize()
-            logo_w = logo_h * (iw / ih)
-            c.drawImage(
-                str(logo_path),
-                MARGIN,
-                y - logo_h,
-                width=logo_w,
-                height=logo_h,
-                preserveAspectRatio=True,
-                mask="auto",
-            )
+            with urllib.request.urlopen(BRAND_LOGO_URL, timeout=8) as resp:
+                remote_logo_reader = ImageReader(io.BytesIO(resp.read()))
         except Exception:
-            c.setFont(FONT_XB, 13)
-            c.setFillColor(NAVY)
-            c.drawString(MARGIN, y - logo_h + 2 * mm, "WASTE EXPERTS")
+            remote_logo_reader = False
+        return remote_logo_reader or None
+
+    def draw_brand_logo(x, top_y, logo_h, draw=True):
+        sources = []
+        if logo_path.exists():
+            sources.append(str(logo_path))
+        remote_logo = get_remote_logo_reader()
+        if remote_logo:
+            sources.append(remote_logo)
+
+        for source in sources:
+            try:
+                img = source if hasattr(source, "getSize") else ImageReader(source)
+                iw, ih = img.getSize()
+                logo_w = logo_h * (iw / ih)
+                if draw:
+                    c.drawImage(
+                        img,
+                        x,
+                        top_y - logo_h,
+                        width=logo_w,
+                        height=logo_h,
+                        preserveAspectRatio=True,
+                        mask="auto",
+                    )
+                return logo_w
+            except Exception:
+                continue
+        return None
+
+    draw_top_border()
+
+    # ── Logo (centered at top) ─────────────────────────────────────────────
+    logo_h = 16 * mm
+    top_logo_w = draw_brand_logo(0, y, logo_h, draw=False)
+    if top_logo_w is not None:
+        draw_brand_logo((PAGE_W - top_logo_w) / 2, y, logo_h)
     else:
-        c.setFont(FONT_XB, 13)
+        c.setFont(FONT_XB, 11)
         c.setFillColor(NAVY)
-        c.drawString(MARGIN, y - logo_h + 2 * mm, "WASTE EXPERTS")
+        c.drawCentredString(PAGE_W / 2, y - logo_h + 2 * mm, "LOGO")
 
     down(logo_h + 8 * mm)
 
