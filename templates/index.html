@@ -306,7 +306,7 @@
 
         <!-- Action bar -->
         <div style="margin-top:18px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button class="btn" type="button" onclick="downloadReviewPDF()">Download PDF</button>
+          <button id="btn-download" class="btn" type="button" onclick="downloadReviewPDF()">Download PDF</button>
           <button class="btn" type="button" onclick="saveReview()">Save Review</button>
           <button class="btn-outline" type="button" onclick="copyAllToClipboard()">Copy All Data</button>
           <span class="pill">Extracted PDF includes selected note type</span>
@@ -571,6 +571,10 @@
     /* ── Download PDF ── */
     async function downloadReviewPDF() {
       if (!validateAccount()) return;
+      const btn = document.getElementById('btn-download');
+      const origText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Generating PDF…';
       const payload = collectReviewPayload();
       try {
         const resp = await fetch('/download-review-pdf', {
@@ -583,15 +587,18 @@
           throw new Error(err.error || 'Unable to download PDF');
         }
         const blob = await resp.blob();
+        if (blob.size === 0) throw new Error('Received empty PDF — please try again');
         const disposition = resp.headers.get('Content-Disposition') || '';
-        const match = disposition.match(/filename="([^"]+)"/);
-        const filename = match ? match[1] : 'review.pdf';
+        const match = disposition.match(/filename[^;=\n]*=\s*(?:UTF-8''|"?)([^";\n]+)/i);
+        const filename = match ? decodeURIComponent(match[1].replace(/"/g, '')) : 'review.pdf';
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url; a.download = filename;
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 2000);
+        showToast('PDF downloaded successfully');
       } catch (err) { alert(err.message); }
+      finally { btn.disabled = false; btn.textContent = origText; }
     }
 
     /* ── Save review ── */
