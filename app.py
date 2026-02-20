@@ -36,6 +36,7 @@ STEP 2 — Return ONLY valid JSON with this shape:
   "account_name": "Account/client/supplier name from approved list, or null",
   "supplier": "Best matching supplier from approved list, or null",
   "purchase_order_number": "PO/order reference, or null",
+  "service_description": "Short product/service description from the products or pricing table (e.g. 'Corrugated Flo Tube Pipe - Exchange'), or null",
   "site_contact": "Primary contact, or null",
   "site_contact_number": "Primary contact number, or null",
   "site_contact_email": "Primary contact email, or null",
@@ -267,10 +268,14 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             pass
     down(logo_h + 6 * mm)
 
-    # ── Title: {Site Name} - JOB SUMMARY - {Site Postcode} ───────────────
+    # ── Title ─────────────────────────────────────────────────────────────
     site_name = (payload.get("site_name") or "").strip() or "Unknown"
     site_postcode = (payload.get("site_postcode") or "").strip() or "Unknown"
-    title_text = f"{site_name} - JOB SUMMARY - {site_postcode}".upper()
+    service_desc = (payload.get("service_description") or "").strip()
+    if service_desc:
+        title_text = f"{site_name} - {service_desc} - {site_postcode}".upper()
+    else:
+        title_text = f"{site_name} | {site_postcode}".upper()
 
     c.setFillColor(NAVY)
     font_size = 16
@@ -512,6 +517,7 @@ def _normalise_data(data: dict):
         "account_name",
         "supplier",
         "purchase_order_number",
+        "service_description",
         "site_contact",
         "site_contact_number",
         "site_contact_email",
@@ -545,10 +551,15 @@ def download_review_pdf():
 
     pdf_buffer = _build_review_pdf(payload)
 
-    # Filename: {Account Name} - Job Summary - {Site Postcode}.pdf
+    # Filename: {Account Name} - {Service Description} - {Site Postcode}.pdf
     safe_account = _sanitise_filename(account_name) or "Unknown"
     safe_postcode = _sanitise_filename((payload.get("site_postcode") or "").strip()) or "Unknown"
-    filename = f"{safe_account} - Job Summary - {safe_postcode}.pdf"
+    service_desc = (payload.get("service_description") or "").strip()
+    if service_desc:
+        safe_service = _sanitise_filename(service_desc)
+        filename = f"{safe_account} - {safe_service} - {safe_postcode}.pdf"
+    else:
+        filename = f"{safe_account} - {safe_postcode}.pdf"
 
     return send_file(
         pdf_buffer,
