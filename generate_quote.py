@@ -444,7 +444,21 @@ def generate_pdf(data: dict, logo_path: Path, out_path: Path):
                 pass
         return get_remote_logo_reader()
 
-    def draw_brand_logo(logo_reader, x, top_y, logo_h, draw=True):
+    def draw_brand_logo(*args, draw=True):
+        """Draw logo and return width.
+
+        Supports both signatures:
+          - draw_brand_logo(logo_reader, x, top_y, logo_h, draw=True)
+          - draw_brand_logo(x, top_y, logo_h, draw=True)  # auto-fetches logo
+        """
+        if len(args) == 4:
+            logo_reader, x, top_y, logo_h = args
+        elif len(args) == 3:
+            x, top_y, logo_h = args
+            logo_reader = get_brand_logo_reader()
+        else:
+            raise TypeError("draw_brand_logo expects 3 or 4 positional arguments")
+
         if not logo_reader:
             return None
         try:
