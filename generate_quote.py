@@ -159,38 +159,42 @@ def ensure_fonts():
 EXTRACT_PROMPT = """Extract all of the following fields from this PDF document and return ONLY a valid JSON object.
 
 {
-  "po_provider_name":    "PO provider/issuer company from terms/footer/important info (the company sending you the PO), or null",
-  "po_provider_address": "PO provider postal address (newline-separated) from terms/footer/important info, or null",
-  "po_provider_email":   "PO provider email address, or null",
+  "po_provider_name":    "The company who SENT this PO to us. Look for: (1) company name in the page header/logo, (2) phrases like 'Go Green Ltd employee', 'email to operations@gogreen.co.uk', 'accept Go Green Ltd terms', (3) the domain of any email address present (e.g. @gogreen.co.uk → Go Green, @mitie.com → Mitie, @suez.com → Suez, @businesswaste.co.uk → Business Waste), (4) Registered Office company name in footer. NEVER use Waste Experts, Electrical Waste Recycling Group, or the waste producer/site as the sender.",
+  "po_provider_address": "Postal address of the PO sender. Look in: Registered Office block in footer, header address block, or terms section. Newline-separated, or null.",
+  "po_provider_email":   "Email address belonging to the PO sender's domain (not wasteexperts.co.uk), or null.",
 
-  "supplier_name":       "Same as PO provider if present; otherwise null",
-  "supplier_address":    "Same as PO provider address if present; otherwise null",
-  "supplier_email":      "Same as PO provider email if present; otherwise null",
+  "supplier_name":       "Same as po_provider_name",
+  "supplier_address":    "Same as po_provider_address",
+  "supplier_email":      "Same as po_provider_email",
 
   "client_name":      "Company name of the buyer/client (if present), or null",
   "client_address":   "Full postal address of the client (newline-separated), or null",
   "client_email":     "Client email address, or null",
-  "reference_number": "PO or reference number",
-  "quote_expiry_date":"Valid-until / expiry date in DD/MM/YYYY format, or null",
-  "job_name":         "Brief title or description for this job/quote",
-  "site_postcode":    "Postcode of the site or delivery location (e.g. SG19 1QY), or null",
+  "reference_number": "The PO or order reference number (e.g. 26131771615, REF-12345)",
+  "quote_expiry_date":"Look for: 'Quote expires', 'Valid until', 'Valid to', 'Expiry date', 'Order valid until', or any date associated with validity. Return in DD/MM/YYYY format, or null.",
+  "job_name":         "A SHORT 3-6 word title for this job (e.g. '8ft Dura Pipe Exchange', 'Fluorescent Tube Collection', 'WEEE Magnum Service'). Based on container type and waste/service type.",
+  "waste_type":       "The waste type or material description as stated on the PO (e.g. 'Fluorescent tubes and other mercury-containing waste', 'WEEE', 'Clinical waste')",
+  "ewc_code":         "The EWC (European Waste Catalogue) code if present (e.g. '20.01.21*'). Codes ending in * are hazardous.",
+  "site_postcode":    "Postcode of the collection/site location (e.g. SG19 1QY), or null",
   "line_items": [
     {
-      "description": "Clear, plain-English product/service summary from the PO (include waste/material type and service type where possible)",
+      "description": "SHORT description — max 5 words. Examples: 'Dura Pipe Exchange', 'Mixed Lamps Service', 'WEEE Magnum Collection', 'Consignment Note'. Strip out repetitive or redundant words.",
       "quantity":    1,
       "unit_price":  0.00,
       "line_total":  0.00
     }
   ],
-  "notes": "Any caveats, special instructions, or comments. Empty string if none.",
+  "notes": "Any special instructions, access requirements, or important order notes. Empty string if none.",
   "terms_important_info": "Verbatim bottom terms/footer/important-info block text, or empty string"
 }
 
-Prioritise PO provider identity from footer/terms/important info/signature blocks.
-Never use Waste Experts, Electrical Waste, Electrical Waste Recycling Group, or the service/customer/site address entity as the supplier unless explicitly stated as the PO issuer in terms/footer.
-If terms/footer says phrases like "Go Green Ltd employee" or "accept ... terms & conditions" tied to a company name, that company is the PO provider.
-Use numeric types (not strings) for quantity, unit_price, and line_total.
-Return ONLY the JSON object — no markdown fences, no explanation."""
+CRITICAL RULES:
+1. po_provider_name: scan the ENTIRE document — header logo, footer, terms, email domains, phrases like "[Company] employee" or "email to [company]@..." or "accept [Company] terms". The sender is almost always named in the footer terms or logo.
+2. quote_expiry_date: scan for ANY date paired with validity/expiry language. On broker POs this is often labelled "Quote expires" near the top.
+3. line_items descriptions: KEEP SHORT — 3-5 words max. No EWC codes, no long waste descriptions. Just the service type and container.
+4. Do NOT add consignment notes or transfer notes to line_items — these are handled separately by the system.
+5. Use numeric types (not strings) for quantity, unit_price, and line_total.
+6. Return ONLY the JSON object — no markdown fences, no explanation."""
 
 INVALID_BILL_TO_PATTERNS = (
     "waste experts",
@@ -273,6 +277,67 @@ def normalize_extracted_data(data: dict) -> dict:
     return data
 
 
+# ─── hazardous waste detection ───────────────────────────────────────────────
+
+# EWC codes ending in * are always hazardous by EU/UK definition.
+# These keywords in waste type descriptions also indicate hazardous waste.
+HAZARDOUS_KEYWORDS = {
+    "mercury", "fluorescent", "crt", "cathode ray", "asbestos", "clinical",
+    "hazardous", "oil", "solvent", "pcb", "cyanide", "acid", "alkali",
+    "paint", "varnish", "adhesive", "resin", "infectious", "cytotoxic",
+    "pharmaceutical", "amalgam", "lead", "cadmium", "arsenic", "chromium",
+    "photochemical", "developer", "fixer", "toner", "ink", "vape", "e-cigarette",
+    "lithium", "nicad", "nickel cadmium", "battery", "ionisation", "smoke detector",
+}
+
+
+def is_hazardous(data: dict) -> bool:
+    """Return True if the job involves hazardous waste.
+
+    Checks:
+      1. EWC code ending in * (definitive — all * codes are hazardous)
+      2. Keyword match in waste_type, job_name, or any line item description
+    """
+    ewc = (data.get("ewc_code") or "").strip()
+    if ewc.endswith("*"):
+        return True
+
+    # Build a combined text blob to search
+    texts = [
+        data.get("waste_type") or "",
+        data.get("job_name") or "",
+    ]
+    for item in (data.get("line_items") or []):
+        texts.append(item.get("description") or "")
+
+    combined = " ".join(texts).lower()
+    return any(kw in combined for kw in HAZARDOUS_KEYWORDS)
+
+
+def inject_note_charge(data: dict) -> dict:
+    """Append the appropriate statutory note charge to line_items.
+
+    Hazardous waste  → Consignment Note    £40.00
+    Non-hazardous    → Waste Transfer Note £40.00
+    """
+    hazardous = is_hazardous(data)
+    note_label = "Consignment Note" if hazardous else "Waste Transfer Note"
+
+    # Avoid duplicating if Claude already extracted one
+    existing = [
+        i for i in (data.get("line_items") or [])
+        if "consignment" in (i.get("description") or "").lower()
+        or "transfer note" in (i.get("description") or "").lower()
+    ]
+    if existing:
+        return data  # already present, don't double-add
+
+    charge = {"description": note_label, "quantity": 1, "unit_price": 40.0, "line_total": 40.0}
+    data.setdefault("line_items", []).append(charge)
+    data["_note_type"] = note_label
+    return data
+
+
 def extract(pdf_path: Path) -> dict:
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
@@ -309,7 +374,8 @@ def extract(pdf_path: Path) -> dict:
         end = raw.rfind("}") + 1
         raw = raw[start:end]
 
-    return normalize_extracted_data(json.loads(raw))
+    data = normalize_extracted_data(json.loads(raw))
+    return inject_note_charge(data)
 
 
 # ─── drawing helpers ─────────────────────────────────────────────────────────
