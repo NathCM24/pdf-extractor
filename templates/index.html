@@ -229,6 +229,11 @@
           </div>
 
           <div class="field full">
+            <label>Service / Product Description</label>
+            <input id="service_description" type="text" placeholder="e.g. Corrugated Flo Tube Pipe - Exchange" />
+          </div>
+
+          <div class="field full">
             <label>Bill To (Representative Address)</label>
             <textarea id="supplier_address" placeholder="Supplier address will appear here"></textarea>
           </div>
@@ -414,7 +419,7 @@
     /* ── Fill form from extraction response ── */
     function fillForm(data) {
       [
-        'supplier', 'purchase_order_number',
+        'supplier', 'purchase_order_number', 'service_description',
         'site_contact', 'site_contact_number', 'site_contact_email',
         'secondary_site_contact', 'secondary_site_contact_number', 'secondary_site_contact_email',
         'site_name', 'site_address', 'site_postcode',
@@ -443,6 +448,7 @@
         account_name: getField('account_name'),
         supplier_address: getField('supplier_address'),
         purchase_order_number: getField('purchase_order_number'),
+        service_description: getField('service_description'),
         document_type: getField('document_type'),
         site_contact: getField('site_contact'),
         site_contact_number: getField('site_contact_number'),
