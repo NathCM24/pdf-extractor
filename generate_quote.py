@@ -429,40 +429,21 @@ def _extract_registered_office(text: str) -> str:
 
 
 def normalize_extracted_data(data: dict) -> dict:
-    """Prefer PO provider details and avoid billing us/end-customer entities."""
-    supplier_name = (data.get("po_provider_name") or data.get("supplier_name") or "").strip()
+    """Consolidate po_provider fields into supplier fields. Broker matching happens separately."""
+    # Prefer po_provider fields over supplier fields
+    supplier_name    = (data.get("po_provider_name")    or data.get("supplier_name")    or "").strip()
     supplier_address = (data.get("po_provider_address") or data.get("supplier_address") or "").strip()
-    supplier_email = (data.get("po_provider_email") or data.get("supplier_email") or "").strip()
+    supplier_email   = (data.get("po_provider_email")   or data.get("supplier_email")   or "").strip()
 
-    terms_text = str(data.get("terms_important_info") or "")
-    combined_text = "\n".join(
-        part
-        for part in [
-            terms_text,
-            str(data.get("notes") or ""),
-            str(data.get("po_provider_name") or ""),
-            str(data.get("supplier_name") or ""),
-        ]
-        if part
-    )
-
-    # If missing/invalid supplier, try derive from terms/footer.
-    if not supplier_name or _is_invalid_supplier(supplier_name):
-        candidates = _extract_company_candidates(combined_text)
-        supplier_name = candidates[0] if candidates else ""
-
-    if not supplier_address:
-        supplier_address = _extract_registered_office(combined_text)
-
-    # Final guard: never allow invalid supplier patterns through.
+    # Clear out anything that's actually us
     if _is_invalid_supplier(supplier_name):
-        supplier_name = ""
+        supplier_name    = ""
         supplier_address = ""
-        supplier_email = ""
+        supplier_email   = ""
 
-    data["supplier_name"] = supplier_name or None
+    data["supplier_name"]    = supplier_name    or None
     data["supplier_address"] = supplier_address or None
-    data["supplier_email"] = supplier_email or None
+    data["supplier_email"]   = supplier_email   or None
     return data
 
 
@@ -571,44 +552,31 @@ def extract(pdf_path: Path) -> dict:
         end = raw.rfind("}") + 1
         raw = raw[start:end]
 
-    data = normalize_extracted_data(json.loads(raw))
+    parsed = json.loads(raw)
+    data = normalize_extracted_data(parsed)
 
-    # ── DEBUG: print what Claude extracted ───────────────────────────────────
-    print(f"  [debug] Claude po_provider_name : {json.loads(raw).get('po_provider_name')}")
-    print(f"  [debug] Claude supplier_name    : {json.loads(raw).get('supplier_name')}")
+    # ── DEBUG ─────────────────────────────────────────────────────────────────
+    print(f"  [debug] Claude po_provider_name : {parsed.get('po_provider_name')}")
+    print(f"  [debug] Claude supplier_name    : {parsed.get('supplier_name')}")
     print(f"  [debug] After normalize         : {data.get('supplier_name')}")
-    # ─────────────────────────────────────────────────────────────────────────
-    # Extract raw text from the PDF for matching
-    raw_pdf_text = _extract_pdf_text(pdf_path)
 
-    # Also include everything Claude returned as a fallback text source
-    claude_text = " ".join([
+    # ── Broker list matching — ALWAYS wins ────────────────────────────────────
+    # Scan the full raw Claude response text (which contains everything Claude
+    # read from the PDF including terms/footer) against our broker list.
+    # No pypdf needed. If we find a match, it's definitive.
+    scan_text = raw + " " + " ".join([
         str(data.get("terms_important_info") or ""),
         str(data.get("notes") or ""),
-        str(data.get("po_provider_name") or ""),
-        str(data.get("supplier_name") or ""),
-        str(data.get("client_name") or ""),
     ])
 
-    combined_text = raw_pdf_text + "\n" + claude_text
+    matched_broker = match_broker_in_text(scan_text)
+    print(f"  [debug] Broker list match       : {matched_broker}")
 
-    matched_broker = match_broker_in_text(combined_text)
-
-    if matched_broker and (_is_invalid_supplier(data.get("supplier_name") or "") or not data.get("supplier_name")):
-        print(f"  [broker] Matched from broker list: {matched_broker}")
+    if matched_broker:
         data["supplier_name"] = matched_broker
-        # Clear any wrong address/email Claude may have set for an invalid entity
-        if _is_invalid_supplier(data.get("supplier_name") or ""):
-            data["supplier_address"] = None
-            data["supplier_email"] = None
-    elif matched_broker:
-        # Claude found something — but double-check it agrees with our list
-        claude_name = _normalise(data.get("supplier_name") or "")
-        matched_norm = _normalise(matched_broker)
-        if matched_norm not in claude_name and claude_name not in matched_norm:
-            # Our list match takes precedence over Claude's guess
-            print(f"  [broker] Overriding '{data.get('supplier_name')}' → '{matched_broker}' (broker list match)")
-            data["supplier_name"] = matched_broker
+        print(f"  [broker] ✓ Set supplier to: {matched_broker}")
+    elif not data.get("supplier_name"):
+        print("  [warn] No broker matched — Bill To will show as not found")
 
     return inject_note_charge(data)
 
