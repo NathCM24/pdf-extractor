@@ -225,6 +225,97 @@
       .grid { grid-template-columns: 1fr; }
       .line-item-row { grid-template-columns: 1fr 1fr; }
     }
+
+    /* --- Supplier Template Management --- */
+    .template-progress { margin-bottom: 14px; }
+    .template-progress-text { font-size: 13px; font-weight: 600; color: #c0cdd8; margin-bottom: 6px; }
+    .template-list { max-height: 400px; overflow-y: auto; }
+    .template-row {
+      display: flex; align-items: center; gap: 10px; padding: 8px 0;
+      border-bottom: 1px solid #2f4a60; font-size: 13px;
+    }
+    .template-row:last-child { border-bottom: none; }
+    .template-row .tmpl-name { flex: 1; color: #c0cdd8; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .template-row .tmpl-date { font-size: 11px; color: #5a7a94; white-space: nowrap; }
+    .badge-trained { display: inline-block; background: rgba(142,196,49,.18); color: #8ec431; border: 1px solid rgba(142,196,49,.35); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+    .badge-untrained { display: inline-block; background: rgba(90,122,148,.15); color: #8aa3b8; border: 1px solid rgba(90,122,148,.3); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+    .btn-train {
+      border: 1px solid #8ec431; background: transparent; color: #8ec431;
+      border-radius: 4px; padding: 4px 10px; font-weight: 700; cursor: pointer;
+      font-family: 'Montserrat', sans-serif; font-size: 11px; transition: background .2s;
+      white-space: nowrap;
+    }
+    .btn-train:hover { background: rgba(142,196,49,.15); }
+    .btn-del-tmpl {
+      border: 1px solid rgba(248,113,113,.3); background: transparent; color: #f87171;
+      border-radius: 4px; padding: 4px 8px; font-weight: 700; cursor: pointer;
+      font-family: 'Montserrat', sans-serif; font-size: 11px; transition: background .2s;
+      white-space: nowrap;
+    }
+    .btn-del-tmpl:hover { background: rgba(248,113,113,.12); }
+    .template-search { margin-bottom: 10px; }
+    .template-search input { width: 100%; font-size: 13px; padding: 8px 12px; }
+
+    /* --- Training modal --- */
+    .train-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 900;
+      display: flex; align-items: center; justify-content: center;
+      animation: fadeIn .2s ease-out;
+    }
+    .train-modal {
+      background: #253a4d; border: 1px solid #2f4a60; border-radius: 4px;
+      width: 700px; max-width: 96vw; max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5);
+    }
+    .train-modal-head {
+      background: #8ec431; color: #fff; padding: 14px 20px; border-radius: 4px 4px 0 0;
+      font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .train-modal-head .close-x { cursor: pointer; font-size: 20px; opacity: .8; }
+    .train-modal-head .close-x:hover { opacity: 1; }
+    .train-modal-body { padding: 20px; }
+    .train-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .train-grid .full { grid-column: 1 / -1; }
+    .train-grid label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: #8ec431; }
+    .train-grid input, .train-grid textarea, .train-grid select {
+      width: 100%; border: 1px solid #3d5a73; border-radius: 4px; padding: 8px 10px;
+      font-size: 13px; font-family: 'Montserrat', sans-serif;
+      background: #1e2e3d; color: #e8ecf1;
+    }
+    .train-grid textarea { min-height: 52px; resize: vertical; }
+    .train-grid select option { background: #1e2e3d; color: #e8ecf1; }
+    .train-section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+      color: #fff; border-bottom: 2px solid #8ec431; padding-bottom: 4px;
+      margin: 14px 0 8px; grid-column: 1 / -1;
+    }
+    .train-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; }
+    .train-li-row {
+      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 6px;
+      align-items: end; padding: 4px 0; border-bottom: 1px solid #2f4a60;
+    }
+    .train-li-row input { font-size: 12px; padding: 6px 8px; }
+    .train-upload-area { text-align: center; padding: 24px; border: 2px dashed #3d5a73; border-radius: 4px; }
+    .train-upload-area.drag-over { border-color: #8ec431; background: rgba(142,196,49,.1); }
+
+    /* --- Confidence dots --- */
+    .conf-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      margin-left: 6px; vertical-align: middle;
+    }
+    .conf-dot.high { background: #8ec431; }
+    .conf-dot.medium { background: #f59e0b; }
+    .conf-dot.low { background: #f87171; }
+    .conf-low-border { border-color: rgba(245,158,11,.5) !important; box-shadow: 0 0 0 1px rgba(245,158,11,.15) inset !important; }
+
+    /* --- Template prompt banner --- */
+    .template-prompt-banner {
+      padding: 10px 14px; border-radius: 4px; font-size: 12px; font-weight: 600;
+      margin-bottom: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      background: rgba(142,196,49,.1); color: #8ec431; border: 1px solid rgba(142,196,49,.25);
+    }
+    .template-prompt-banner .dismiss { margin-left: auto; cursor: pointer; opacity: .7; font-size: 14px; }
+    .template-prompt-banner .dismiss:hover { opacity: 1; }
   </style>
 </head>
 <body>
@@ -258,6 +349,9 @@
           <h2 id="doc-title">Purchase Order</h2>
           <span class="doc-meta" id="doc-supplier-label"></span>
         </div>
+
+        <!-- Template prompt banner (shown for untrained suppliers) -->
+        <div id="template-prompt-area"></div>
 
         <div class="grid">
 
@@ -374,6 +468,25 @@
           <div id="owners-list-container" class="owners-list hidden"></div>
         </div>
       </div>
+
+      <!-- Supplier Templates -->
+      <div class="settings-card">
+        <div class="head" style="background:#3d5a73; font-size:13px;">Supplier Templates</div>
+        <div class="settings-body">
+          <div class="template-progress">
+            <div class="template-progress-text" id="template-progress-label">Loading suppliers...</div>
+            <div class="progress-track" style="margin-top:6px;">
+              <div class="progress-fill" id="template-progress-fill" style="width:0%; background:#8EC431;"></div>
+            </div>
+          </div>
+          <div class="template-search">
+            <input type="text" id="template-search-input" placeholder="Search suppliers..." oninput="filterTemplateList(this.value)" />
+          </div>
+          <div id="template-supplier-list" class="template-list">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -382,6 +495,9 @@
 
   <!-- HubSpot preview modal (injected dynamically) -->
   <div id="hs-modal-root"></div>
+
+  <!-- Training modal (injected dynamically) -->
+  <div id="training-modal-root"></div>
 
   <!-- Toast notification -->
   <div id="toast" class="toast"></div>
@@ -520,7 +636,14 @@
       if (elAccErr) elAccErr.classList.add('hidden');
       var elBanner = document.getElementById('hs-banner-area');
       if (elBanner) elBanner.innerHTML = '';
+      var elTmplArea = document.getElementById('template-prompt-area');
+      if (elTmplArea) elTmplArea.innerHTML = '';
+      document.querySelectorAll('.conf-dot').forEach(function(d) { d.remove(); });
+      document.querySelectorAll('.conf-low-border').forEach(function(el) { el.classList.remove('conf-low-border'); });
       if (dropdown) dropdown.classList.remove('open');
+      _lastExtractedData = null;
+      _lastConfidence = null;
+      _lastSupplierTrained = false;
 
       setState('upload');
     }
@@ -736,7 +859,15 @@
     }
 
     /* ── Fill form from extraction response ── */
-    function fillForm(data) {
+    var _lastExtractedData = null;  /* Stored for template save */
+    var _lastConfidence = null;
+    var _lastSupplierTrained = false;
+
+    function fillForm(data, confidence, supplierTrained) {
+      _lastExtractedData = JSON.parse(JSON.stringify(data));
+      _lastConfidence = confidence || {};
+      _lastSupplierTrained = !!supplierTrained;
+
       [
         'supplier', 'purchase_order_number', 'service_description',
         'site_contact', 'site_contact_number', 'site_contact_email',
@@ -766,6 +897,12 @@
       items.forEach(item => {
         addLineItem(item.description, item.quantity, item.unit_price, item.line_total);
       });
+
+      /* Render confidence dots */
+      renderConfidenceDots(confidence || {});
+
+      /* Show template prompt for untrained suppliers */
+      showTemplatePrompt(supplierName, supplierTrained);
     }
 
     /* ── Collect payload ── */
@@ -977,7 +1114,7 @@
 
         /* Transition to results state (removes scanning, shows edit card) */
         setState('results');
-        fillForm(json.data || {});
+        fillForm(json.data || {}, json.confidence || {}, json.supplier_trained);
         requestAnimationFrame(function() { if (editCard) editCard.classList.add('fade-in'); });
       } catch (err) {
         alert(err.message);
@@ -1213,6 +1350,362 @@
         document.getElementById('hs-banner-area').innerHTML = errHtml;
       }
     }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       Supplier Template Training System
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    var _allTemplateSuppliers = [];
+
+    /* ── Load & render templates in settings ── */
+    async function loadTemplates() {
+      try {
+        var resp = await fetch('/api/templates');
+        var data = await resp.json();
+        _allTemplateSuppliers = data.suppliers || [];
+        renderTemplateList(_allTemplateSuppliers, data.trained_count, data.total_count);
+      } catch(e) {
+        document.getElementById('template-progress-label').textContent = 'Failed to load suppliers';
+      }
+    }
+
+    function renderTemplateList(suppliers, trainedCount, totalCount) {
+      var pct = totalCount > 0 ? Math.round((trainedCount / totalCount) * 100) : 0;
+      document.getElementById('template-progress-label').textContent = trainedCount + '/' + totalCount + ' suppliers trained';
+      document.getElementById('template-progress-fill').style.width = pct + '%';
+
+      var sorted = suppliers.slice().sort(function(a, b) {
+        if (a.trained !== b.trained) return a.trained ? 1 : -1;
+        return a.name.localeCompare(b.name);
+      });
+
+      var container = document.getElementById('template-supplier-list');
+      container.innerHTML = sorted.map(function(s) {
+        var badge = s.trained
+          ? '<span class="badge-trained">Trained</span>'
+          : '<span class="badge-untrained">Untrained</span>';
+        var dateStr = s.trained_date
+          ? '<span class="tmpl-date">' + new Date(s.trained_date).toLocaleDateString() + '</span>'
+          : '';
+        var safeName = s.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        var trainBtn = '<button class="btn-train" onclick="startTraining(\'' + safeName + '\')">' + (s.trained ? 'Re-train' : 'Train') + '</button>';
+        var delBtn = s.trained
+          ? '<button class="btn-del-tmpl" onclick="deleteTemplate(\'' + safeName + '\')">&times;</button>'
+          : '';
+        return '<div class="template-row" data-supplier="' + escHtml(s.name) + '">' +
+          '<span class="tmpl-name" title="' + escHtml(s.name) + '">' + escHtml(s.name) + '</span>' +
+          dateStr + badge + trainBtn + delBtn + '</div>';
+      }).join('');
+    }
+
+    function filterTemplateList(term) {
+      var q = (term || '').trim().toLowerCase();
+      document.querySelectorAll('#template-supplier-list .template-row').forEach(function(row) {
+        var name = (row.getAttribute('data-supplier') || '').toLowerCase();
+        row.style.display = (!q || name.indexOf(q) !== -1) ? '' : 'none';
+      });
+    }
+
+    /* ── Delete template ── */
+    async function deleteTemplate(supplier) {
+      if (!confirm('Delete template for ' + supplier + '?')) return;
+      try {
+        await fetch('/api/templates/' + encodeURIComponent(supplier), { method: 'DELETE' });
+        showToast('Template deleted');
+        loadTemplates();
+      } catch(e) { alert('Failed to delete template'); }
+    }
+
+    /* ── Training flow ── */
+    var _trainingSupplier = '';
+    var _trainingOriginalData = null;
+
+    function startTraining(supplier) {
+      _trainingSupplier = supplier;
+      _trainingOriginalData = null;
+
+      var html =
+        '<div class="train-overlay" id="train-overlay" onclick="if(event.target===this)closeTrainingModal()">' +
+          '<div class="train-modal">' +
+            '<div class="train-modal-head">' +
+              '<span>Train Template: ' + escHtml(supplier) + '</span>' +
+              '<span class="close-x" onclick="closeTrainingModal()">&times;</span>' +
+            '</div>' +
+            '<div class="train-modal-body" id="train-modal-body">' +
+              '<div class="train-upload-area" id="train-drop-zone">' +
+                '<p style="margin:0 0 10px; color:#c0cdd8;"><strong>Upload a sample PO PDF</strong> from this supplier</p>' +
+                '<button class="btn" type="button" onclick="document.getElementById(\'train-file-input\').click()">Choose PDF</button>' +
+                '<input id="train-file-input" type="file" accept=".pdf" class="hidden" />' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+
+      document.getElementById('training-modal-root').innerHTML = html;
+
+      var trainDrop = document.getElementById('train-drop-zone');
+      var trainInput = document.getElementById('train-file-input');
+
+      trainDrop.addEventListener('dragover', function(e) { e.preventDefault(); trainDrop.classList.add('drag-over'); });
+      trainDrop.addEventListener('dragleave', function() { trainDrop.classList.remove('drag-over'); });
+      trainDrop.addEventListener('drop', function(e) {
+        e.preventDefault(); trainDrop.classList.remove('drag-over');
+        var f = e.dataTransfer.files[0];
+        if (f && f.name.toLowerCase().endsWith('.pdf')) uploadTrainingPDF(f);
+      });
+      trainInput.addEventListener('change', function(e) {
+        var f = e.target.files[0];
+        if (f) uploadTrainingPDF(f);
+      });
+    }
+
+    function closeTrainingModal() {
+      document.getElementById('training-modal-root').innerHTML = '';
+      _trainingSupplier = '';
+      _trainingOriginalData = null;
+    }
+
+    async function uploadTrainingPDF(file) {
+      var body = document.getElementById('train-modal-body');
+      body.innerHTML =
+        '<div style="text-align:center; padding:32px;">' +
+          '<p style="color:#c0cdd8; margin:0 0 12px;">Extracting data from <em>' + escHtml(file.name) + '</em>...</p>' +
+          '<div class="progress-track" style="width:240px; margin:0 auto;">' +
+            '<div class="progress-fill" id="train-progress" style="width:0%;"></div>' +
+          '</div>' +
+        '</div>';
+
+      var tp = 0;
+      var tTimer = setInterval(function() {
+        tp += (90 - tp) * 0.03;
+        var el = document.getElementById('train-progress');
+        if (el) el.style.width = Math.round(tp) + '%';
+        if (tp >= 89) clearInterval(tTimer);
+      }, 200);
+
+      var fd = new FormData();
+      fd.append('pdf', file);
+      fd.append('training', 'true');
+      fd.append('training_supplier', _trainingSupplier);
+
+      try {
+        var resp = await fetch('/extract', { method: 'POST', body: fd });
+        var json = await resp.json();
+        clearInterval(tTimer);
+        if (!resp.ok || json.error) throw new Error(json.error || 'Extraction failed');
+
+        _trainingOriginalData = JSON.parse(JSON.stringify(json.data || {}));
+        showTrainingForm(json.data || {});
+      } catch(err) {
+        clearInterval(tTimer);
+        body.innerHTML = '<div style="padding:20px; color:#f87171;">' + escHtml(err.message) +
+          '<br><br><button class="btn-outline" onclick="closeTrainingModal()">Close</button></div>';
+      }
+    }
+
+    function showTrainingForm(data) {
+      var body = document.getElementById('train-modal-body');
+      var fields = [
+        { id: 'purchase_order_number', label: 'PO Number', type: 'input' },
+        { id: 'service_description', label: 'Service Description', type: 'input', full: true },
+        { id: 'document_type', label: 'Document Type', type: 'select', options: ['Consignment Note', 'Waste Transfer Note'] },
+        { id: 'site_contact', label: 'Site Contact', type: 'input' },
+        { id: 'site_contact_number', label: 'Contact Number', type: 'input' },
+        { id: 'site_contact_email', label: 'Contact Email', type: 'input', full: true },
+        { id: 'secondary_site_contact', label: 'Secondary Contact', type: 'input' },
+        { id: 'secondary_site_contact_number', label: 'Sec. Contact Number', type: 'input' },
+        { id: 'secondary_site_contact_email', label: 'Sec. Contact Email', type: 'input', full: true },
+        { id: 'site_name', label: 'Site Name', type: 'input' },
+        { id: 'site_postcode', label: 'Site Postcode', type: 'input' },
+        { id: 'site_address', label: 'Site Address', type: 'textarea', full: true },
+        { id: 'opening_times', label: 'Opening Times', type: 'textarea' },
+        { id: 'access', label: 'Access', type: 'textarea' },
+        { id: 'site_restrictions', label: 'Site Restrictions', type: 'textarea' },
+        { id: 'special_instructions', label: 'Special Instructions', type: 'textarea' },
+      ];
+
+      var html = '<p style="font-size:12px; color:#8aa3b8; margin:0 0 12px;">Review and correct the extracted data, then save as template.</p>';
+      html += '<div class="train-grid">';
+      html += '<div class="train-section-title">Extraction Results</div>';
+
+      fields.forEach(function(f) {
+        var val = escHtml(String(data[f.id] || ''));
+        var cls = f.full ? 'full' : '';
+        html += '<div class="field ' + cls + '">';
+        html += '<label>' + escHtml(f.label) + '</label>';
+        if (f.type === 'select') {
+          html += '<select id="train_' + f.id + '">';
+          f.options.forEach(function(opt) {
+            var sel = (data[f.id] || '') === opt ? ' selected' : '';
+            html += '<option' + sel + '>' + escHtml(opt) + '</option>';
+          });
+          html += '</select>';
+        } else if (f.type === 'textarea') {
+          html += '<textarea id="train_' + f.id + '">' + val + '</textarea>';
+        } else {
+          html += '<input id="train_' + f.id + '" type="text" value="' + val + '" />';
+        }
+        html += '</div>';
+      });
+
+      html += '<div class="train-section-title">Line Items</div>';
+      html += '<div class="full" id="train-line-items">';
+      var items = data.line_items || [];
+      if (items.length) {
+        html += '<div class="train-li-row" style="border:none; padding-bottom:2px;">' +
+          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Description</span>' +
+          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Qty</span>' +
+          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Unit Price</span>' +
+          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Total</span></div>';
+        items.forEach(function(li) {
+          html += '<div class="train-li-row">' +
+            '<input type="text" class="tli-desc" value="' + escHtml(String(li.description || '')) + '" />' +
+            '<input type="number" class="tli-qty" value="' + (li.quantity || 1) + '" min="0" step="1" />' +
+            '<input type="number" class="tli-unit" value="' + (li.unit_price || 0) + '" min="0" step="0.01" />' +
+            '<input type="number" class="tli-total" value="' + (li.line_total || 0) + '" min="0" step="0.01" />' +
+            '</div>';
+        });
+      } else {
+        html += '<div style="color:#8aa3b8; font-size:12px;">No line items extracted</div>';
+      }
+      html += '</div></div>';
+
+      html += '<div class="train-actions">' +
+        '<button class="btn-outline" type="button" onclick="closeTrainingModal()">Cancel</button>' +
+        '<button class="btn" type="button" id="btn-save-template" onclick="saveTrainingTemplate()">Save Template</button>' +
+        '</div>';
+
+      body.innerHTML = html;
+    }
+
+    async function saveTrainingTemplate() {
+      var btn = document.getElementById('btn-save-template');
+      btn.disabled = true;
+      btn.textContent = 'Saving\u2026';
+
+      var corrected = {};
+      ['purchase_order_number', 'service_description', 'document_type',
+       'site_contact', 'site_contact_number', 'site_contact_email',
+       'secondary_site_contact', 'secondary_site_contact_number', 'secondary_site_contact_email',
+       'site_name', 'site_postcode', 'site_address',
+       'opening_times', 'access', 'site_restrictions', 'special_instructions'
+      ].forEach(function(f) {
+        var el = document.getElementById('train_' + f);
+        corrected[f] = el ? el.value.trim() : '';
+      });
+
+      var liRows = document.querySelectorAll('#train-line-items .train-li-row');
+      var lineItems = [];
+      liRows.forEach(function(row) {
+        var desc = row.querySelector('.tli-desc');
+        if (!desc) return;
+        lineItems.push({
+          description: desc.value || '',
+          quantity: parseFloat((row.querySelector('.tli-qty') || {}).value) || 1,
+          unit_price: parseFloat((row.querySelector('.tli-unit') || {}).value) || 0,
+          line_total: parseFloat((row.querySelector('.tli-total') || {}).value) || 0,
+        });
+      });
+      corrected.line_items = lineItems;
+
+      try {
+        var resp = await fetch('/api/templates/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            supplier: _trainingSupplier,
+            original_data: _trainingOriginalData || {},
+            corrected_data: corrected,
+          })
+        });
+        var data = await resp.json();
+        if (!resp.ok || data.error) throw new Error(data.error || 'Failed to save template');
+
+        closeTrainingModal();
+        showToast('Template saved for ' + _trainingSupplier);
+        loadTemplates();
+      } catch(err) {
+        alert(err.message);
+        btn.disabled = false;
+        btn.textContent = 'Save Template';
+      }
+    }
+
+    /* ── Confidence dots ── */
+    function renderConfidenceDots(confidence) {
+      document.querySelectorAll('.conf-dot').forEach(function(d) { d.remove(); });
+      document.querySelectorAll('.conf-low-border').forEach(function(el) { el.classList.remove('conf-low-border'); });
+
+      var fieldIds = [
+        'purchase_order_number', 'service_description',
+        'site_contact', 'site_contact_number', 'site_contact_email',
+        'secondary_site_contact', 'secondary_site_contact_number', 'secondary_site_contact_email',
+        'site_name', 'site_address', 'site_postcode',
+        'opening_times', 'access', 'site_restrictions',
+        'special_instructions', 'document_type'
+      ];
+
+      fieldIds.forEach(function(fieldId) {
+        var level = confidence[fieldId] || 'medium';
+        var input = document.getElementById(fieldId);
+        if (!input) return;
+
+        var wrapper = input.closest('.field');
+        if (wrapper) {
+          var lbl = wrapper.querySelector('label');
+          if (lbl) {
+            var dot = document.createElement('span');
+            dot.className = 'conf-dot ' + level;
+            dot.title = level.charAt(0).toUpperCase() + level.slice(1) + ' confidence';
+            lbl.appendChild(dot);
+          }
+        }
+        if (level === 'low') input.classList.add('conf-low-border');
+      });
+    }
+
+    /* ── Template prompt for untrained suppliers ── */
+    function showTemplatePrompt(supplierName, isTrained) {
+      var area = document.getElementById('template-prompt-area');
+      if (!area) return;
+      if (isTrained || !supplierName || supplierName === 'Unknown Supplier') {
+        area.innerHTML = '';
+        return;
+      }
+      area.innerHTML =
+        '<div class="template-prompt-banner">' +
+          '<span>This supplier hasn\'t been trained yet. Save as template?</span>' +
+          '<button class="btn-train" onclick="saveCurrentAsTemplate()" style="padding:5px 12px;">Save as Template</button>' +
+          '<span class="dismiss" onclick="this.parentNode.remove()">&times;</span>' +
+        '</div>';
+    }
+
+    async function saveCurrentAsTemplate() {
+      var supplier = getField('supplier');
+      if (!supplier) { alert('No supplier identified'); return; }
+      var corrected = collectReviewPayload();
+      corrected.document_type = getField('document_type');
+      try {
+        var resp = await fetch('/api/templates/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            supplier: supplier,
+            original_data: _lastExtractedData || {},
+            corrected_data: corrected,
+          })
+        });
+        var data = await resp.json();
+        if (!resp.ok || data.error) throw new Error(data.error || 'Failed to save template');
+        var area = document.getElementById('template-prompt-area');
+        if (area) area.innerHTML = '<div class="template-prompt-banner"><span>Template saved for ' + escHtml(supplier) + ' &#10003;</span><span class="dismiss" onclick="this.parentNode.remove()">&times;</span></div>';
+        showToast('Template saved');
+        loadTemplates();
+      } catch(err) { alert(err.message); }
+    }
+
+    /* ── Init templates ── */
+    loadTemplates();
   </script>
 </body>
 </html>
