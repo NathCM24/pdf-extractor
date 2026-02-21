@@ -253,6 +253,16 @@
       <div class="head">Extracted Order Data</div>
       <div class="body">
 
+        <!-- HubSpot connection test -->
+        <div style="margin-bottom:14px;">
+          <button id="btn-hs-test" type="button" onclick="testHubSpotConnection()"
+                  style="background:#ff7a59; color:#fff; border:none; padding:12px 28px; border-radius:6px; font-size:15px; font-weight:700; cursor:pointer; width:100%; letter-spacing:.3px;">
+            Test HubSpot Connection
+          </button>
+          <pre id="hs-test-output" class="hidden"
+               style="margin-top:10px; background:#0d1b28; border:1px solid #2a4054; border-radius:6px; padding:14px; color:#c8dce8; font-size:12px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:400px; overflow:auto;"></pre>
+        </div>
+
         <!-- Reset button -->
         <div style="margin-bottom:14px;">
           <button class="btn-outline" type="button" onclick="resetToUpload()">&larr; Convert Another Purchase Order</button>
@@ -1003,6 +1013,26 @@
        ═══════════════════════════════════════════════════════════════════════ */
 
     var uploadedFileName = '';  /* Stored when file is uploaded */
+
+    /* ── Test HubSpot Connection ── */
+    async function testHubSpotConnection() {
+      var btn = document.getElementById('btn-hs-test');
+      var output = document.getElementById('hs-test-output');
+      btn.disabled = true;
+      btn.textContent = 'Testing…';
+      output.classList.remove('hidden');
+      output.textContent = 'Connecting to HubSpot…';
+      try {
+        var resp = await fetch('/api/hubspot/test');
+        var data = await resp.json();
+        output.textContent = JSON.stringify(data, null, 2);
+      } catch(err) {
+        output.textContent = 'Error: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Test HubSpot Connection';
+      }
+    }
 
     /* Patch uploadAndExtract to remember filename */
     var _origUploadAndExtract = uploadAndExtract;
