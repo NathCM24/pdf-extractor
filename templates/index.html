@@ -526,11 +526,43 @@
       }
     });
 
+    /* ── Smart supplier address lookup (exact → case-insensitive → partial) ── */
+    function lookupSupplierAddress(name) {
+      if (!name) return '';
+
+      /* 1. Exact match */
+      if (brokerAddressMap[name]) return brokerAddressMap[name];
+
+      var nameLower = name.trim().toLowerCase();
+
+      /* 2. Case-insensitive match */
+      for (var key in brokerAddressMap) {
+        if (key.toLowerCase() === nameLower) return brokerAddressMap[key];
+      }
+
+      /* 3. Partial match — input is substring of a key, or key is substring of input */
+      var best = '';
+      var bestLen = 0;
+      for (var key in brokerAddressMap) {
+        if (!brokerAddressMap[key]) continue;
+        var keyLower = key.toLowerCase();
+        if (keyLower.includes(nameLower) || nameLower.includes(keyLower)) {
+          /* Prefer longest matching key (most specific) */
+          if (key.length > bestLen) {
+            best = brokerAddressMap[key];
+            bestLen = key.length;
+          }
+        }
+      }
+
+      return best;
+    }
+
     /* ── Address / validation ── */
     function updateSupplierAddress() {
       const account = getField('account_name');
       const current = getField('supplier_address');
-      const suggested = brokerAddressMap[account] || '';
+      const suggested = lookupSupplierAddress(account);
       if (!current || current === suggested || brokerNames.includes(account)) {
         setField('supplier_address', suggested);
       }
