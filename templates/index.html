@@ -361,8 +361,9 @@
         <div id="hs-banner-area"></div>
       </div>
     </div>
+    </div>
 
-    <!-- Settings card (below results) -->
+    <!-- Settings card (OUTSIDE state-container so state transitions don't detach it) -->
     <div id="settings-section" class="hidden">
       <div class="settings-card">
         <div class="head" style="background:#3d5a73; font-size:13px;">Settings</div>
@@ -371,7 +372,6 @@
           <div id="owners-list-container" class="owners-list hidden"></div>
         </div>
       </div>
-    </div>
     </div>
   </div>
 
@@ -494,8 +494,6 @@
       } else if (newState === 'results') {
         editCard.classList.remove('fade-in');
         stateContainer.appendChild(editCard);
-        /* Show settings section in results state */
-        document.getElementById('settings-section').classList.add('hidden');
       }
     }
 
@@ -512,12 +510,17 @@
       ].forEach(function(key) { setField(key, ''); });
       setField('document_type', 'Consignment Note');
       clearLineItems();
-      document.getElementById('doc-title').textContent = 'Purchase Order';
-      document.getElementById('doc-supplier-label').textContent = '';
-      document.getElementById('account-error').classList.add('hidden');
-      document.getElementById('save-status').classList.add('hidden');
-      document.getElementById('hs-banner-area').innerHTML = '';
-      dropdown.classList.remove('open');
+      var elDocTitle = document.getElementById('doc-title');
+      if (elDocTitle) elDocTitle.textContent = 'Purchase Order';
+      var elDocLabel = document.getElementById('doc-supplier-label');
+      if (elDocLabel) elDocLabel.textContent = '';
+      var elAccErr = document.getElementById('account-error');
+      if (elAccErr) elAccErr.classList.add('hidden');
+      var elSave = document.getElementById('save-status');
+      if (elSave) elSave.classList.add('hidden');
+      var elBanner = document.getElementById('hs-banner-area');
+      if (elBanner) elBanner.innerHTML = '';
+      if (dropdown) dropdown.classList.remove('open');
 
       setState('upload');
     }
@@ -534,6 +537,7 @@
 
     /* ── Typeahead dropdown ── */
     function renderDropdown(term) {
+      if (!dropdown) return;
       const q = (term || '').trim().toLowerCase();
       let matches = brokerNames;
       if (q) {
@@ -566,14 +570,14 @@
 
     function closeDropdown() {
       setTimeout(() => {
-        dropdown.classList.remove('open');
+        if (dropdown) dropdown.classList.remove('open');
         activeIdx = -1;
       }, 150);
     }
 
     function selectSupplier(name) {
-      accountInput.value = name;
-      dropdown.classList.remove('open');
+      if (accountInput) accountInput.value = name;
+      if (dropdown) dropdown.classList.remove('open');
       updateSupplierAddress();
       validateAccount();
     }
@@ -613,7 +617,7 @@
           selectSupplier(items[activeIdx].dataset.value);
         }
       } else if (e.key === 'Escape') {
-        dropdown.classList.remove('open');
+        if (dropdown) dropdown.classList.remove('open');
       }
     });
 
@@ -662,9 +666,11 @@
     function validateAccount() {
       const account = getField('account_name');
       const valid = brokerNames.includes(account);
-      document.getElementById('account-error').classList.toggle('hidden', valid);
+      var elErr = document.getElementById('account-error');
+      if (elErr) elErr.classList.toggle('hidden', valid);
       if (!valid) {
-        document.getElementById('supplier_address').value = '';
+        var elAddr = document.getElementById('supplier_address');
+        if (elAddr) elAddr.value = '';
       }
       return valid;
     }
@@ -827,7 +833,7 @@
     async function saveReview() {
       if (!validateAccount()) return;
       const status = document.getElementById('save-status');
-      status.classList.add('hidden');
+      if (status) status.classList.add('hidden');
       const payload = collectReviewPayload();
       try {
         const resp = await fetch('/save-review', {
@@ -838,9 +844,11 @@
         const json = await resp.json();
         if (!resp.ok || json.error) throw new Error(json.error || 'Unable to save review');
         window.lastReviewedPayload = json.data || payload;
-        status.textContent = json.message || 'Review saved.';
-        status.classList.remove('hidden');
-        setTimeout(() => status.classList.add('hidden'), 2500);
+        if (status) {
+          status.textContent = json.message || 'Review saved.';
+          status.classList.remove('hidden');
+          setTimeout(() => { if (status) status.classList.add('hidden'); }, 2500);
+        }
       } catch (err) { alert(err.message); }
     }
 
@@ -896,9 +904,10 @@
 
     function showToast(msg) {
       const toast = document.getElementById('toast');
+      if (!toast) return;
       toast.textContent = msg;
       toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 2000);
+      setTimeout(() => { if (toast) toast.classList.remove('show'); }, 2000);
     }
 
     /* ── Progress bar helpers ── */
@@ -960,7 +969,7 @@
         /* Transition to results state (removes scanning, shows edit card) */
         setState('results');
         fillForm(json.data || {});
-        requestAnimationFrame(function() { editCard.classList.add('fade-in'); });
+        requestAnimationFrame(function() { if (editCard) editCard.classList.add('fade-in'); });
       } catch (err) {
         alert(err.message);
         setState('upload');
@@ -970,14 +979,14 @@
     /* ── Drag & drop ── */
     dropZone.addEventListener('dragover', e => {
       e.preventDefault();
-      dropZone.classList.add('drag-over');
+      if (dropZone) dropZone.classList.add('drag-over');
     });
     dropZone.addEventListener('dragleave', () => {
-      dropZone.classList.remove('drag-over');
+      if (dropZone) dropZone.classList.remove('drag-over');
     });
     dropZone.addEventListener('drop', e => {
       e.preventDefault();
-      dropZone.classList.remove('drag-over');
+      if (dropZone) dropZone.classList.remove('drag-over');
       const file = e.dataTransfer.files[0];
       if (file && file.name.toLowerCase().endsWith('.pdf')) uploadAndExtract(file);
     });
@@ -1005,13 +1014,14 @@
     /* ── Settings toggle ── */
     function toggleSettings() {
       var s = document.getElementById('settings-section');
-      s.classList.toggle('hidden');
+      if (s) s.classList.toggle('hidden');
     }
 
     /* ── Fetch HubSpot Owners ── */
     async function fetchHubSpotOwners() {
       var btn = document.getElementById('btn-fetch-owners');
       var container = document.getElementById('owners-list-container');
+      if (!btn || !container) return;
       btn.disabled = true;
       btn.textContent = 'Fetching…';
       try {
