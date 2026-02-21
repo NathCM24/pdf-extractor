@@ -342,14 +342,9 @@
       walk(obj);
     })(scanAnimation);
 
-    /* Initialise Lottie player */
-    var lottieAnim = lottie.loadAnimation({
-      container: document.getElementById('lottie-player'),
-      renderer: 'svg',
-      loop: true,
-      autoplay: false,
-      animationData: scanAnimation
-    });
+    /* Lottie player — lazy-initialised on first upload, destroyed after */
+    var lottieAnim = null;
+    var isProcessing = false;
 
     /* ── Broker data from Flask ── */
     const BROKERS = {{ brokers_json|safe }};
@@ -747,13 +742,25 @@
 
     /* ── Upload & extract ── */
     async function uploadAndExtract(file) {
+      isProcessing = true;
+
       document.getElementById('file-label').textContent = file.name;
       document.getElementById('loading-text').innerHTML =
         "We're attempting to read <em>" + file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;') + "</em>. Hold tight!";
       document.getElementById('loading').classList.remove('hidden');
       document.getElementById('edit').classList.add('hidden');
       document.getElementById('edit').classList.remove('fade-in');
-      if (lottieAnim) lottieAnim.goToAndPlay(0, true);
+
+      /* Create Lottie instance fresh each time (destroyed on completion) */
+      var playerEl = document.getElementById('lottie-player');
+      playerEl.innerHTML = '';
+      lottieAnim = lottie.loadAnimation({
+        container: playerEl,
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        animationData: JSON.parse(JSON.stringify(scanAnimation))
+      });
       startProgress();
 
       const fd = new FormData();
@@ -775,8 +782,10 @@
       } finally {
         /* Brief delay so user sees 100% before hiding */
         await new Promise(function(r) { setTimeout(r, 400); });
+        isProcessing = false;
         document.getElementById('loading').classList.add('hidden');
-        if (lottieAnim) lottieAnim.stop();
+        if (lottieAnim) { lottieAnim.destroy(); lottieAnim = null; }
+        document.getElementById('lottie-player').innerHTML = '';
         resetProgress();
       }
     }
