@@ -1025,7 +1025,7 @@
       btn.disabled = true;
       btn.textContent = 'Fetching…';
       try {
-        var resp = await fetch('/hubspot/owners');
+        var resp = await fetch('/api/hubspot/owners');
         var data = await resp.json();
         if (!resp.ok || data.error) throw new Error(data.error || 'Failed to fetch owners');
         var owners = data.owners || [];
@@ -1135,7 +1135,7 @@
       btn.textContent = 'Creating deal…';
 
       try {
-        var resp = await fetch('/hubspot/create-deal', {
+        var resp = await fetch('/api/hubspot/create-deal', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(window._hsDealData)

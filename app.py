@@ -854,7 +854,7 @@ def _hs_request(method, path, body=None):
         return e.code, err_body
 
 
-@app.route("/hubspot/owners", methods=["GET"])
+@app.route("/api/hubspot/owners", methods=["GET"])
 def hubspot_owners():
     """Fetch all HubSpot owners. Also caches Nathan Malone's ID."""
     global _cached_owner_id
@@ -873,7 +873,51 @@ def hubspot_owners():
     return jsonify({"owners": owners, "nathan_id": _cached_owner_id})
 
 
-@app.route("/hubspot/create-deal", methods=["POST"])
+# ─── Individual HubSpot proxy routes ─────────────────────────────────────────
+
+@app.route("/api/hubspot/companies/search", methods=["POST"])
+def hubspot_companies_search():
+    """Proxy: POST /api/hubspot/companies/search → HubSpot companies search."""
+    body = request.get_json(silent=True) or {}
+    status, data = _hs_request("POST", "/objects/companies/search", body)
+    return jsonify(data), status
+
+
+@app.route("/api/hubspot/contacts/search", methods=["POST"])
+def hubspot_contacts_search():
+    """Proxy: POST /api/hubspot/contacts/search → HubSpot contacts search."""
+    body = request.get_json(silent=True) or {}
+    status, data = _hs_request("POST", "/objects/contacts/search", body)
+    return jsonify(data), status
+
+
+@app.route("/api/hubspot/deals", methods=["POST"])
+def hubspot_deals_create():
+    """Proxy: POST /api/hubspot/deals → HubSpot create deal."""
+    body = request.get_json(silent=True) or {}
+    status, data = _hs_request("POST", "/objects/deals", body)
+    return jsonify(data), status
+
+
+@app.route("/api/hubspot/line-items", methods=["POST"])
+def hubspot_line_items_create():
+    """Proxy: POST /api/hubspot/line-items → HubSpot create line item."""
+    body = request.get_json(silent=True) or {}
+    status, data = _hs_request("POST", "/objects/line_items", body)
+    return jsonify(data), status
+
+
+@app.route("/api/hubspot/deals/<deal_id>/associations/<path:rest>", methods=["PUT"])
+def hubspot_deal_associations(deal_id, rest):
+    """Proxy: PUT /api/hubspot/deals/:dealId/associations/* → HubSpot associations."""
+    body = request.get_json(silent=True)
+    status, data = _hs_request("PUT", f"/objects/deals/{deal_id}/associations/{rest}", body)
+    return jsonify(data), status
+
+
+# ─── Orchestrated deal creation (uses proxy routes internally) ────────────────
+
+@app.route("/api/hubspot/create-deal", methods=["POST"])
 def hubspot_create_deal():
     """
     Full deal creation flow:
