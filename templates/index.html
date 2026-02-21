@@ -17,7 +17,7 @@
 
     /* --- Cards --- */
     .card { background: #253a4d; border-radius: 4px; box-shadow: 0 2px 12px rgba(0,0,0,.25); margin-bottom: 16px; border: 1px solid #2f4a60; }
-    .head { background: #8ec431; color: #fff; padding: 16px 20px; border-radius: 3px 3px 0 0; font-weight: 700; font-size: 15px; }
+    .head { background: #8ec431; color: #fff; padding: 16px 20px; border-radius: 4px 4px 0 0; font-weight: 700; font-size: 15px; }
     .body { padding: 16px 20px; }
 
     /* --- Drop zone --- */
@@ -80,7 +80,7 @@
     }
     .typeahead-item:last-child { border-bottom: none; }
     .typeahead-item:hover, .typeahead-item.active { background: rgba(142,196,49,.15); color: #fff; }
-    .typeahead-item mark { background: rgba(142,196,49,.35); color: #fff; border-radius: 2px; padding: 0 1px; }
+    .typeahead-item mark { background: rgba(142,196,49,.35); color: #fff; border-radius: 4px; padding: 0 1px; }
 
     /* --- Lottie loading --- */
     .lottie-loading {
@@ -170,8 +170,9 @@
       <p class="brand-subtitle">Made with 💚 by Marketing</p>
     </div>
 
+    <div id="state-container">
     <!-- Upload card -->
-    <div class="card">
+    <div id="upload-card" class="card">
       <div class="head">Upload Purchase Order PDF</div>
       <div class="body">
         <div id="drop-zone" class="drop">
@@ -183,20 +184,15 @@
       </div>
     </div>
 
-    <!-- Lottie loading state -->
-    <div id="loading" class="lottie-loading hidden">
-      <div id="lottie-player"></div>
-      <p class="loading-text" id="loading-text"></p>
-      <div class="progress-wrap">
-        <div class="progress-pct" id="progress-pct">0%</div>
-        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
-      </div>
-    </div>
-
-    <!-- Extracted data card -->
-    <div id="edit" class="card hidden">
+    <!-- Extracted data card (detached from DOM by JS on init) -->
+    <div id="edit" class="card">
       <div class="head">Extracted Order Data</div>
       <div class="body">
+
+        <!-- Reset button -->
+        <div style="margin-bottom:14px;">
+          <button class="btn-outline" type="button" onclick="resetToUpload()">&larr; Convert Another Purchase Order</button>
+        </div>
 
         <!-- Document header -->
         <div class="doc-header">
@@ -294,6 +290,7 @@
         </div>
       </div>
     </div>
+    </div>
   </div>
 
   <!-- Toast notification -->
@@ -342,21 +339,97 @@
       walk(obj);
     })(scanAnimation);
 
-    /* Lottie player — lazy-initialised on first upload, destroyed after */
+    /* Lottie player — created fresh each scan, destroyed after */
     var lottieAnim = null;
-    var isProcessing = false;
+
+    /* ── Three-state flow: "upload" | "scanning" | "results" ── */
+    var appState = 'upload';
 
     /* ── Broker data from Flask ── */
     const BROKERS = {{ brokers_json|safe }};
     const brokerNames = BROKERS.map(b => b.name);
     const brokerAddressMap = Object.fromEntries(BROKERS.map(b => [b.name, b.address || '']));
 
-    /* ── DOM refs ── */
-    const fileInput    = document.getElementById('file-input');
-    const dropZone     = document.getElementById('drop-zone');
-    const accountInput = document.getElementById('account_name');
-    const dropdown     = document.getElementById('typeahead-dropdown');
-    let activeIdx      = -1;
+    /* ── DOM refs (cached before setState detaches elements) ── */
+    const stateContainer = document.getElementById('state-container');
+    const uploadCard     = document.getElementById('upload-card');
+    const editCard       = document.getElementById('edit');
+    const fileInput      = document.getElementById('file-input');
+    const dropZone       = document.getElementById('drop-zone');
+    const accountInput   = document.getElementById('account_name');
+    const dropdown       = document.getElementById('typeahead-dropdown');
+    let activeIdx        = -1;
+
+    /* ── State management ── */
+    function setState(newState, filename) {
+      /* Clean up scanning state */
+      if (appState === 'scanning') {
+        clearInterval(progressTimer);
+        if (lottieAnim) { lottieAnim.destroy(); lottieAnim = null; }
+      }
+
+      /* Remove all children from container (detach, not destroy) */
+      while (stateContainer.firstChild) {
+        stateContainer.removeChild(stateContainer.firstChild);
+      }
+
+      appState = newState;
+
+      if (newState === 'upload') {
+        fileInput.value = '';
+        stateContainer.appendChild(uploadCard);
+
+      } else if (newState === 'scanning') {
+        /* Build scanning section dynamically */
+        var section = document.createElement('div');
+        section.className = 'lottie-loading';
+        var safeName = (filename || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        section.innerHTML =
+          '<div id="lottie-player"></div>' +
+          '<p class="loading-text">We\'re attempting to read <em>' + safeName + '</em>. Hold tight!</p>' +
+          '<div class="progress-wrap">' +
+            '<div class="progress-pct" id="progress-pct">0%</div>' +
+            '<div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>' +
+          '</div>';
+        stateContainer.appendChild(section);
+
+        /* Init Lottie */
+        lottieAnim = lottie.loadAnimation({
+          container: document.getElementById('lottie-player'),
+          renderer: 'svg',
+          loop: true,
+          autoplay: true,
+          animationData: JSON.parse(JSON.stringify(scanAnimation))
+        });
+        startProgress();
+
+      } else if (newState === 'results') {
+        editCard.classList.remove('fade-in');
+        stateContainer.appendChild(editCard);
+      }
+    }
+
+    /* ── Reset back to upload state ── */
+    function resetToUpload() {
+      /* Clear all form fields while edit card is still in DOM */
+      [
+        'supplier', 'purchase_order_number', 'service_description',
+        'site_contact', 'site_contact_number', 'site_contact_email',
+        'secondary_site_contact', 'secondary_site_contact_number', 'secondary_site_contact_email',
+        'site_name', 'site_address', 'site_postcode',
+        'opening_times', 'access', 'site_restrictions', 'special_instructions',
+        'account_name', 'supplier_address'
+      ].forEach(function(key) { setField(key, ''); });
+      setField('document_type', 'Consignment Note');
+      clearLineItems();
+      document.getElementById('doc-title').textContent = 'Purchase Order';
+      document.getElementById('doc-supplier-label').textContent = '';
+      document.getElementById('account-error').classList.add('hidden');
+      document.getElementById('save-status').classList.add('hidden');
+      dropdown.classList.remove('open');
+
+      setState('upload');
+    }
 
     /* ── Helpers ── */
     function setField(id, value) {
@@ -736,32 +809,16 @@
 
     function updateProgressUI(pct) {
       var rounded = Math.round(pct);
-      document.getElementById('progress-pct').textContent = rounded + '%';
-      document.getElementById('progress-fill').style.width = rounded + '%';
+      var pctEl = document.getElementById('progress-pct');
+      var fillEl = document.getElementById('progress-fill');
+      if (pctEl) pctEl.textContent = rounded + '%';
+      if (fillEl) fillEl.style.width = rounded + '%';
     }
 
     /* ── Upload & extract ── */
     async function uploadAndExtract(file) {
-      isProcessing = true;
-
-      document.getElementById('file-label').textContent = file.name;
-      document.getElementById('loading-text').innerHTML =
-        "We're attempting to read <em>" + file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;') + "</em>. Hold tight!";
-      document.getElementById('loading').classList.remove('hidden');
-      document.getElementById('edit').classList.add('hidden');
-      document.getElementById('edit').classList.remove('fade-in');
-
-      /* Create Lottie instance fresh each time (destroyed on completion) */
-      var playerEl = document.getElementById('lottie-player');
-      playerEl.innerHTML = '';
-      lottieAnim = lottie.loadAnimation({
-        container: playerEl,
-        renderer: 'svg',
-        loop: true,
-        autoplay: true,
-        animationData: JSON.parse(JSON.stringify(scanAnimation))
-      });
-      startProgress();
+      /* Transition to scanning state (removes upload card, shows animation) */
+      setState('scanning', file.name);
 
       const fd = new FormData();
       fd.append('pdf', file);
@@ -770,23 +827,20 @@
         const resp = await fetch('/extract', { method: 'POST', body: fd });
         const json = await resp.json();
         if (!resp.ok || json.error) throw new Error(json.error || 'Extraction failed');
+
+        /* Jump progress to 100% */
         finishProgress();
+
+        /* Brief delay so user sees 100% before transition (~500ms) */
+        await new Promise(function(r) { setTimeout(r, 500); });
+
+        /* Transition to results state (removes scanning, shows edit card) */
+        setState('results');
         fillForm(json.data || {});
-        document.getElementById('edit').classList.remove('hidden');
-        /* Trigger fade-in on next frame */
-        requestAnimationFrame(() => {
-          document.getElementById('edit').classList.add('fade-in');
-        });
+        requestAnimationFrame(function() { editCard.classList.add('fade-in'); });
       } catch (err) {
         alert(err.message);
-      } finally {
-        /* Brief delay so user sees 100% before hiding */
-        await new Promise(function(r) { setTimeout(r, 400); });
-        isProcessing = false;
-        document.getElementById('loading').classList.add('hidden');
-        if (lottieAnim) { lottieAnim.destroy(); lottieAnim = null; }
-        document.getElementById('lottie-player').innerHTML = '';
-        resetProgress();
+        setState('upload');
       }
     }
 
@@ -808,6 +862,9 @@
       const file = e.target.files[0];
       if (file) uploadAndExtract(file);
     });
+
+    /* ── Initialize: show only upload state ── */
+    setState('upload');
   </script>
 </body>
 </html>
