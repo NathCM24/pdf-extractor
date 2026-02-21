@@ -134,6 +134,70 @@
     .doc-header h2 { margin: 0; font-size: 18px; font-weight: 700; color: #fff; }
     .doc-header .doc-meta { font-size: 12px; color: #8aa3b8; }
 
+    /* --- HubSpot button --- */
+    .btn-hubspot {
+      border: none; background: #ff7a59; color: #fff; border-radius: 4px;
+      padding: 10px 18px; font-weight: 700; cursor: pointer;
+      font-family: 'Montserrat', sans-serif; font-size: 13px;
+      transition: background .2s; display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-hubspot:hover { background: #e56a4a; }
+    .btn-hubspot:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-hubspot svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+    /* --- HubSpot modal overlay --- */
+    .hs-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 900;
+      display: flex; align-items: center; justify-content: center;
+      animation: fadeIn .2s ease-out;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .hs-modal {
+      background: #253a4d; border: 1px solid #2f4a60; border-radius: 4px;
+      width: 600px; max-width: 94vw; max-height: 85vh; overflow-y: auto;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5);
+    }
+    .hs-modal-head {
+      background: #ff7a59; color: #fff; padding: 14px 20px; border-radius: 4px 4px 0 0;
+      font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 10px;
+    }
+    .hs-modal-body { padding: 20px; }
+    .hs-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #2f4a60; font-size: 13px; }
+    .hs-row:last-child { border-bottom: none; }
+    .hs-label { color: #8aa3b8; font-weight: 600; min-width: 140px; }
+    .hs-value { color: #e8ecf1; text-align: right; word-break: break-word; }
+    .hs-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #ff7a59; margin: 16px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #3d5a73; }
+    .hs-section:first-child { margin-top: 0; }
+    .hs-li-table { width: 100%; font-size: 12px; border-collapse: collapse; margin-top: 6px; }
+    .hs-li-table th { text-align: left; color: #8aa3b8; font-weight: 600; padding: 4px 6px; border-bottom: 1px solid #3d5a73; }
+    .hs-li-table td { padding: 4px 6px; color: #c0cdd8; border-bottom: 1px solid #2f4a60; }
+    .hs-li-table td:nth-child(n+2) { text-align: right; }
+    .hs-actions { display: flex; gap: 10px; margin-top: 18px; justify-content: flex-end; }
+    .hs-match { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+    .hs-match.found { color: #8ec431; }
+    .hs-match.not-found { color: #8aa3b8; }
+
+    /* --- HubSpot banner --- */
+    .hs-banner {
+      padding: 12px 16px; border-radius: 4px; font-size: 13px; font-weight: 600;
+      margin-top: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .hs-banner.success { background: rgba(142,196,49,.15); color: #8ec431; border: 1px solid #8ec431; }
+    .hs-banner.error { background: rgba(248,113,113,.12); color: #f87171; border: 1px solid rgba(248,113,113,.3); }
+    .hs-banner a { color: inherit; text-decoration: underline; }
+    .hs-banner .hs-banner-close { margin-left: auto; cursor: pointer; opacity: .7; }
+    .hs-banner .hs-banner-close:hover { opacity: 1; }
+
+    /* --- Settings card --- */
+    .settings-toggle { font-size: 12px; color: #5a7a94; cursor: pointer; text-align: center; margin-top: 8px; }
+    .settings-toggle:hover { color: #8aa3b8; }
+    .settings-card { background: #253a4d; border-radius: 4px; border: 1px solid #2f4a60; margin-bottom: 16px; }
+    .settings-body { padding: 16px 20px; }
+    .owners-list { max-height: 200px; overflow-y: auto; font-size: 12px; margin-top: 10px; }
+    .owners-list .owner-row { padding: 6px 0; border-bottom: 1px solid #2f4a60; color: #c0cdd8; display: flex; justify-content: space-between; }
+    .owners-list .owner-row:last-child { border-bottom: none; }
+    .owner-id { color: #5a7a94; font-family: monospace; font-size: 11px; }
+
     /* --- Copy toast --- */
     .toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -285,13 +349,37 @@
           <button id="btn-download" class="btn" type="button" onclick="downloadReviewPDF()">Download PDF</button>
           <button class="btn" type="button" onclick="saveReview()">Save Review</button>
           <button class="btn-outline" type="button" onclick="copyAllToClipboard()">Copy All Data</button>
+          <button id="btn-hubspot" class="btn-hubspot" type="button" onclick="openHubSpotPreview()">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.83 11.41V7.55a2.2 2.2 0 0 0 1.27-1.98 2.22 2.22 0 0 0-2.22-2.22h-.04V1.5a.75.75 0 0 0-1.5 0v1.85h-.04a2.22 2.22 0 0 0-2.22 2.22c0 .9.54 1.67 1.31 2.01v3.83a5.1 5.1 0 0 0-2.53 1.27l-6.63-5.16a2.03 2.03 0 0 0 .05-.42 2.08 2.08 0 1 0-2.08 2.08c.4 0 .77-.12 1.09-.32l6.45 5.02a5.17 5.17 0 0 0 .42 5.53l-1.79 1.79a1.7 1.7 0 0 0-.5-.08 1.72 1.72 0 1 0 1.72 1.72c0-.17-.03-.34-.08-.5l1.76-1.76a5.18 5.18 0 1 0 5.96-8.52zM16.84 18a2.68 2.68 0 1 1 0-5.37 2.68 2.68 0 0 1 0 5.37z"/></svg>
+            Send to HubSpot
+          </button>
           <span class="pill">Extracted PDF includes selected note type</span>
           <span id="save-status" class="ok hidden">Review saved.</span>
+        </div>
+
+        <!-- HubSpot feedback banner area -->
+        <div id="hs-banner-area"></div>
+      </div>
+    </div>
+
+    <!-- Settings card (below results) -->
+    <div id="settings-section" class="hidden">
+      <div class="settings-card">
+        <div class="head" style="background:#3d5a73; font-size:13px;">Settings</div>
+        <div class="settings-body">
+          <button class="btn-outline" type="button" onclick="fetchHubSpotOwners()" id="btn-fetch-owners">Fetch HubSpot Owners</button>
+          <div id="owners-list-container" class="owners-list hidden"></div>
         </div>
       </div>
     </div>
     </div>
   </div>
+
+  <!-- Settings toggle -->
+  <div class="settings-toggle" onclick="toggleSettings()">Settings</div>
+
+  <!-- HubSpot preview modal (injected dynamically) -->
+  <div id="hs-modal-root"></div>
 
   <!-- Toast notification -->
   <div id="toast" class="toast"></div>
@@ -406,6 +494,8 @@
       } else if (newState === 'results') {
         editCard.classList.remove('fade-in');
         stateContainer.appendChild(editCard);
+        /* Show settings section in results state */
+        document.getElementById('settings-section').classList.add('hidden');
       }
     }
 
@@ -426,6 +516,7 @@
       document.getElementById('doc-supplier-label').textContent = '';
       document.getElementById('account-error').classList.add('hidden');
       document.getElementById('save-status').classList.add('hidden');
+      document.getElementById('hs-banner-area').innerHTML = '';
       dropdown.classList.remove('open');
 
       setState('upload');
@@ -897,6 +988,192 @@
 
     /* ── Initialize: show only upload state ── */
     setState('upload');
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       HubSpot Integration
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    var uploadedFileName = '';  /* Stored when file is uploaded */
+
+    /* Patch uploadAndExtract to remember filename */
+    var _origUploadAndExtract = uploadAndExtract;
+    uploadAndExtract = async function(file) {
+      uploadedFileName = file.name.replace(/\.pdf$/i, '');
+      return _origUploadAndExtract(file);
+    };
+
+    /* ── Settings toggle ── */
+    function toggleSettings() {
+      var s = document.getElementById('settings-section');
+      s.classList.toggle('hidden');
+    }
+
+    /* ── Fetch HubSpot Owners ── */
+    async function fetchHubSpotOwners() {
+      var btn = document.getElementById('btn-fetch-owners');
+      var container = document.getElementById('owners-list-container');
+      btn.disabled = true;
+      btn.textContent = 'Fetching…';
+      try {
+        var resp = await fetch('/hubspot/owners');
+        var data = await resp.json();
+        if (!resp.ok || data.error) throw new Error(data.error || 'Failed to fetch owners');
+        var owners = data.owners || [];
+        container.innerHTML = owners.map(function(o) {
+          return '<div class="owner-row"><span>' + escHtml(o.name) + ' <span style="color:#5a7a94">(' + escHtml(o.email) + ')</span></span><span class="owner-id">' + escHtml(o.id) + '</span></div>';
+        }).join('');
+        if (!owners.length) container.innerHTML = '<div style="color:#8aa3b8; padding:8px 0;">No owners found</div>';
+        container.classList.remove('hidden');
+        if (data.nathan_id) {
+          showToast('Nathan Malone found — Owner ID: ' + data.nathan_id);
+        }
+      } catch(err) {
+        container.innerHTML = '<div style="color:#f87171; padding:8px 0;">' + escHtml(err.message) + '</div>';
+        container.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Fetch HubSpot Owners';
+      }
+    }
+
+    function escHtml(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    /* ── HubSpot preview modal ── */
+    function openHubSpotPreview() {
+      var payload = collectReviewPayload();
+      var dealName = uploadedFileName || 'Untitled Deal';
+      var today = new Date().toISOString().split('T')[0];
+      var totalAmount = (payload.overall_total || 0).toFixed(2);
+      var poNumber = payload.purchase_order_number || '—';
+      var supplierName = payload.account_name || payload.supplier || '';
+      var items = payload.line_items || [];
+
+      /* Build description from line items */
+      var desc = items.map(function(li, i) {
+        return (i+1) + '. ' + (li.description || 'Item') + ' (x' + li.quantity + ' @ £' + (li.unit_price||0).toFixed(2) + ')';
+      }).join('; ');
+
+      /* Build line items table */
+      var liHtml = '';
+      if (items.length) {
+        liHtml = '<table class="hs-li-table"><thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Line Total</th></tr></thead><tbody>';
+        items.forEach(function(li) {
+          liHtml += '<tr><td>' + escHtml(li.description) + '</td><td>' + li.quantity + '</td><td>£' + (li.unit_price||0).toFixed(2) + '</td><td>£' + (li.line_total||0).toFixed(2) + '</td></tr>';
+        });
+        liHtml += '</tbody></table>';
+      } else {
+        liHtml = '<div style="color:#8aa3b8; font-size:12px;">No line items</div>';
+      }
+
+      var modalHtml =
+        '<div class="hs-overlay" id="hs-overlay" onclick="if(event.target===this)closeHubSpotModal()">' +
+          '<div class="hs-modal">' +
+            '<div class="hs-modal-head">' +
+              '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.83 11.41V7.55a2.2 2.2 0 0 0 1.27-1.98 2.22 2.22 0 0 0-2.22-2.22h-.04V1.5a.75.75 0 0 0-1.5 0v1.85h-.04a2.22 2.22 0 0 0-2.22 2.22c0 .9.54 1.67 1.31 2.01v3.83a5.1 5.1 0 0 0-2.53 1.27l-6.63-5.16a2.03 2.03 0 0 0 .05-.42 2.08 2.08 0 1 0-2.08 2.08c.4 0 .77-.12 1.09-.32l6.45 5.02a5.17 5.17 0 0 0 .42 5.53l-1.79 1.79a1.7 1.7 0 0 0-.5-.08 1.72 1.72 0 1 0 1.72 1.72c0-.17-.03-.34-.08-.5l1.76-1.76a5.18 5.18 0 1 0 5.96-8.52zM16.84 18a2.68 2.68 0 1 1 0-5.37 2.68 2.68 0 0 1 0 5.37z"/></svg>' +
+              'HubSpot Deal Preview' +
+            '</div>' +
+            '<div class="hs-modal-body">' +
+              '<div class="hs-section">Deal Properties</div>' +
+              '<div class="hs-row"><span class="hs-label">Deal Name</span><span class="hs-value">' + escHtml(dealName) + '</span></div>' +
+              '<div class="hs-row"><span class="hs-label">Create Date</span><span class="hs-value">' + today + '</span></div>' +
+              '<div class="hs-row"><span class="hs-label">Close Date</span><span class="hs-value">' + today + '</span></div>' +
+              '<div class="hs-row"><span class="hs-label">Forecast Amount</span><span class="hs-value">£' + totalAmount + '</span></div>' +
+              '<div class="hs-row"><span class="hs-label">Deal Owner</span><span class="hs-value">Nathan Malone</span></div>' +
+              '<div class="hs-row"><span class="hs-label">Is Deal Closed</span><span class="hs-value">Yes</span></div>' +
+              '<div class="hs-row"><span class="hs-label">PO Number</span><span class="hs-value">' + escHtml(poNumber) + '</span></div>' +
+
+              '<div class="hs-section">Line Items</div>' +
+              liHtml +
+
+              '<div class="hs-section">Company Association</div>' +
+              '<div class="hs-row"><span class="hs-label">Supplier</span><span class="hs-value">' + escHtml(supplierName || '—') + '</span></div>' +
+              '<div style="padding:6px 0; font-size:12px; color:#8aa3b8;"><em>Company match will be checked when creating the deal</em></div>' +
+
+              '<div class="hs-actions">' +
+                '<button class="btn-outline" type="button" onclick="closeHubSpotModal()">Cancel</button>' +
+                '<button class="btn-hubspot" type="button" id="btn-hs-confirm" onclick="confirmCreateDeal()">' +
+                  'Confirm &amp; Create Deal' +
+                '</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+
+      document.getElementById('hs-modal-root').innerHTML = modalHtml;
+
+      /* Store deal data for submission */
+      window._hsDealData = {
+        deal_name: dealName,
+        amount: payload.overall_total || 0,
+        po_number: payload.purchase_order_number || '',
+        supplier_name: supplierName,
+        line_items: items,
+        description: desc
+      };
+    }
+
+    function closeHubSpotModal() {
+      document.getElementById('hs-modal-root').innerHTML = '';
+    }
+
+    /* ── Create deal ── */
+    async function confirmCreateDeal() {
+      var btn = document.getElementById('btn-hs-confirm');
+      btn.disabled = true;
+      btn.textContent = 'Creating deal…';
+
+      try {
+        var resp = await fetch('/hubspot/create-deal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(window._hsDealData)
+        });
+        var data = await resp.json();
+
+        if (!resp.ok || data.error) {
+          throw new Error(data.error || 'Failed to create deal');
+        }
+
+        closeHubSpotModal();
+
+        /* Success banner */
+        var bannerHtml = '<div class="hs-banner success">' +
+          '<span>Deal created in HubSpot &#10003;</span>' +
+          '<a href="' + escHtml(data.deal_url) + '" target="_blank" rel="noopener">View in HubSpot</a>';
+
+        if (!data.company_id) {
+          bannerHtml += '<div style="width:100%; font-size:11px; margin-top:4px; color:#8aa3b8;">No matching company found in HubSpot — deal created without association. You can link it manually.</div>';
+        } else {
+          bannerHtml += '<div style="width:100%; font-size:11px; margin-top:4px;"><span class="hs-match found">&#10003; Company matched: ' + escHtml(data.company_found || 'Unknown') + '</span></div>';
+        }
+
+        if (data.po_number_warning) {
+          bannerHtml += '<div style="width:100%; font-size:11px; margin-top:4px; color:#ff7a59;">' + escHtml(data.po_number_warning) + '</div>';
+        }
+
+        if (data.association_warnings && data.association_warnings.length) {
+          data.association_warnings.forEach(function(w) {
+            bannerHtml += '<div style="width:100%; font-size:11px; margin-top:2px; color:#ff7a59;">' + escHtml(w) + '</div>';
+          });
+        }
+
+        bannerHtml += '<span class="hs-banner-close" onclick="this.parentNode.remove()">&#10005;</span></div>';
+        document.getElementById('hs-banner-area').innerHTML = bannerHtml;
+
+      } catch(err) {
+        closeHubSpotModal();
+
+        /* Error banner with retry */
+        var errHtml = '<div class="hs-banner error">' +
+          '<span>' + escHtml(err.message) + '</span>' +
+          '<button class="btn-hubspot" style="padding:6px 12px; font-size:12px;" onclick="openHubSpotPreview()">Retry</button>' +
+          '<span class="hs-banner-close" onclick="this.parentNode.remove()">&#10005;</span>' +
+          '</div>';
+        document.getElementById('hs-banner-area').innerHTML = errHtml;
+      }
+    }
   </script>
 </body>
 </html>
