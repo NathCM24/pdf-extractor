@@ -199,6 +199,61 @@
     .persistent-gear:hover { opacity: .7; transform: rotate(45deg); }
     .persistent-gear svg { width: 22px; height: 22px; }
 
+    /* --- Top navigation bar (green) --- */
+    .top-nav {
+      background: #8ec431; border-radius: 4px; padding: 0 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px; min-height: 48px;
+    }
+    .nav-btn {
+      background: none; border: none; cursor: pointer; padding: 12px 4px;
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 600;
+      color: rgba(255,255,255,.9); transition: opacity .2s;
+    }
+    .nav-btn:hover { opacity: .7; }
+    .nav-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .nav-btn.nav-hidden { visibility: hidden; pointer-events: none; }
+
+    /* --- Settings modal overlay --- */
+    .settings-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 900;
+      display: flex; align-items: center; justify-content: center;
+      animation: fadeIn .2s ease-out;
+    }
+    .settings-modal {
+      background: #253a4d; border: 1px solid #2f4a60; border-radius: 4px;
+      width: 650px; max-width: 94vw; max-height: 80vh; overflow-y: auto;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5); position: relative;
+    }
+    .settings-modal-head {
+      background: #3d5a73; color: #fff; padding: 14px 20px; border-radius: 4px 4px 0 0;
+      font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .settings-modal-head .close-x { cursor: pointer; font-size: 20px; opacity: .8; background: none; border: none; color: #fff; padding: 0 2px; }
+    .settings-modal-head .close-x:hover { opacity: 1; }
+    .settings-modal-body { padding: 20px; }
+
+    /* --- Collapsible section --- */
+    .collapsible-header {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      padding: 12px 0; user-select: none;
+    }
+    .collapsible-header h3 {
+      margin: 0; font-size: 13px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .5px; color: #c0cdd8;
+    }
+    .collapsible-chevron {
+      font-size: 12px; color: #8aa3b8; transition: transform .2s; display: inline-block;
+    }
+    .collapsible-header.open .collapsible-chevron { transform: rotate(90deg); }
+    .collapsible-body {
+      max-height: 0; overflow: hidden; transition: max-height .3s ease;
+    }
+    .collapsible-body.open {
+      max-height: 2000px;
+    }
+
     /* --- Document Type row (styled as line item) --- */
     .doc-type-row {
       display: flex; align-items: center; justify-content: space-between;
@@ -343,15 +398,22 @@
 </head>
 <body>
   <div class="wrap">
-    <!-- Persistent settings gear — always visible in all states -->
-    <button class="persistent-gear" type="button" onclick="toggleSettings()" title="Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
-
     <div class="brand">
       <img src="https://i0.wp.com/wasteexperts.co.uk/wp-content/uploads/2022/11/green-grey-logo-1080.png?w=1920&amp;ssl=1" alt="Waste Experts logo" />
       <h1 class="brand-title">Improving Efficiency, Reducing Input</h1>
       <p class="brand-subtitle">Made with 💚 by Marketing</p>
+    </div>
+
+    <!-- Top navigation bar — always visible -->
+    <div class="top-nav" id="top-nav">
+      <button class="nav-btn nav-hidden" id="nav-upload-btn" type="button" onclick="resetToUpload()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload New PDF
+      </button>
+      <button class="nav-btn" id="nav-settings-btn" type="button" onclick="openSettingsModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
     </div>
 
     <div id="state-container">
@@ -469,13 +531,10 @@
             <button id="btn-download" class="btn" type="button" onclick="downloadReviewPDF()">Download PDF</button>
             <button id="btn-csv" class="btn-outline" type="button" onclick="downloadCSV()">Download as CSV</button>
           </div>
-          <div style="display:flex; gap:10px; align-items:center;">
-            <button id="btn-hubspot" class="btn-hubspot" type="button" onclick="openHubSpotPreview()">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.83 11.41V7.55a2.2 2.2 0 0 0 1.27-1.98 2.22 2.22 0 0 0-2.22-2.22h-.04V1.5a.75.75 0 0 0-1.5 0v1.85h-.04a2.22 2.22 0 0 0-2.22 2.22c0 .9.54 1.67 1.31 2.01v3.83a5.1 5.1 0 0 0-2.53 1.27l-6.63-5.16a2.03 2.03 0 0 0 .05-.42 2.08 2.08 0 1 0-2.08 2.08c.4 0 .77-.12 1.09-.32l6.45 5.02a5.17 5.17 0 0 0 .42 5.53l-1.79 1.79a1.7 1.7 0 0 0-.5-.08 1.72 1.72 0 1 0 1.72 1.72c0-.17-.03-.34-.08-.5l1.76-1.76a5.18 5.18 0 1 0 5.96-8.52zM16.84 18a2.68 2.68 0 1 1 0-5.37 2.68 2.68 0 0 1 0 5.37z"/></svg>
-              Send to HubSpot
-            </button>
-            <button class="btn-outline" type="button" onclick="resetToUpload()">&larr; Convert Another Purchase Order</button>
-          </div>
+          <button id="btn-hubspot" class="btn-hubspot" type="button" onclick="openHubSpotPreview()">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.83 11.41V7.55a2.2 2.2 0 0 0 1.27-1.98 2.22 2.22 0 0 0-2.22-2.22h-.04V1.5a.75.75 0 0 0-1.5 0v1.85h-.04a2.22 2.22 0 0 0-2.22 2.22c0 .9.54 1.67 1.31 2.01v3.83a5.1 5.1 0 0 0-2.53 1.27l-6.63-5.16a2.03 2.03 0 0 0 .05-.42 2.08 2.08 0 1 0-2.08 2.08c.4 0 .77-.12 1.09-.32l6.45 5.02a5.17 5.17 0 0 0 .42 5.53l-1.79 1.79a1.7 1.7 0 0 0-.5-.08 1.72 1.72 0 1 0 1.72 1.72c0-.17-.03-.34-.08-.5l1.76-1.76a5.18 5.18 0 1 0 5.96-8.52zM16.84 18a2.68 2.68 0 1 1 0-5.37 2.68 2.68 0 0 1 0 5.37z"/></svg>
+            Send to HubSpot
+          </button>
         </div>
 
         <!-- HubSpot feedback banner area -->
@@ -484,41 +543,10 @@
     </div>
     </div>
 
-    <!-- Settings card (OUTSIDE state-container so state transitions don't detach it) -->
-    <div id="settings-section" class="hidden">
-      <div class="settings-card">
-        <div class="head" style="background:#3d5a73; font-size:13px;">Settings</div>
-        <div class="settings-body">
-          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-            <button class="btn-outline" type="button" onclick="fetchHubSpotOwners()" id="btn-fetch-owners">Fetch HubSpot Owners</button>
-            <button class="btn-outline" type="button" onclick="testHubSpotConnection()" id="btn-hs-test">Test HubSpot Connection</button>
-          </div>
-          <pre id="hs-test-output" class="hidden"
-               style="margin-top:10px; background:#0d1b28; border:1px solid #2a4054; border-radius:4px; padding:14px; color:#c8dce8; font-size:12px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:400px; overflow:auto;"></pre>
-          <div id="owners-list-container" class="owners-list hidden"></div>
-        </div>
-      </div>
-
-      <!-- Supplier Templates -->
-      <div class="settings-card">
-        <div class="head" style="background:#3d5a73; font-size:13px;">Supplier Templates</div>
-        <div class="settings-body">
-          <div class="template-progress">
-            <div class="template-progress-text" id="template-progress-label">Loading suppliers...</div>
-            <div class="progress-track" style="margin-top:6px;">
-              <div class="progress-fill" id="template-progress-fill" style="width:0%; background:#8EC431;"></div>
-            </div>
-          </div>
-          <div class="template-search">
-            <input type="text" id="template-search-input" placeholder="Search suppliers..." oninput="filterTemplateList(this.value)" />
-          </div>
-          <div id="template-supplier-list" class="template-list">
-            <!-- Populated by JS -->
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
+
+  <!-- Settings modal (rendered outside .wrap for proper fixed overlay) -->
+  <div id="settings-modal-root"></div>
 
   <!-- HubSpot preview modal (injected dynamically) -->
   <div id="hs-modal-root"></div>
@@ -577,6 +605,19 @@
 
     /* ── Three-state flow: "upload" | "scanning" | "results" ── */
     var appState = 'upload';
+
+    /* ── Nav bar visibility helper ── */
+    function updateNavButtons() {
+      var uploadBtn = document.getElementById('nav-upload-btn');
+      if (uploadBtn) {
+        /* Hide "Upload New PDF" when already on upload screen */
+        if (appState === 'upload') {
+          uploadBtn.classList.add('nav-hidden');
+        } else {
+          uploadBtn.classList.remove('nav-hidden');
+        }
+      }
+    }
 
     /* ── Broker data from Flask ── */
     const BROKERS = {{ brokers_json|safe }};
@@ -640,6 +681,8 @@
         editCard.classList.remove('fade-in');
         stateContainer.appendChild(editCard);
       }
+
+      updateNavButtons();
     }
 
     /* ── Reset back to upload state ── */
@@ -1204,10 +1247,62 @@
       return _origUploadAndExtract(file);
     };
 
-    /* ── Settings toggle ── */
-    function toggleSettings() {
-      var s = document.getElementById('settings-section');
-      if (s) s.classList.toggle('hidden');
+    /* ── Settings modal ── */
+    function openSettingsModal() {
+      var root = document.getElementById('settings-modal-root');
+      root.innerHTML =
+        '<div class="settings-overlay" id="settings-overlay" onclick="if(event.target===this)closeSettingsModal()">' +
+          '<div class="settings-modal">' +
+            '<div class="settings-modal-head">' +
+              '<span>Settings</span>' +
+              '<button class="close-x" type="button" onclick="closeSettingsModal()">&times;</button>' +
+            '</div>' +
+            '<div class="settings-modal-body">' +
+              '<div style="margin-bottom:18px;">' +
+                '<h3 style="margin:0 0 12px; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#c0cdd8;">HubSpot Integration</h3>' +
+                '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">' +
+                  '<button class="btn-outline" type="button" onclick="fetchHubSpotOwners()" id="btn-fetch-owners">Fetch HubSpot Owners</button>' +
+                  '<button class="btn-outline" type="button" onclick="testHubSpotConnection()" id="btn-hs-test">Test HubSpot Connection</button>' +
+                '</div>' +
+                '<pre id="hs-test-output" class="hidden" style="margin-top:10px; background:#0d1b28; border:1px solid #2a4054; border-radius:4px; padding:14px; color:#c8dce8; font-size:12px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:300px; overflow:auto;"></pre>' +
+                '<div id="owners-list-container" class="owners-list hidden"></div>' +
+              '</div>' +
+              '<div style="border-top:1px solid #2f4a60; padding-top:14px;">' +
+                '<div class="collapsible-header" id="templates-toggle" onclick="toggleTemplatesSection()">' +
+                  '<span class="collapsible-chevron" id="templates-chevron">&#9656;</span>' +
+                  '<h3>Supplier Templates</h3>' +
+                '</div>' +
+                '<div class="collapsible-body" id="templates-body">' +
+                  '<div class="template-progress">' +
+                    '<div class="template-progress-text" id="template-progress-label">Loading suppliers...</div>' +
+                    '<div class="progress-track" style="margin-top:6px;">' +
+                      '<div class="progress-fill" id="template-progress-fill" style="width:0%; background:#8EC431;"></div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="template-search">' +
+                    '<input type="text" id="template-search-input" placeholder="Search suppliers..." oninput="filterTemplateList(this.value)" />' +
+                  '</div>' +
+                  '<div id="template-supplier-list" class="template-list"></div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+
+      /* Re-load templates into the fresh modal DOM */
+      loadTemplates();
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settings-modal-root').innerHTML = '';
+    }
+
+    function toggleTemplatesSection() {
+      var header = document.getElementById('templates-toggle');
+      var body = document.getElementById('templates-body');
+      if (!header || !body) return;
+      header.classList.toggle('open');
+      body.classList.toggle('open');
     }
 
     /* ── Fetch HubSpot Owners ── */
@@ -1392,14 +1487,17 @@
         _allTemplateSuppliers = data.suppliers || [];
         renderTemplateList(_allTemplateSuppliers, data.trained_count, data.total_count);
       } catch(e) {
-        document.getElementById('template-progress-label').textContent = 'Failed to load suppliers';
+        var el = document.getElementById('template-progress-label');
+        if (el) el.textContent = 'Failed to load suppliers';
       }
     }
 
     function renderTemplateList(suppliers, trainedCount, totalCount) {
       var pct = totalCount > 0 ? Math.round((trainedCount / totalCount) * 100) : 0;
-      document.getElementById('template-progress-label').textContent = trainedCount + '/' + totalCount + ' suppliers trained';
-      document.getElementById('template-progress-fill').style.width = pct + '%';
+      var progLabel = document.getElementById('template-progress-label');
+      var progFill = document.getElementById('template-progress-fill');
+      if (progLabel) progLabel.textContent = trainedCount + '/' + totalCount + ' suppliers trained';
+      if (progFill) progFill.style.width = pct + '%';
 
       var sorted = suppliers.slice().sort(function(a, b) {
         if (a.trained !== b.trained) return a.trained ? 1 : -1;
@@ -1407,6 +1505,7 @@
       });
 
       var container = document.getElementById('template-supplier-list');
+      if (!container) return;
       container.innerHTML = sorted.map(function(s) {
         var badge = s.trained
           ? '<span class="badge-trained">Trained</span>'
