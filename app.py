@@ -1031,7 +1031,6 @@ def hubspot_create_deal():
         "amount": str(amount),
         "dealstage": "closedwon",
         "pipeline": "default",
-        "hs_is_closed_won": "true",
         "description": description,
     }
     if owner_id:
