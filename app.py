@@ -5,9 +5,15 @@ import json
 import os
 import re
 import urllib.request
-from datetime import datetime
+from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 import anthropic
 from reportlab.lib import colors
@@ -813,6 +819,246 @@ def get_brokers():
 def broker_address():
     name = request.args.get("name", "")
     return jsonify({"name": name, "address": BROKERS.get(name, "")})
+
+
+# ─── HubSpot integration ─────────────────────────────────────────────────────
+
+HUBSPOT_TOKEN = os.environ.get("HUBSPOT_TOKEN", "")
+HUBSPOT_PORTAL_ID = os.environ.get("HUBSPOT_PORTAL_ID", "26464920")
+HUBSPOT_BASE = "https://api.hubapi.com/crm/v3"
+HUBSPOT_APP_BASE = "https://app-eu1.hubspot.com"
+
+_cached_owner_id = None  # Cache Nathan Malone's owner ID
+
+
+def _hs_headers():
+    return {
+        "Authorization": f"Bearer {HUBSPOT_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+
+def _hs_request(method, path, body=None):
+    """Make a HubSpot API request. Returns (status_code, parsed_json)."""
+    url = f"{HUBSPOT_BASE}{path}"
+    data = json.dumps(body).encode() if body else None
+    req = urllib.request.Request(url, data=data, headers=_hs_headers(), method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.status, json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = json.loads(e.read().decode())
+        except Exception:
+            err_body = {"message": str(e)}
+        return e.code, err_body
+
+
+@app.route("/hubspot/owners", methods=["GET"])
+def hubspot_owners():
+    """Fetch all HubSpot owners. Also caches Nathan Malone's ID."""
+    global _cached_owner_id
+    status, data = _hs_request("GET", "/owners?limit=100")
+    if status != 200:
+        return jsonify({"error": data.get("message", "Failed to fetch owners"), "status": status}), status
+
+    owners = []
+    for o in data.get("results", []):
+        name = f"{o.get('firstName', '')} {o.get('lastName', '')}".strip()
+        oid = o.get("id")
+        owners.append({"id": oid, "name": name, "email": o.get("email", "")})
+        if name.lower() == "nathan malone":
+            _cached_owner_id = oid
+
+    return jsonify({"owners": owners, "nathan_id": _cached_owner_id})
+
+
+@app.route("/hubspot/create-deal", methods=["POST"])
+def hubspot_create_deal():
+    """
+    Full deal creation flow:
+    1. Resolve owner ID
+    2. Search for company
+    3. Search for contact
+    4. Create deal
+    5. Associate company/contact
+    6. Create line items
+    """
+    global _cached_owner_id
+    payload = request.get_json(silent=True) or {}
+
+    deal_name = payload.get("deal_name", "Untitled Deal")
+    amount = payload.get("amount", 0)
+    po_number = payload.get("po_number", "")
+    supplier_name = payload.get("supplier_name", "")
+    line_items = payload.get("line_items", [])
+    description = payload.get("description", "")
+
+    today_iso = date.today().isoformat()
+
+    # Step 1 — Resolve Nathan Malone's owner ID
+    owner_id = _cached_owner_id
+    if not owner_id:
+        status, data = _hs_request("GET", "/owners?limit=100")
+        if status == 200:
+            for o in data.get("results", []):
+                name = f"{o.get('firstName', '')} {o.get('lastName', '')}".strip()
+                if name.lower() == "nathan malone":
+                    owner_id = o.get("id")
+                    _cached_owner_id = owner_id
+                    break
+        elif status == 401:
+            return jsonify({"error": "HubSpot authentication failed — check your API token"}), 401
+
+    # Step 2 — Search for existing company
+    company_id = None
+    company_name_found = None
+    if supplier_name:
+        search_body = {
+            "filterGroups": [{
+                "filters": [{
+                    "propertyName": "name",
+                    "operator": "CONTAINS_TOKEN",
+                    "value": supplier_name.split()[0] if supplier_name.split() else supplier_name,
+                }]
+            }],
+            "properties": ["name"],
+            "limit": 10,
+        }
+        status, data = _hs_request("POST", "/objects/companies/search", search_body)
+        if status == 200:
+            supplier_lower = supplier_name.lower()
+            for comp in data.get("results", []):
+                comp_name = (comp.get("properties", {}).get("name") or "").lower()
+                if supplier_lower in comp_name or comp_name in supplier_lower:
+                    company_id = comp["id"]
+                    company_name_found = comp.get("properties", {}).get("name")
+                    break
+            # If no fuzzy match, try the first result as a fallback
+            if not company_id and data.get("results"):
+                company_id = data["results"][0]["id"]
+                company_name_found = data["results"][0].get("properties", {}).get("name")
+
+    # Step 3 — Search for existing contact
+    contact_id = None
+    if supplier_name:
+        contact_body = {
+            "filterGroups": [{
+                "filters": [{
+                    "propertyName": "company",
+                    "operator": "CONTAINS_TOKEN",
+                    "value": supplier_name.split()[0] if supplier_name.split() else supplier_name,
+                }]
+            }],
+            "properties": ["firstname", "lastname", "company"],
+            "limit": 5,
+        }
+        status, data = _hs_request("POST", "/objects/contacts/search", contact_body)
+        if status == 200 and data.get("results"):
+            contact_id = data["results"][0]["id"]
+
+    # Step 4 — Create the deal
+    deal_properties = {
+        "dealname": deal_name,
+        "createdate": today_iso,
+        "closedate": today_iso,
+        "amount": str(amount),
+        "dealstage": "closedwon",
+        "pipeline": "default",
+        "hs_is_closed_won": "true",
+        "description": description,
+    }
+    if owner_id:
+        deal_properties["hubspot_owner_id"] = owner_id
+    if po_number:
+        deal_properties["po_number"] = po_number
+
+    status, data = _hs_request("POST", "/objects/deals", {"properties": deal_properties})
+
+    if status == 401:
+        return jsonify({"error": "HubSpot authentication failed — check your API token"}), 401
+    if status == 429:
+        return jsonify({"error": "HubSpot rate limit exceeded — please wait a moment and retry"}), 429
+
+    # Check for po_number property error
+    if status != 201:
+        err_msg = data.get("message", "")
+        if "po_number" in err_msg.lower() or "property" in err_msg.lower():
+            # Retry without po_number
+            deal_properties.pop("po_number", None)
+            status, data = _hs_request("POST", "/objects/deals", {"properties": deal_properties})
+            if status == 201:
+                po_number_warning = "Custom property 'po_number' not found — create it in HubSpot under Settings → Properties → Deal properties, then retry"
+            else:
+                return jsonify({"error": data.get("message", "Failed to create deal"), "status": status}), status
+        else:
+            return jsonify({"error": data.get("message", "Failed to create deal"), "status": status}), status
+    else:
+        po_number_warning = None
+
+    deal_id = data["id"]
+
+    # Step 5 — Associate company and contact
+    association_errors = []
+    if company_id:
+        assoc_status, assoc_data = _hs_request(
+            "PUT",
+            f"/objects/deals/{deal_id}/associations/companies/{company_id}/deal_to_company",
+            None,
+        )
+        if assoc_status not in (200, 201):
+            association_errors.append(f"Company association failed: {assoc_data.get('message', '')}")
+
+    if contact_id:
+        assoc_status, assoc_data = _hs_request(
+            "PUT",
+            f"/objects/deals/{deal_id}/associations/contacts/{contact_id}/deal_to_contact",
+            None,
+        )
+        if assoc_status not in (200, 201):
+            association_errors.append(f"Contact association failed: {assoc_data.get('message', '')}")
+
+    # Step 6 — Create line items
+    line_item_ids = []
+    for item in line_items:
+        li_body = {
+            "properties": {
+                "name": item.get("description", "Item"),
+                "quantity": str(item.get("quantity", 1)),
+                "price": str(item.get("unit_price", 0)),
+                "hs_product_id": None,
+            }
+        }
+        # Remove None values
+        li_body["properties"] = {k: v for k, v in li_body["properties"].items() if v is not None}
+
+        li_status, li_data = _hs_request("POST", "/objects/line_items", li_body)
+        if li_status in (200, 201):
+            li_id = li_data["id"]
+            line_item_ids.append(li_id)
+            # Associate line item to deal
+            _hs_request(
+                "PUT",
+                f"/objects/deals/{deal_id}/associations/line_items/{li_id}/deal_to_line_item",
+                None,
+            )
+
+    result = {
+        "success": True,
+        "deal_id": deal_id,
+        "deal_url": f"{HUBSPOT_APP_BASE}/contacts/{HUBSPOT_PORTAL_ID}/deal/{deal_id}",
+        "company_found": company_name_found,
+        "company_id": company_id,
+        "contact_id": contact_id,
+        "line_items_created": len(line_item_ids),
+        "owner_id": owner_id,
+    }
+    if po_number_warning:
+        result["po_number_warning"] = po_number_warning
+    if association_errors:
+        result["association_warnings"] = association_errors
+
+    return jsonify(result), 201
 
 
 if __name__ == "__main__":
