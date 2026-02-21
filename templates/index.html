@@ -253,21 +253,6 @@
       <div class="head">Extracted Order Data</div>
       <div class="body">
 
-        <!-- HubSpot connection test -->
-        <div style="margin-bottom:14px;">
-          <button id="btn-hs-test" type="button" onclick="testHubSpotConnection()"
-                  style="background:#ff7a59; color:#fff; border:none; padding:12px 28px; border-radius:6px; font-size:15px; font-weight:700; cursor:pointer; width:100%; letter-spacing:.3px;">
-            Test HubSpot Connection
-          </button>
-          <pre id="hs-test-output" class="hidden"
-               style="margin-top:10px; background:#0d1b28; border:1px solid #2a4054; border-radius:6px; padding:14px; color:#c8dce8; font-size:12px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:400px; overflow:auto;"></pre>
-        </div>
-
-        <!-- Reset button -->
-        <div style="margin-bottom:14px;">
-          <button class="btn-outline" type="button" onclick="resetToUpload()">&larr; Convert Another Purchase Order</button>
-        </div>
-
         <!-- Document header -->
         <div class="doc-header">
           <h2 id="doc-title">Purchase Order</h2>
@@ -356,15 +341,12 @@
 
         <!-- Action bar -->
         <div style="margin-top:18px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button id="btn-download" class="btn" type="button" onclick="downloadReviewPDF()">Download PDF</button>
-          <button class="btn" type="button" onclick="saveReview()">Save Review</button>
-          <button class="btn-outline" type="button" onclick="copyAllToClipboard()">Copy All Data</button>
+          <button id="btn-csv" class="btn" type="button" onclick="downloadCSV()">Download as CSV</button>
           <button id="btn-hubspot" class="btn-hubspot" type="button" onclick="openHubSpotPreview()">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.83 11.41V7.55a2.2 2.2 0 0 0 1.27-1.98 2.22 2.22 0 0 0-2.22-2.22h-.04V1.5a.75.75 0 0 0-1.5 0v1.85h-.04a2.22 2.22 0 0 0-2.22 2.22c0 .9.54 1.67 1.31 2.01v3.83a5.1 5.1 0 0 0-2.53 1.27l-6.63-5.16a2.03 2.03 0 0 0 .05-.42 2.08 2.08 0 1 0-2.08 2.08c.4 0 .77-.12 1.09-.32l6.45 5.02a5.17 5.17 0 0 0 .42 5.53l-1.79 1.79a1.7 1.7 0 0 0-.5-.08 1.72 1.72 0 1 0 1.72 1.72c0-.17-.03-.34-.08-.5l1.76-1.76a5.18 5.18 0 1 0 5.96-8.52zM16.84 18a2.68 2.68 0 1 1 0-5.37 2.68 2.68 0 0 1 0 5.37z"/></svg>
             Send to HubSpot
           </button>
-          <span class="pill">Extracted PDF includes selected note type</span>
-          <span id="save-status" class="ok hidden">Review saved.</span>
+          <button class="btn-outline" type="button" onclick="resetToUpload()" style="margin-left:auto;">&larr; Convert Another Purchase Order</button>
         </div>
 
         <!-- HubSpot feedback banner area -->
@@ -378,7 +360,12 @@
       <div class="settings-card">
         <div class="head" style="background:#3d5a73; font-size:13px;">Settings</div>
         <div class="settings-body">
-          <button class="btn-outline" type="button" onclick="fetchHubSpotOwners()" id="btn-fetch-owners">Fetch HubSpot Owners</button>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+            <button class="btn-outline" type="button" onclick="fetchHubSpotOwners()" id="btn-fetch-owners">Fetch HubSpot Owners</button>
+            <button class="btn-outline" type="button" onclick="testHubSpotConnection()" id="btn-hs-test">Test HubSpot Connection</button>
+          </div>
+          <pre id="hs-test-output" class="hidden"
+               style="margin-top:10px; background:#0d1b28; border:1px solid #2a4054; border-radius:4px; padding:14px; color:#c8dce8; font-size:12px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:400px; overflow:auto;"></pre>
           <div id="owners-list-container" class="owners-list hidden"></div>
         </div>
       </div>
@@ -526,8 +513,6 @@
       if (elDocLabel) elDocLabel.textContent = '';
       var elAccErr = document.getElementById('account-error');
       if (elAccErr) elAccErr.classList.add('hidden');
-      var elSave = document.getElementById('save-status');
-      if (elSave) elSave.classList.add('hidden');
       var elBanner = document.getElementById('hs-banner-area');
       if (elBanner) elBanner.innerHTML = '';
       if (dropdown) dropdown.classList.remove('open');
@@ -806,110 +791,86 @@
       };
     }
 
-    /* ── Download PDF ── */
-    async function downloadReviewPDF() {
-      if (!validateAccount()) return;
-      const btn = document.getElementById('btn-download');
-      const origText = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Generating PDF…';
-      const payload = collectReviewPayload();
-      try {
-        const resp = await fetch('/download-review-pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({ error: 'Unable to download PDF' }));
-          throw new Error(err.error || 'Unable to download PDF');
-        }
-        const blob = await resp.blob();
-        if (blob.size === 0) throw new Error('Received empty PDF — please try again');
-        const disposition = resp.headers.get('Content-Disposition') || '';
-        const match = disposition.match(/filename[^;=\n]*=\s*(?:UTF-8''|"?)([^";\n]+)/i);
-        const filename = match ? decodeURIComponent(match[1].replace(/"/g, '')) : 'review.pdf';
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = filename;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
-        showToast('PDF downloaded successfully');
-      } catch (err) { alert(err.message); }
-      finally { btn.disabled = false; btn.textContent = origText; }
-    }
-
-    /* ── Save review ── */
-    async function saveReview() {
-      if (!validateAccount()) return;
-      const status = document.getElementById('save-status');
-      if (status) status.classList.add('hidden');
-      const payload = collectReviewPayload();
-      try {
-        const resp = await fetch('/save-review', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const json = await resp.json();
-        if (!resp.ok || json.error) throw new Error(json.error || 'Unable to save review');
-        window.lastReviewedPayload = json.data || payload;
-        if (status) {
-          status.textContent = json.message || 'Review saved.';
-          status.classList.remove('hidden');
-          setTimeout(() => { if (status) status.classList.add('hidden'); }, 2500);
-        }
-      } catch (err) { alert(err.message); }
-    }
-
-    /* ── Copy all data to clipboard ── */
-    function copyAllToClipboard() {
-      const payload = collectReviewPayload();
-      const labels = {
-        account_name: 'Account Name',
-        supplier_address: 'Bill To Address',
-        purchase_order_number: 'Purchase Order Number',
-        service_description: 'Service Description',
-        document_type: 'Document Type',
-        site_contact: 'Site Contact',
-        site_contact_number: 'Site Contact Number',
-        site_contact_email: 'Site Contact Email',
-        secondary_site_contact: 'Secondary Site Contact',
-        secondary_site_contact_number: 'Secondary Site Contact Number',
-        secondary_site_contact_email: 'Secondary Site Contact Email',
-        site_name: 'Site Name',
-        site_address: 'Site Address',
-        site_postcode: 'Site Postcode',
-        opening_times: 'Opening Times',
-        access: 'Access',
-        site_restrictions: 'Site Restrictions',
-        special_instructions: 'Special Instructions'
-      };
-      let text = Object.entries(labels)
-        .map(([key, label]) => `${label}: ${payload[key] || '-'}`)
-        .join('\n');
-
-      /* Append line items */
-      const items = payload.line_items || [];
-      if (items.length) {
-        text += '\n\nProducts & Services:';
-        items.forEach((item, i) => {
-          text += `\n  ${i + 1}. ${item.description || '-'} | Qty: ${item.quantity} | Unit: £${(item.unit_price || 0).toFixed(2)} | Total: £${(item.line_total || 0).toFixed(2)}`;
-        });
-        text += `\nOverall Total: £${(payload.overall_total || 0).toFixed(2)}`;
+    /* ── Download as CSV ── */
+    function csvEscape(val) {
+      var s = String(val == null ? '' : val);
+      if (s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1) {
+        return '"' + s.replace(/"/g, '""') + '"';
       }
+      return s;
+    }
 
-      navigator.clipboard.writeText(text).then(() => {
-        showToast('All data copied to clipboard');
-      }).catch(() => {
-        /* Fallback for older browsers */
-        const ta = document.createElement('textarea');
-        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-        document.body.appendChild(ta); ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        showToast('All data copied to clipboard');
+    function downloadCSV() {
+      var payload = collectReviewPayload();
+      var items = payload.line_items || [];
+      var total = (payload.overall_total || 0).toFixed(2);
+      var rows = [];
+
+      /* Purchase Order Summary */
+      rows.push('PURCHASE ORDER SUMMARY');
+      rows.push('Field,Value');
+      rows.push('PO Number,' + csvEscape(payload.purchase_order_number || ''));
+      rows.push('Supplier,' + csvEscape(payload.account_name || payload.supplier || ''));
+      rows.push('Service Description,' + csvEscape(payload.service_description || ''));
+      rows.push('Document Type,' + csvEscape(payload.document_type || ''));
+      rows.push('Total Amount,' + csvEscape('\u00a3' + total));
+      rows.push('');
+
+      /* Line Items */
+      rows.push('LINE ITEMS');
+      rows.push('Item #,Description,Quantity,Unit Price,Line Total');
+      items.forEach(function(li, i) {
+        rows.push(
+          (i + 1) + ',' +
+          csvEscape(li.description || '') + ',' +
+          (li.quantity || 0) + ',' +
+          csvEscape('\u00a3' + (li.unit_price || 0).toFixed(2)) + ',' +
+          csvEscape('\u00a3' + (li.line_total || 0).toFixed(2))
+        );
       });
+      rows.push('');
+
+      /* Delivery Details */
+      rows.push('DELIVERY DETAILS');
+      rows.push('Site Name,' + csvEscape(payload.site_name || ''));
+      rows.push('Delivery Address,' + csvEscape(payload.site_address || ''));
+      rows.push('Site Postcode,' + csvEscape(payload.site_postcode || ''));
+      rows.push('Bill To Address,' + csvEscape(payload.supplier_address || ''));
+      rows.push('');
+
+      /* Contact Information */
+      rows.push('CONTACT INFORMATION');
+      rows.push('Site Contact,' + csvEscape(payload.site_contact || ''));
+      rows.push('Site Contact Number,' + csvEscape(payload.site_contact_number || ''));
+      rows.push('Site Contact Email,' + csvEscape(payload.site_contact_email || ''));
+      rows.push('Secondary Contact,' + csvEscape(payload.secondary_site_contact || ''));
+      rows.push('Secondary Contact Number,' + csvEscape(payload.secondary_site_contact_number || ''));
+      rows.push('Secondary Contact Email,' + csvEscape(payload.secondary_site_contact_email || ''));
+      rows.push('');
+
+      /* Notes */
+      rows.push('NOTES');
+      var notes = [
+        payload.opening_times ? 'Opening Times: ' + payload.opening_times : '',
+        payload.access ? 'Access: ' + payload.access : '',
+        payload.site_restrictions ? 'Site Restrictions: ' + payload.site_restrictions : '',
+        payload.special_instructions ? 'Special Instructions: ' + payload.special_instructions : ''
+      ].filter(Boolean).join('; ');
+      rows.push(csvEscape(notes || 'None'));
+
+      /* BOM + CSV content for proper Excel £ rendering */
+      var csvContent = '\uFEFF' + rows.join('\r\n');
+      var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      var filename = (uploadedFileName || 'purchase_order') + '_extracted.csv';
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+      showToast('CSV downloaded');
     }
 
     function showToast(msg) {
