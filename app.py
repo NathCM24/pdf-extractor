@@ -854,6 +854,13 @@ def _hs_request(method, path, body=None):
         return e.code, err_body
 
 
+@app.route("/api/hubspot/test", methods=["GET"])
+def hubspot_test():
+    """Quick connectivity check: fetch account info from HubSpot."""
+    status, data = _hs_request("GET", "/owners?limit=1")
+    return jsonify({"ok": status == 200, "status": status, "data": data}), status if status != 200 else 200
+
+
 @app.route("/api/hubspot/owners", methods=["GET"])
 def hubspot_owners():
     """Fetch all HubSpot owners. Also caches Nathan Malone's ID."""
