@@ -857,8 +857,23 @@ def _hs_request(method, path, body=None):
 @app.route("/api/hubspot/test", methods=["GET"])
 def hubspot_test():
     """Quick connectivity check: fetch account info from HubSpot."""
+    if not HUBSPOT_TOKEN:
+        return jsonify({
+            "ok": False,
+            "error": "HUBSPOT_TOKEN environment variable is not set. "
+                     "Set it in your hosting platform (e.g. Railway) environment variables.",
+        }), 500
+
+    # Show masked token for debugging (first 8 + last 4 chars)
+    masked = HUBSPOT_TOKEN[:8] + "***" + HUBSPOT_TOKEN[-4:] if len(HUBSPOT_TOKEN) > 12 else "***"
+
     status, data = _hs_request("GET", "/owners?limit=1")
-    return jsonify({"ok": status == 200, "status": status, "data": data}), status if status != 200 else 200
+    return jsonify({
+        "ok": status == 200,
+        "status": status,
+        "token_preview": masked,
+        "data": data,
+    }), status if status != 200 else 200
 
 
 @app.route("/api/hubspot/owners", methods=["GET"])
@@ -1016,7 +1031,6 @@ def hubspot_create_deal():
         "amount": str(amount),
         "dealstage": "closedwon",
         "pipeline": "default",
-        "hs_is_closed_won": "true",
         "description": description,
     }
     if owner_id:
