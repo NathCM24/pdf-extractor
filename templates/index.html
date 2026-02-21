@@ -88,15 +88,26 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 48px 20px;
-      background: #253a4d;
-      border-radius: 4px;
-      border: 1px solid #2f4a60;
-      box-shadow: 0 2px 12px rgba(0,0,0,.25);
+      padding: 32px 20px;
       margin-bottom: 16px;
     }
-    #lottie-player { width: 220px; height: 220px; }
-    .loading-text { margin: 12px 0 0; font-size: 14px; color: #8a9bb0; }
+    #lottie-player { width: 320px; height: 320px; }
+    .loading-text { margin: 4px 0 0; font-size: 14px; color: #8a9bb0; text-align: center; line-height: 1.5; }
+    .loading-text em { font-style: italic; }
+
+    /* --- Progress bar --- */
+    .progress-wrap { width: 320px; margin-top: 16px; text-align: center; }
+    .progress-pct { font-size: 13px; font-weight: 700; color: #8a9bb0; margin-bottom: 6px; }
+    .progress-track {
+      width: 100%; height: 8px; background: #2f4a60; border-radius: 4px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; width: 0%; background: #8ec431; border-radius: 4px;
+      transition: width .3s ease;
+    }
+
+    /* --- Brand subtitle --- */
+    .brand-subtitle { font-size: 11px; color: #5a7a94; margin-top: 4px; }
 
     /* --- Fade-in animation --- */
     .fade-in {
@@ -156,6 +167,7 @@
   <div class="wrap">
     <div class="brand">
       <img src="https://i0.wp.com/wasteexperts.co.uk/wp-content/uploads/2022/11/green-grey-logo-1080.png?w=1920&amp;ssl=1" alt="Waste Experts logo" />
+      <p class="brand-subtitle">Made with 💚 by Marketing</p>
     </div>
 
     <!-- Upload card -->
@@ -174,7 +186,11 @@
     <!-- Lottie loading state -->
     <div id="loading" class="lottie-loading hidden">
       <div id="lottie-player"></div>
-      <p class="loading-text">Loading document...</p>
+      <p class="loading-text" id="loading-text"></p>
+      <div class="progress-wrap">
+        <div class="progress-pct" id="progress-pct">0%</div>
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+      </div>
     </div>
 
     <!-- Extracted data card -->
@@ -287,10 +303,12 @@
     /* ── Lottie animation data & setup ── */
     const scanAnimation = {"v":"5.5.7","meta":{"g":"LottieFiles AE 0.1.20","a":"","k":"","d":"","tc":"#ffffff"},"fr":60,"ip":0,"op":227,"w":600,"h":600,"nm":"Artboard","ddd":0,"assets":[{"id":"comp_0","layers":[{"ddd":0,"ind":1,"ty":4,"nm":"Rectangle Copy 10","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[274,400.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[128,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.21960799396,0.545098006725,0.929412007332,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle Copy 3","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":2,"ty":4,"nm":"Rectangle Copy 9","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[368.5,302.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[41,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.21960799396,0.545098006725,0.929412007332,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle Copy 5","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":3,"ty":4,"nm":"Rectangle Copy 8","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[348.5,351.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[81,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.21960799396,0.545098006725,0.929412007332,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle Copy 4","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":4,"ty":4,"nm":"Rectangle Copy 7","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[249,351.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[78,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.21960799396,0.545098006725,0.929412007332,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle Copy 2","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":5,"ty":4,"nm":"Rectangle Copy 6","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[270.5,302.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[121,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.21960799396,0.545098006725,0.929412007332,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle Copy","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":6,"ty":4,"nm":"Rectangle 3","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[255,234.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[90,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.21960799396,0.545098006725,0.929412007332,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":7,"ty":4,"nm":"Rectangle 2","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[299.89,304.75,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[245.78,319.5],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":19,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[1,1,1,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle","np":2,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0}]},{"id":"comp_1","layers":[{"ddd":0,"ind":1,"ty":4,"nm":"Rectangle Copy 3","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[274,400.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[128,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.882352941176,0.913725490196,0.949019607843,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle Copy 3","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":2,"ty":4,"nm":"Rectangle Copy 5","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[368.5,302.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[41,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.882352941176,0.913725490196,0.949019607843,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle Copy 5","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":3,"ty":4,"nm":"Rectangle Copy 4","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[348.5,351.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[81,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.882352941176,0.913725490196,0.949019607843,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle Copy 4","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":4,"ty":4,"nm":"Rectangle Copy 2","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[249,351.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[78,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.882352941176,0.913725490196,0.949019607843,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle Copy 2","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":5,"ty":4,"nm":"Rectangle Copy","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[270.5,302.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[121,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.882352941176,0.913725490196,0.949019607843,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle Copy","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":6,"ty":4,"nm":"Rectangle","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[255,234.5,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[90,25],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":12.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.882352941176,0.913725490196,0.949019607843,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle","np":3,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":7,"ty":4,"nm":"Rectangle","sr":1,"ks":{"o":{"a":0,"k":60,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[299.89,304.75,0],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[245.78,319.5],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":19,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[1,1,1,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle","np":2,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0}]}],"layers":[{"ddd":0,"ind":1,"ty":4,"nm":"Rectangle","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":1,"k":[{"i":{"x":0.376,"y":1},"o":{"x":0.275,"y":0},"t":0,"s":[300,485.5,0],"to":[0,-60,0],"ti":[0,0,0]},{"i":{"x":0.725,"y":1},"o":{"x":0.632,"y":0},"t":110,"s":[300,125.5,0],"to":[0,0,0],"ti":[0,-60,0]},{"t":220,"s":[300,485.5,0]}],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[300,9],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":4.5,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"fl","c":{"a":0,"k":[0.094117999077,0.439215987921,0.843137025833,1],"ix":4},"o":{"a":0,"k":100,"ix":5},"r":1,"bm":0,"nm":"Fill 1","mn":"ADBE Vector Graphic - Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle","np":2,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":2,"ty":4,"nm":"bottom-grad","sr":1,"ks":{"o":{"a":1,"k":[{"i":{"x":[0.667],"y":[1]},"o":{"x":[0.333],"y":[0]},"t":120,"s":[0]},{"i":{"x":[0.667],"y":[1]},"o":{"x":[0.333],"y":[0]},"t":152,"s":[40]},{"i":{"x":[0.667],"y":[1]},"o":{"x":[0.333],"y":[0]},"t":199,"s":[40]},{"t":218,"s":[0]}],"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":1,"k":[{"i":{"x":0.374,"y":1},"o":{"x":0.274,"y":0},"t":1,"s":[300,463.5,0],"to":[0,-52.833,0],"ti":[0,-7.167,0]},{"i":{"x":0.726,"y":1},"o":{"x":0.621,"y":0},"t":111,"s":[300,146.5,0],"to":[0,7.167,0],"ti":[0,-60,0]},{"t":221,"s":[300,506.5,0]}],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,-100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[300,45],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":0,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"gf","o":{"a":0,"k":100,"ix":10},"r":1,"bm":0,"g":{"p":3,"k":{"a":0,"k":[0,0.094,0.439,0.843,0.5,0.094,0.439,0.843,1,0.094,0.439,0.843,0,0,0.252,0.2,0.505,0.4,0.752,0.7,1,1],"ix":9}},"s":{"a":0,"k":[0,-22.5],"ix":5},"e":{"a":0,"k":[0,22.5],"ix":6},"t":1,"nm":"Gradient Fill 1","mn":"ADBE Vector Graphic - G-Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle","np":2,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":3,"ty":4,"nm":"top-grad","sr":1,"ks":{"o":{"a":1,"k":[{"i":{"x":[0.833],"y":[1]},"o":{"x":[0.167],"y":[0]},"t":0,"s":[0]},{"i":{"x":[0.667],"y":[1]},"o":{"x":[0.333],"y":[0]},"t":14,"s":[40]},{"i":{"x":[0.667],"y":[1]},"o":{"x":[0.333],"y":[0]},"t":89,"s":[40]},{"i":{"x":[0.833],"y":[1]},"o":{"x":[0.333],"y":[0]},"t":108,"s":[0]},{"t":221,"s":[0]}],"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":1,"k":[{"i":{"x":0.376,"y":1},"o":{"x":0.271,"y":0},"t":1,"s":[300,463.5,0],"to":[0,-60,0],"ti":[0,0,0]},{"i":{"x":0.725,"y":1},"o":{"x":0.632,"y":0},"t":111,"s":[300,103.5,0],"to":[0,0,0],"ti":[0,-60,0]},{"t":221,"s":[300,463.5,0]}],"ix":2},"a":{"a":0,"k":[0,0,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"shapes":[{"ty":"gr","it":[{"ty":"rc","d":1,"s":{"a":0,"k":[300,45],"ix":2},"p":{"a":0,"k":[0,0],"ix":3},"r":{"a":0,"k":0,"ix":4},"nm":"Rectangle Path 1","mn":"ADBE Vector Shape - Rect","hd":false},{"ty":"gf","o":{"a":0,"k":100,"ix":10},"r":1,"bm":0,"g":{"p":3,"k":{"a":0,"k":[0,0.094,0.439,0.843,0.5,0.094,0.439,0.843,1,0.094,0.439,0.843,0,0,0.252,0.2,0.505,0.4,0.752,0.7,1,1],"ix":9}},"s":{"a":0,"k":[0,-22.5],"ix":5},"e":{"a":0,"k":[0,22.5],"ix":6},"t":1,"nm":"Gradient Fill 1","mn":"ADBE Vector Graphic - G-Fill","hd":false},{"ty":"tr","p":{"a":0,"k":[0,0],"ix":2},"a":{"a":0,"k":[0,0],"ix":1},"s":{"a":0,"k":[100,100],"ix":3},"r":{"a":0,"k":0,"ix":6},"o":{"a":0,"k":100,"ix":7},"sk":{"a":0,"k":0,"ix":4},"sa":{"a":0,"k":0,"ix":5},"nm":"Transform"}],"nm":"Rectangle","np":2,"cix":2,"bm":0,"ix":1,"mn":"ADBE Vector Group","hd":false}],"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":4,"ty":0,"nm":"full","refId":"comp_0","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[300,300,0],"ix":2},"a":{"a":0,"k":[300,300,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"hasMask":true,"masksProperties":[{"inv":false,"mode":"i","pt":{"a":1,"k":[{"i":{"x":0.364,"y":1},"o":{"x":0.272,"y":0},"t":0,"s":[{"i":[[0,0],[0,0],[0,0],[0,0]],"o":[[0,0],[0,0],[0,0],[0,0]],"v":[[448.801,109],[153,109],[153,479.957],[448.801,479.957]],"c":true}]},{"i":{"x":0.73,"y":1},"o":{"x":0.631,"y":0},"t":110,"s":[{"i":[[0,0],[0,0],[0,0],[0,0]],"o":[[0,0],[0,0],[0,0],[0,0]],"v":[[448.801,109],[153,109],[153,129.957],[448.801,129.957]],"c":true}]},{"t":220,"s":[{"i":[[0,0],[0,0],[0,0],[0,0]],"o":[[0,0],[0,0],[0,0],[0,0]],"v":[[448.801,109],[153,109],[153,479.957],[448.801,479.957]],"c":true}]}],"ix":1},"o":{"a":0,"k":100,"ix":3},"x":{"a":0,"k":0,"ix":4},"nm":"Mask 1"}],"w":600,"h":600,"ip":0,"op":3600,"st":0,"bm":0},{"ddd":0,"ind":5,"ty":0,"nm":"trans","refId":"comp_1","sr":1,"ks":{"o":{"a":0,"k":100,"ix":11},"r":{"a":0,"k":0,"ix":10},"p":{"a":0,"k":[300,300,0],"ix":2},"a":{"a":0,"k":[300,300,0],"ix":1},"s":{"a":0,"k":[100,100,100],"ix":6}},"ao":0,"w":600,"h":600,"ip":0,"op":3600,"st":0,"bm":0}],"markers":[]};
 
-    /* Replace blue colors with #8EC431 (RGB 0.557, 0.769, 0.192 in 0-1 range) */
+    /* Replace all blue and green colors with grey #6B7280 (RGB 0.42, 0.447, 0.502) */
     (function recolorLottie(obj) {
-      const GREEN = [0.557, 0.769, 0.192];
+      var GREY = [0.42, 0.447, 0.502];
       function isBlue(r, g, b) { return b > 0.5 && b > r * 2; }
+      function isGreen(r, g, b) { return g > 0.5 && g > r * 1.2 && g > b * 1.2; }
+      function shouldReplace(r, g, b) { return isBlue(r, g, b) || isGreen(r, g, b); }
 
       function walk(node) {
         if (Array.isArray(node)) { node.forEach(walk); return; }
@@ -300,7 +318,7 @@
         if ((node.ty === 'fl' || node.ty === 'st') && node.c) {
           var k = node.c.k;
           if (Array.isArray(k) && k.length >= 4 && typeof k[0] === 'number') {
-            if (isBlue(k[0], k[1], k[2])) { k[0] = GREEN[0]; k[1] = GREEN[1]; k[2] = GREEN[2]; }
+            if (shouldReplace(k[0], k[1], k[2])) { k[0] = GREY[0]; k[1] = GREY[1]; k[2] = GREY[2]; }
           }
         }
 
@@ -311,8 +329,8 @@
           if (gk && gk.a === 0 && Array.isArray(gk.k)) {
             for (var i = 0; i < p; i++) {
               var base = i * 4;
-              if (isBlue(gk.k[base + 1], gk.k[base + 2], gk.k[base + 3])) {
-                gk.k[base + 1] = GREEN[0]; gk.k[base + 2] = GREEN[1]; gk.k[base + 3] = GREEN[2];
+              if (shouldReplace(gk.k[base + 1], gk.k[base + 2], gk.k[base + 3])) {
+                gk.k[base + 1] = GREY[0]; gk.k[base + 2] = GREY[1]; gk.k[base + 3] = GREY[2];
               }
             }
           }
@@ -692,13 +710,51 @@
       setTimeout(() => toast.classList.remove('show'), 2000);
     }
 
+    /* ── Progress bar helpers ── */
+    var progressTimer = null;
+    var currentProgress = 0;
+
+    function startProgress() {
+      currentProgress = 0;
+      updateProgressUI(0);
+      progressTimer = setInterval(function() {
+        /* Ease towards 90% — slows as it approaches */
+        var remaining = 90 - currentProgress;
+        currentProgress += remaining * 0.03;
+        if (currentProgress > 89.5) currentProgress = 90;
+        updateProgressUI(currentProgress);
+        if (currentProgress >= 90) clearInterval(progressTimer);
+      }, 200);
+    }
+
+    function finishProgress() {
+      clearInterval(progressTimer);
+      currentProgress = 100;
+      updateProgressUI(100);
+    }
+
+    function resetProgress() {
+      clearInterval(progressTimer);
+      currentProgress = 0;
+      updateProgressUI(0);
+    }
+
+    function updateProgressUI(pct) {
+      var rounded = Math.round(pct);
+      document.getElementById('progress-pct').textContent = rounded + '%';
+      document.getElementById('progress-fill').style.width = rounded + '%';
+    }
+
     /* ── Upload & extract ── */
     async function uploadAndExtract(file) {
       document.getElementById('file-label').textContent = file.name;
+      document.getElementById('loading-text').innerHTML =
+        "We're attempting to read <em>" + file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;') + "</em>. Hold tight!";
       document.getElementById('loading').classList.remove('hidden');
       document.getElementById('edit').classList.add('hidden');
       document.getElementById('edit').classList.remove('fade-in');
       if (lottieAnim) lottieAnim.goToAndPlay(0, true);
+      startProgress();
 
       const fd = new FormData();
       fd.append('pdf', file);
@@ -707,6 +763,7 @@
         const resp = await fetch('/extract', { method: 'POST', body: fd });
         const json = await resp.json();
         if (!resp.ok || json.error) throw new Error(json.error || 'Extraction failed');
+        finishProgress();
         fillForm(json.data || {});
         document.getElementById('edit').classList.remove('hidden');
         /* Trigger fade-in on next frame */
@@ -716,8 +773,11 @@
       } catch (err) {
         alert(err.message);
       } finally {
+        /* Brief delay so user sees 100% before hiding */
+        await new Promise(function(r) { setTimeout(r, 400); });
         document.getElementById('loading').classList.add('hidden');
         if (lottieAnim) lottieAnim.stop();
+        resetProgress();
       }
     }
 
