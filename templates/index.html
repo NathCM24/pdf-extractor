@@ -11,7 +11,7 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { font-family: 'Montserrat', sans-serif; margin: 0; background: #1e2e3d; color: #e8ecf1; }
-    .wrap { max-width: 980px; margin: 24px auto 48px; padding: 0 16px; }
+    .wrap { max-width: 980px; margin: 24px auto 48px; padding: 0 16px; position: relative; }
     .brand { text-align: center; margin: 6px 0 18px; }
     .brand img { max-width: 224px; width: 100%; height: auto; }
 
@@ -122,7 +122,7 @@
     /* --- Section headers inside the result card --- */
     .section-title {
       font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
-      color: #fff; border-bottom: 2px solid #8ec431; padding-bottom: 4px;
+      color: #fff; border-bottom: 2px solid #5a7a94; padding-bottom: 4px;
       margin: 18px 0 10px; grid-column: 1 / -1;
     }
     .section-title:first-child { margin-top: 0; }
@@ -189,14 +189,29 @@
     .hs-banner .hs-banner-close { margin-left: auto; cursor: pointer; opacity: .7; }
     .hs-banner .hs-banner-close:hover { opacity: 1; }
 
-    /* --- Settings gear icon in header --- */
-    .head-with-gear { display: flex; align-items: center; justify-content: space-between; position: relative; }
-    .settings-gear {
-      background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center;
-      color: rgba(255,255,255,.85); transition: opacity .2s, transform .3s;
+    /* --- Persistent settings gear icon (always visible) --- */
+    .persistent-gear {
+      position: absolute; top: 10px; right: 16px; z-index: 100;
+      background: none; border: none; padding: 4px; cursor: pointer;
+      display: flex; align-items: center;
+      color: #5a7a94; transition: opacity .2s, transform .3s;
     }
-    .settings-gear:hover { opacity: .7; transform: rotate(45deg); }
-    .settings-gear svg { width: 20px; height: 20px; }
+    .persistent-gear:hover { opacity: .7; transform: rotate(45deg); }
+    .persistent-gear svg { width: 22px; height: 22px; }
+
+    /* --- Document Type row (styled as line item) --- */
+    .doc-type-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid #2f4a60;
+    }
+    .doc-type-row .dt-label {
+      font-size: 13px; font-weight: 700; color: #8ec431;
+    }
+    .doc-type-row select {
+      max-width: 220px; border: 1px solid #3d5a73; border-radius: 4px;
+      padding: 8px 10px; font-size: 13px; font-family: 'Montserrat', sans-serif;
+      background: #1e2e3d; color: #e8ecf1;
+    }
 
     /* --- Settings card --- */
     .settings-card { background: #253a4d; border-radius: 4px; border: 1px solid #2f4a60; margin-bottom: 16px; }
@@ -294,7 +309,7 @@
     .train-grid select option { background: #1e2e3d; color: #e8ecf1; }
     .train-section-title {
       font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
-      color: #fff; border-bottom: 2px solid #8ec431; padding-bottom: 4px;
+      color: #fff; border-bottom: 2px solid #5a7a94; padding-bottom: 4px;
       margin: 14px 0 8px; grid-column: 1 / -1;
     }
     .train-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; }
@@ -328,6 +343,11 @@
 </head>
 <body>
   <div class="wrap">
+    <!-- Persistent settings gear — always visible in all states -->
+    <button class="persistent-gear" type="button" onclick="toggleSettings()" title="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+
     <div class="brand">
       <img src="https://i0.wp.com/wasteexperts.co.uk/wp-content/uploads/2022/11/green-grey-logo-1080.png?w=1920&amp;ssl=1" alt="Waste Experts logo" />
       <h1 class="brand-title">Improving Efficiency, Reducing Input</h1>
@@ -337,12 +357,7 @@
     <div id="state-container">
     <!-- Upload card -->
     <div id="upload-card" class="card">
-      <div class="head head-with-gear">
-        <span>Upload Purchase Order PDF</span>
-        <button class="settings-gear" type="button" onclick="toggleSettings()" title="Settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </button>
-      </div>
+      <div class="head">Upload Purchase Order PDF</div>
       <div class="body">
         <div id="drop-zone" class="drop">
           <p><strong>Drop a PDF here</strong> or choose a file</p>
@@ -398,19 +413,20 @@
             <textarea id="supplier_address" placeholder="Supplier address will appear here"></textarea>
           </div>
 
-          <div class="field">
-            <label>Document Type</label>
-            <select id="document_type" class="hl">
-              <option>Consignment Note</option>
-              <option>Waste Transfer Note</option>
-            </select>
-          </div>
-
           <!-- ===== Products & Services ===== -->
           <div class="section-title">Products &amp; Services</div>
 
           <div class="full" id="line-items-container">
             <!-- Line item rows are injected here by JS -->
+          </div>
+
+          <!-- Document Type as permanent line item row -->
+          <div class="full doc-type-row">
+            <span class="dt-label">Document Type</span>
+            <select id="document_type">
+              <option>Consignment Note</option>
+              <option>Waste Transfer Note</option>
+            </select>
           </div>
 
           <div class="full" style="display:flex; gap:10px; align-items:center; margin-bottom:4px;">
@@ -503,8 +519,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Settings toggle (gear icon in upload header) -->
 
   <!-- HubSpot preview modal (injected dynamically) -->
   <div id="hs-modal-root"></div>

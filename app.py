@@ -33,8 +33,12 @@ LAST_REVIEW_PAYLOAD = {}
 SCRIPT_DIR = Path(__file__).parent
 
 # ─── Supplier template storage ────────────────────────────────────────────────
-
-TEMPLATES_FILE = SCRIPT_DIR / "supplier_templates.json"
+# Use TEMPLATES_DIR env var to point to a persistent volume (e.g. Railway volume
+# mount at /data). Defaults to SCRIPT_DIR which works locally but is ephemeral
+# on platforms like Railway that rebuild containers on deploy.
+TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", str(SCRIPT_DIR)))
+TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+TEMPLATES_FILE = TEMPLATES_DIR / "supplier_templates.json"
 TRAINING_PDF_CACHE = {}  # supplier -> base64 pdf data (temporary, per-session)
 
 
@@ -1047,6 +1051,34 @@ def save_template():
     }
     _save_templates(templates)
 
+    return jsonify({"success": True, "supplier": supplier})
+
+
+@app.route("/api/templates", methods=["POST"])
+def create_template():
+    """Create a new supplier template (alias for /api/templates/save)."""
+    return save_template()
+
+
+@app.route("/api/templates/<path:supplier>", methods=["PUT"])
+def update_template(supplier):
+    """Update an existing supplier template."""
+    payload = request.get_json(silent=True) or {}
+    if not supplier or supplier not in BROKERS:
+        return jsonify({"error": "Invalid supplier name"}), 400
+
+    templates = _load_templates()
+    if supplier not in templates:
+        return jsonify({"error": "Template not found — use POST to create"}), 404
+
+    # Merge provided fields into existing template
+    existing = templates[supplier]
+    for key in ("layout_description", "field_locations",
+                "auto_extracted_fields", "manually_corrected_fields"):
+        if key in payload:
+            existing[key] = payload[key]
+    existing["trained_date"] = datetime.now().isoformat()
+    _save_templates(templates)
     return jsonify({"success": True, "supplier": supplier})
 
 
