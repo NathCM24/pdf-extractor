@@ -30,6 +30,28 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
 LAST_REVIEW_PAYLOAD = {}
 
+# ─── Supplier template storage ────────────────────────────────────────────────
+
+TEMPLATES_FILE = SCRIPT_DIR / "supplier_templates.json"
+TRAINING_PDF_CACHE = {}  # supplier -> base64 pdf data (temporary, per-session)
+
+
+def _load_templates():
+    """Load supplier templates from JSON file."""
+    if TEMPLATES_FILE.exists():
+        try:
+            with open(TEMPLATES_FILE, "r") as f:
+                return json.loads(f.read())
+        except (json.JSONDecodeError, IOError):
+            return {}
+    return {}
+
+
+def _save_templates(templates):
+    """Save supplier templates to JSON file."""
+    with open(TEMPLATES_FILE, "w") as f:
+        f.write(json.dumps(templates, indent=2))
+
 
 EXTRACT_PROMPT = f"""You are extracting data from a supplier purchase order PDF sent to Waste Logics.
 
@@ -77,6 +99,63 @@ RULES:
 - Return JSON only. No markdown. No explanation.
 """
 
+
+def _build_all_template_hints(templates):
+    """Build template hints for all trained suppliers to include in prompt."""
+    if not templates:
+        return ""
+    lines = [
+        "SUPPLIER TEMPLATE HINTS (after identifying the supplier, "
+        "use the matching hints below to guide extraction):"
+    ]
+    for supplier, tmpl in templates.items():
+        hints = []
+        if tmpl.get("layout_description"):
+            hints.append(tmpl["layout_description"])
+        for field, location in (tmpl.get("field_locations") or {}).items():
+            readable = field.replace("_", " ").title()
+            hints.append(f"{readable}: {location}")
+        if hints:
+            lines.append(f"\n{supplier}:")
+            for h in hints:
+                lines.append(f"  - {h}")
+    return "\n".join(lines)
+
+
+def _calculate_confidence(data, template):
+    """Calculate per-field confidence scores based on extraction and template."""
+    confidence = {}
+    fields = [
+        "purchase_order_number", "service_description",
+        "site_contact", "site_contact_number", "site_contact_email",
+        "secondary_site_contact", "secondary_site_contact_number",
+        "secondary_site_contact_email",
+        "site_name", "site_address", "site_postcode",
+        "opening_times", "access", "site_restrictions",
+        "special_instructions", "document_type",
+    ]
+    auto_fields = set(template.get("auto_extracted_fields", [])) if template else set()
+    corrected_fields = set(template.get("manually_corrected_fields", [])) if template else set()
+
+    for field in fields:
+        value = data.get(field)
+        has_value = value is not None and str(value).strip() != ""
+        if not has_value:
+            confidence[field] = "low"
+        elif template:
+            if field in auto_fields:
+                confidence[field] = "high"
+            elif field in corrected_fields:
+                confidence[field] = "medium"
+            else:
+                confidence[field] = "high"
+        else:
+            confidence[field] = "medium"
+
+    line_items = data.get("line_items", [])
+    confidence["line_items"] = ("high" if template else "medium") if line_items else "low"
+    confidence["overall_total"] = confidence["line_items"]
+    return confidence
 
 
 
@@ -782,7 +861,19 @@ def extract():
     b64_pdf = base64.standard_b64encode(pdf_bytes).decode()
     client = anthropic.Anthropic(api_key=api_key)
 
+    is_training = request.form.get("training") == "true"
+    training_supplier = request.form.get("training_supplier", "")
+
     try:
+        templates = _load_templates()
+
+        # Build prompt — include template hints when available
+        prompt = EXTRACT_PROMPT
+        if not is_training and templates:
+            hints = _build_all_template_hints(templates)
+            if hints:
+                prompt += "\n\n" + hints
+
         resp = client.messages.create(
             model="claude-opus-4-1",
             max_tokens=1800,
@@ -798,14 +889,31 @@ def extract():
                                 "data": b64_pdf,
                             },
                         },
-                        {"type": "text", "text": EXTRACT_PROMPT},
+                        {"type": "text", "text": prompt},
                     ],
                 }
             ],
         )
 
         parsed = _clean_json_payload(resp.content[0].text)
-        return jsonify({"success": True, "data": _normalise_data(parsed)})
+        normalised = _normalise_data(parsed)
+
+        # Cache PDF for training if applicable
+        if is_training and training_supplier:
+            TRAINING_PDF_CACHE[training_supplier] = b64_pdf
+
+        # Determine template status for the extracted supplier
+        supplier = normalised.get("supplier", "")
+        template = templates.get(supplier)
+        confidence = _calculate_confidence(normalised, template)
+
+        return jsonify({
+            "success": True,
+            "data": normalised,
+            "confidence": confidence,
+            "template_used": template is not None,
+            "supplier_trained": bool(supplier and supplier in templates),
+        })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -819,6 +927,136 @@ def get_brokers():
 def broker_address():
     name = request.args.get("name", "")
     return jsonify({"name": name, "address": BROKERS.get(name, "")})
+
+
+# ─── Supplier template management ─────────────────────────────────────────────
+
+
+@app.route("/api/templates", methods=["GET"])
+def get_templates():
+    """Return all suppliers with their template training status."""
+    templates = _load_templates()
+    suppliers = []
+    for name in BROKERS:
+        tmpl = templates.get(name)
+        suppliers.append({
+            "name": name,
+            "trained": tmpl is not None,
+            "trained_date": tmpl.get("trained_date") if tmpl else None,
+        })
+    trained_count = sum(1 for s in suppliers if s["trained"])
+    return jsonify({
+        "suppliers": suppliers,
+        "trained_count": trained_count,
+        "total_count": len(suppliers),
+    })
+
+
+@app.route("/api/templates/save", methods=["POST"])
+def save_template():
+    """Save a supplier template with corrected data and AI layout hints."""
+    payload = request.get_json(silent=True) or {}
+    supplier = (payload.get("supplier") or "").strip()
+    if not supplier or supplier not in BROKERS:
+        return jsonify({"error": "Invalid supplier name"}), 400
+
+    original_data = payload.get("original_data", {})
+    corrected_data = payload.get("corrected_data", {})
+
+    tracked_fields = [
+        "purchase_order_number", "service_description",
+        "site_contact", "site_contact_number", "site_contact_email",
+        "secondary_site_contact", "secondary_site_contact_number",
+        "secondary_site_contact_email",
+        "site_name", "site_address", "site_postcode",
+        "opening_times", "access", "site_restrictions",
+        "special_instructions", "document_type",
+    ]
+
+    auto_extracted = []
+    manually_corrected = []
+    for field in tracked_fields:
+        orig_val = str(original_data.get(field) or "").strip()
+        corr_val = str(corrected_data.get(field) or "").strip()
+        if corr_val:
+            if orig_val == corr_val:
+                auto_extracted.append(field)
+            else:
+                manually_corrected.append(field)
+
+    # Generate layout description using cached training PDF
+    layout_description = ""
+    field_locations = {}
+
+    b64_pdf = TRAINING_PDF_CACHE.pop(supplier, "")
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
+    if api_key and b64_pdf:
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+            layout_prompt = (
+                f"Analyze this PDF from {supplier} and describe the layout "
+                "for future extraction.\n\n"
+                f"The correct extracted data is:\n"
+                f"{json.dumps(corrected_data, indent=2)}\n\n"
+                "For each non-null field, describe WHERE in the PDF it was found. "
+                "Return JSON:\n"
+                "{\n"
+                '  "layout_description": "Brief overall layout (e.g. \'PO number '
+                "top-right, line items in center table, total at bottom')\",\n"
+                '  "field_locations": {\n'
+                '    "purchase_order_number": "location description",\n'
+                '    "site_contact": "location description"\n'
+                "  }\n"
+                "}\n\n"
+                "Be specific about positions (top-left, top-right, center, bottom) "
+                "and nearby labels.\nJSON only. No markdown."
+            )
+            layout_resp = client.messages.create(
+                model="claude-opus-4-1",
+                max_tokens=800,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "document",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "application/pdf",
+                                "data": b64_pdf,
+                            },
+                        },
+                        {"type": "text", "text": layout_prompt},
+                    ],
+                }],
+            )
+            layout_data = _clean_json_payload(layout_resp.content[0].text)
+            layout_description = layout_data.get("layout_description", "")
+            field_locations = layout_data.get("field_locations", {})
+        except Exception:
+            pass
+
+    templates = _load_templates()
+    templates[supplier] = {
+        "trained_date": datetime.now().isoformat(),
+        "layout_description": layout_description,
+        "field_locations": field_locations,
+        "auto_extracted_fields": auto_extracted,
+        "manually_corrected_fields": manually_corrected,
+    }
+    _save_templates(templates)
+
+    return jsonify({"success": True, "supplier": supplier})
+
+
+@app.route("/api/templates/<path:supplier>", methods=["DELETE"])
+def delete_template(supplier):
+    """Delete a supplier template."""
+    templates = _load_templates()
+    if supplier in templates:
+        del templates[supplier]
+        _save_templates(templates)
+    return jsonify({"success": True})
 
 
 # ─── HubSpot integration ─────────────────────────────────────────────────────
