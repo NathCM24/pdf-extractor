@@ -340,13 +340,18 @@
         </div>
 
         <!-- Action bar -->
-        <div style="margin-top:18px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button id="btn-csv" class="btn" type="button" onclick="downloadCSV()">Download as CSV</button>
-          <button id="btn-hubspot" class="btn-hubspot" type="button" onclick="openHubSpotPreview()">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.83 11.41V7.55a2.2 2.2 0 0 0 1.27-1.98 2.22 2.22 0 0 0-2.22-2.22h-.04V1.5a.75.75 0 0 0-1.5 0v1.85h-.04a2.22 2.22 0 0 0-2.22 2.22c0 .9.54 1.67 1.31 2.01v3.83a5.1 5.1 0 0 0-2.53 1.27l-6.63-5.16a2.03 2.03 0 0 0 .05-.42 2.08 2.08 0 1 0-2.08 2.08c.4 0 .77-.12 1.09-.32l6.45 5.02a5.17 5.17 0 0 0 .42 5.53l-1.79 1.79a1.7 1.7 0 0 0-.5-.08 1.72 1.72 0 1 0 1.72 1.72c0-.17-.03-.34-.08-.5l1.76-1.76a5.18 5.18 0 1 0 5.96-8.52zM16.84 18a2.68 2.68 0 1 1 0-5.37 2.68 2.68 0 0 1 0 5.37z"/></svg>
-            Send to HubSpot
-          </button>
-          <button class="btn-outline" type="button" onclick="resetToUpload()" style="margin-left:auto;">&larr; Convert Another Purchase Order</button>
+        <div style="margin-top:18px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button id="btn-download" class="btn" type="button" onclick="downloadReviewPDF()">Download PDF</button>
+            <button id="btn-csv" class="btn-outline" type="button" onclick="downloadCSV()">Download as CSV</button>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button id="btn-hubspot" class="btn-hubspot" type="button" onclick="openHubSpotPreview()">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.83 11.41V7.55a2.2 2.2 0 0 0 1.27-1.98 2.22 2.22 0 0 0-2.22-2.22h-.04V1.5a.75.75 0 0 0-1.5 0v1.85h-.04a2.22 2.22 0 0 0-2.22 2.22c0 .9.54 1.67 1.31 2.01v3.83a5.1 5.1 0 0 0-2.53 1.27l-6.63-5.16a2.03 2.03 0 0 0 .05-.42 2.08 2.08 0 1 0-2.08 2.08c.4 0 .77-.12 1.09-.32l6.45 5.02a5.17 5.17 0 0 0 .42 5.53l-1.79 1.79a1.7 1.7 0 0 0-.5-.08 1.72 1.72 0 1 0 1.72 1.72c0-.17-.03-.34-.08-.5l1.76-1.76a5.18 5.18 0 1 0 5.96-8.52zM16.84 18a2.68 2.68 0 1 1 0-5.37 2.68 2.68 0 0 1 0 5.37z"/></svg>
+              Send to HubSpot
+            </button>
+            <button class="btn-outline" type="button" onclick="resetToUpload()">&larr; Convert Another Purchase Order</button>
+          </div>
         </div>
 
         <!-- HubSpot feedback banner area -->
@@ -789,6 +794,39 @@
         line_items: items,
         overall_total: overallTotal
       };
+    }
+
+    /* ── Download PDF ── */
+    async function downloadReviewPDF() {
+      if (!validateAccount()) return;
+      const btn = document.getElementById('btn-download');
+      const origText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Generating PDF\u2026';
+      const payload = collectReviewPayload();
+      try {
+        const resp = await fetch('/download-review-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: 'Unable to download PDF' }));
+          throw new Error(err.error || 'Unable to download PDF');
+        }
+        const blob = await resp.blob();
+        if (blob.size === 0) throw new Error('Received empty PDF \u2014 please try again');
+        const disposition = resp.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename[^;=\n]*=\s*(?:UTF-8''|"?)([^";\n]+)/i);
+        const filename = match ? decodeURIComponent(match[1].replace(/"/g, '')) : 'review.pdf';
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        showToast('PDF downloaded successfully');
+      } catch (err) { alert(err.message); }
+      finally { btn.disabled = false; btn.textContent = origText; }
     }
 
     /* ── Download as CSV ── */
