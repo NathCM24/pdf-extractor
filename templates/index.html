@@ -13,7 +13,7 @@
     body { font-family: 'Montserrat', sans-serif; margin: 0; background: #1e2e3d; color: #e8ecf1; }
     .wrap { max-width: 980px; margin: 24px auto 48px; padding: 0 16px; }
     .brand { text-align: center; margin: 6px 0 18px; }
-    .brand img { max-width: 320px; width: 100%; height: auto; }
+    .brand img { max-width: 224px; width: 100%; height: auto; }
 
     /* --- Cards --- */
     .card { background: #253a4d; border-radius: 4px; box-shadow: 0 2px 12px rgba(0,0,0,.25); margin-bottom: 16px; border: 1px solid #2f4a60; }
@@ -107,7 +107,8 @@
     }
 
     /* --- Brand subtitle --- */
-    .brand-subtitle { font-size: 11px; color: #5a7a94; margin-top: 4px; }
+    .brand-subtitle { font-size: 11px; color: #5a7a94; margin-top: 6px; }
+    .brand-title { font-family: 'Montserrat', sans-serif; font-weight: 700; font-size: 28px; color: #e8ecf1; text-align: center; margin: 14px 0 4px; letter-spacing: -.3px; }
 
     /* --- Fade-in animation --- */
     .fade-in {
@@ -188,9 +189,16 @@
     .hs-banner .hs-banner-close { margin-left: auto; cursor: pointer; opacity: .7; }
     .hs-banner .hs-banner-close:hover { opacity: 1; }
 
+    /* --- Settings gear icon in header --- */
+    .head-with-gear { display: flex; align-items: center; justify-content: space-between; position: relative; }
+    .settings-gear {
+      background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center;
+      color: rgba(255,255,255,.85); transition: opacity .2s, transform .3s;
+    }
+    .settings-gear:hover { opacity: .7; transform: rotate(45deg); }
+    .settings-gear svg { width: 20px; height: 20px; }
+
     /* --- Settings card --- */
-    .settings-toggle { font-size: 12px; color: #5a7a94; cursor: pointer; text-align: center; margin-top: 8px; }
-    .settings-toggle:hover { color: #8aa3b8; }
     .settings-card { background: #253a4d; border-radius: 4px; border: 1px solid #2f4a60; margin-bottom: 16px; }
     .settings-body { padding: 16px 20px; }
     .owners-list { max-height: 200px; overflow-y: auto; font-size: 12px; margin-top: 10px; }
@@ -322,13 +330,19 @@
   <div class="wrap">
     <div class="brand">
       <img src="https://i0.wp.com/wasteexperts.co.uk/wp-content/uploads/2022/11/green-grey-logo-1080.png?w=1920&amp;ssl=1" alt="Waste Experts logo" />
+      <h1 class="brand-title">Improving Efficiency, Reducing Input</h1>
       <p class="brand-subtitle">Made with 💚 by Marketing</p>
     </div>
 
     <div id="state-container">
     <!-- Upload card -->
     <div id="upload-card" class="card">
-      <div class="head">Upload Purchase Order PDF</div>
+      <div class="head head-with-gear">
+        <span>Upload Purchase Order PDF</span>
+        <button class="settings-gear" type="button" onclick="toggleSettings()" title="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
       <div class="body">
         <div id="drop-zone" class="drop">
           <p><strong>Drop a PDF here</strong> or choose a file</p>
@@ -490,8 +504,7 @@
     </div>
   </div>
 
-  <!-- Settings toggle -->
-  <div class="settings-toggle" onclick="toggleSettings()">Settings</div>
+  <!-- Settings toggle (gear icon in upload header) -->
 
   <!-- HubSpot preview modal (injected dynamically) -->
   <div id="hs-modal-root"></div>
