@@ -30,6 +30,8 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
 LAST_REVIEW_PAYLOAD = {}
 
+SCRIPT_DIR = Path(__file__).parent
+
 # ─── Supplier template storage ────────────────────────────────────────────────
 
 TEMPLATES_FILE = SCRIPT_DIR / "supplier_templates.json"
@@ -192,7 +194,6 @@ BRAND_LOGO_URL = (
     "2022/11/green-grey-logo-1080.png?w=1920&ssl=1"
 )
 
-SCRIPT_DIR = Path(__file__).parent
 FONT_DIR = SCRIPT_DIR / "fonts"
 
 # Font names — overridden to Helvetica if Montserrat unavailable
