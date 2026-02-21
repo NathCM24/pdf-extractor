@@ -61,6 +61,13 @@
       transition: background .2s, color .2s;
     }
     .btn-outline:hover { background: rgba(142,196,49,.15); color: #a5d84e; }
+    .btn-debug {
+      border: 1px solid #4b5563; background: #374151; color: #9CA3AF;
+      border-radius: 4px; padding: 6px 12px; font-weight: 600;
+      cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 11px;
+      transition: background .2s;
+    }
+    .btn-debug:hover { background: #4b5563; }
     .pill { display: inline-block; background: rgba(142,196,49,.15); color: #8ec431; border: 1px solid #8ec431; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; }
     .hl { border: 2px solid #8ec431; box-shadow: 0 0 0 2px rgba(142,196,49,.15) inset; }
 
@@ -199,9 +206,10 @@
     .persistent-gear:hover { opacity: .7; transform: rotate(45deg); }
     .persistent-gear svg { width: 22px; height: 22px; }
 
-    /* --- Top navigation bar (green) --- */
+    /* --- Top navigation bar (matches detail card) --- */
     .top-nav {
-      background: #8ec431; border-radius: 4px; padding: 0 20px;
+      background: #253a4d; border: 1px solid #2f4a60; border-radius: 4px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.25); padding: 0 20px;
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 16px; min-height: 48px;
     }
@@ -209,7 +217,7 @@
       background: none; border: none; cursor: pointer; padding: 12px 4px;
       display: inline-flex; align-items: center; gap: 6px;
       font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 600;
-      color: rgba(255,255,255,.9); transition: opacity .2s;
+      color: #c0cdd8; transition: opacity .2s;
     }
     .nav-btn:hover { opacity: .7; }
     .nav-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
@@ -1260,9 +1268,12 @@
             '<div class="settings-modal-body">' +
               '<div style="margin-bottom:18px;">' +
                 '<h3 style="margin:0 0 12px; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#c0cdd8;">HubSpot Integration</h3>' +
-                '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">' +
+                '<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start; margin-bottom:10px;">' +
                   '<button class="btn-outline" type="button" onclick="fetchHubSpotOwners()" id="btn-fetch-owners">Fetch HubSpot Owners</button>' +
-                  '<button class="btn-outline" type="button" onclick="testHubSpotConnection()" id="btn-hs-test">Test HubSpot Connection</button>' +
+                  '<div style="display:flex; flex-direction:column; gap:3px;">' +
+                    '<button class="btn-debug" type="button" onclick="testHubSpotConnection()" id="btn-hs-test">Test HubSpot Connection</button>' +
+                    '<span style="font-size:10px; color:#6b7280;">Developer use only</span>' +
+                  '</div>' +
                 '</div>' +
                 '<pre id="hs-test-output" class="hidden" style="margin-top:10px; background:#0d1b28; border:1px solid #2a4054; border-radius:4px; padding:14px; color:#c8dce8; font-size:12px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:300px; overflow:auto;"></pre>' +
                 '<div id="owners-list-container" class="owners-list hidden"></div>' +
