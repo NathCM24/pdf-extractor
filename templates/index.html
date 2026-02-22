@@ -402,6 +402,55 @@
     }
     .template-prompt-banner .dismiss { margin-left: auto; cursor: pointer; opacity: .7; font-size: 14px; }
     .template-prompt-banner .dismiss:hover { opacity: 1; }
+
+    /* --- Help tooltips --- */
+    .help-tooltip-wrap {
+      position: relative; display: inline-flex; align-items: center;
+      margin-left: 6px; vertical-align: middle;
+    }
+    .help-tooltip-icon {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 1px solid #4B5563; color: #9CA3AF; background: transparent;
+      font-size: 11px; font-weight: 700; line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: help; transition: border-color .2s, color .2s;
+      flex-shrink: 0; padding: 0;
+    }
+    .help-tooltip-icon:hover { border-color: #8EC431; color: #8EC431; }
+    .help-tooltip-popup {
+      position: absolute; z-index: 9999;
+      background: #1e293b; color: #e2e8f0;
+      padding: 10px 14px; border: 1px solid #334155; border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.3);
+      font-size: 12.5px; line-height: 1.6; font-weight: 400;
+      max-width: 280px; width: max-content;
+      pointer-events: none; opacity: 0;
+      transition: opacity .2s ease;
+      text-transform: none; letter-spacing: 0;
+    }
+    .help-tooltip-wrap:hover .help-tooltip-popup { opacity: 1; }
+    .help-tooltip-popup--above {
+      bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    }
+    .help-tooltip-popup--above::after {
+      content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+      border: 6px solid transparent; border-top-color: #1e293b;
+    }
+    .help-tooltip-popup--above::before {
+      content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+      border: 7px solid transparent; border-top-color: #334155;
+    }
+    .help-tooltip-popup--right {
+      left: calc(100% + 8px); top: 50%; transform: translateY(-50%);
+    }
+    .help-tooltip-popup--right::after {
+      content: ''; position: absolute; right: 100%; top: 50%; transform: translateY(-50%);
+      border: 6px solid transparent; border-right-color: #1e293b;
+    }
+    .help-tooltip-popup--right::before {
+      content: ''; position: absolute; right: 100%; top: 50%; transform: translateY(-50%);
+      border: 7px solid transparent; border-right-color: #334155;
+    }
   </style>
 </head>
 <body>
@@ -455,7 +504,7 @@
         <div class="grid">
 
           <!-- ===== Supplier / Account ===== -->
-          <div class="section-title">Supplier &amp; Reference</div>
+          <div class="section-title">Supplier &amp; Reference<span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--right">This section shows the supplier name, PO number, and reference details extracted from your PDF. If anything looks wrong, click the field to edit it manually.</span></span></div>
 
           <div class="field full typeahead-wrap">
             <label for="account_name">Account Name</label>
@@ -484,7 +533,7 @@
           </div>
 
           <!-- ===== Products & Services ===== -->
-          <div class="section-title">Products &amp; Services</div>
+          <div class="section-title">Products &amp; Services<span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--right">All line items found in the purchase order. Check quantities, unit prices, and totals are correct. You can edit any field by clicking on it.</span></span></div>
 
           <div class="full" id="line-items-container">
             <!-- Line item rows are injected here by JS -->
@@ -492,7 +541,7 @@
 
           <!-- Document Type as permanent line item row -->
           <div class="full doc-type-row">
-            <span class="dt-label">Document Type</span>
+            <span class="dt-label">Document Type<span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--right">Select the document type for this order. This will be included in your downloaded PDF and CSV exports.</span></span></span>
             <select id="document_type">
               <option>Consignment Note</option>
               <option>Waste Transfer Note</option>
@@ -536,13 +585,15 @@
         <!-- Action bar -->
         <div style="margin-top:18px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
           <div style="display:flex; gap:10px; align-items:center;">
-            <button id="btn-download" class="btn" type="button" onclick="downloadReviewPDF()">Download PDF</button>
-            <button id="btn-csv" class="btn-outline" type="button" onclick="downloadCSV()">Download as CSV</button>
+            <button id="btn-download" class="btn" type="button" onclick="downloadReviewPDF()">Download PDF</button><span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--above">Downloads a formatted PDF of the extracted purchase order data, including all fields and the selected document type.</span></span>
+            <button id="btn-csv" class="btn-outline" type="button" onclick="downloadCSV()">Download as CSV</button><span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--above">Downloads the extracted data as a CSV spreadsheet file with all order details, line items, and totals.</span></span>
           </div>
-          <button id="btn-hubspot" class="btn-hubspot" type="button" onclick="openHubSpotPreview()">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.83 11.41V7.55a2.2 2.2 0 0 0 1.27-1.98 2.22 2.22 0 0 0-2.22-2.22h-.04V1.5a.75.75 0 0 0-1.5 0v1.85h-.04a2.22 2.22 0 0 0-2.22 2.22c0 .9.54 1.67 1.31 2.01v3.83a5.1 5.1 0 0 0-2.53 1.27l-6.63-5.16a2.03 2.03 0 0 0 .05-.42 2.08 2.08 0 1 0-2.08 2.08c.4 0 .77-.12 1.09-.32l6.45 5.02a5.17 5.17 0 0 0 .42 5.53l-1.79 1.79a1.7 1.7 0 0 0-.5-.08 1.72 1.72 0 1 0 1.72 1.72c0-.17-.03-.34-.08-.5l1.76-1.76a5.18 5.18 0 1 0 5.96-8.52zM16.84 18a2.68 2.68 0 1 1 0-5.37 2.68 2.68 0 0 1 0 5.37z"/></svg>
-            Send to HubSpot
-          </button>
+          <div style="display:flex; align-items:center;">
+            <button id="btn-hubspot" class="btn-hubspot" type="button" onclick="openHubSpotPreview()">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.83 11.41V7.55a2.2 2.2 0 0 0 1.27-1.98 2.22 2.22 0 0 0-2.22-2.22h-.04V1.5a.75.75 0 0 0-1.5 0v1.85h-.04a2.22 2.22 0 0 0-2.22 2.22c0 .9.54 1.67 1.31 2.01v3.83a5.1 5.1 0 0 0-2.53 1.27l-6.63-5.16a2.03 2.03 0 0 0 .05-.42 2.08 2.08 0 1 0-2.08 2.08c.4 0 .77-.12 1.09-.32l6.45 5.02a5.17 5.17 0 0 0 .42 5.53l-1.79 1.79a1.7 1.7 0 0 0-.5-.08 1.72 1.72 0 1 0 1.72 1.72c0-.17-.03-.34-.08-.5l1.76-1.76a5.18 5.18 0 1 0 5.96-8.52zM16.84 18a2.68 2.68 0 1 1 0-5.37 2.68 2.68 0 0 1 0 5.37z"/></svg>
+              Send to HubSpot
+            </button><span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--above">Creates a deal in HubSpot with the extracted data. You&rsquo;ll see a preview of exactly what will be sent before confirming. The deal will be assigned to the default owner and marked as closed won.</span></span>
+          </div>
         </div>
 
         <!-- HubSpot feedback banner area -->
@@ -734,6 +785,15 @@
     function getField(id) {
       const el = document.getElementById(id);
       return el ? el.value.trim() : '';
+    }
+
+    /* ── Help tooltip helper ── */
+    function helpTooltip(text, position) {
+      var pos = position || 'above';
+      return '<span class="help-tooltip-wrap">' +
+        '<span class="help-tooltip-icon">?</span>' +
+        '<span class="help-tooltip-popup help-tooltip-popup--' + pos + '">' + text + '</span>' +
+      '</span>';
     }
 
     /* ── Typeahead dropdown ── */
@@ -1282,10 +1342,12 @@
                 '<div class="collapsible-header" id="templates-toggle" onclick="toggleTemplatesSection()">' +
                   '<span class="collapsible-chevron" id="templates-chevron">&#9656;</span>' +
                   '<h3>Supplier Templates</h3>' +
+                  helpTooltip('Train the system to recognise different supplier PO formats. Upload a sample PDF from each supplier and correct the extraction. Once trained, future POs from that supplier will extract more accurately.', 'right') +
                 '</div>' +
                 '<div class="collapsible-body" id="templates-body">' +
                   '<div class="template-progress">' +
                     '<div class="template-progress-text" id="template-progress-label">Loading suppliers...</div>' +
+                    helpTooltip('Shows how many of your suppliers have been trained. The more you train, the better the extraction accuracy across all your purchase orders.', 'right') +
                     '<div class="progress-track" style="margin-top:6px;">' +
                       '<div class="progress-fill" id="template-progress-fill" style="width:0%; background:#8EC431;"></div>' +
                     '</div>' +
@@ -1771,6 +1833,7 @@
     /* ── Confidence dots ── */
     function renderConfidenceDots(confidence) {
       document.querySelectorAll('.conf-dot').forEach(function(d) { d.remove(); });
+      document.querySelectorAll('.conf-dot-help').forEach(function(d) { d.remove(); });
       document.querySelectorAll('.conf-low-border').forEach(function(el) { el.classList.remove('conf-low-border'); });
 
       var fieldIds = [
@@ -1782,6 +1845,7 @@
         'special_instructions', 'document_type'
       ];
 
+      var firstDotAdded = false;
       fieldIds.forEach(function(fieldId) {
         var level = confidence[fieldId] || 'medium';
         var input = document.getElementById(fieldId);
@@ -1795,6 +1859,13 @@
             dot.className = 'conf-dot ' + level;
             dot.title = level.charAt(0).toUpperCase() + level.slice(1) + ' confidence';
             lbl.appendChild(dot);
+            if (!firstDotAdded) {
+              firstDotAdded = true;
+              var tip = document.createElement('span');
+              tip.className = 'conf-dot-help';
+              tip.innerHTML = helpTooltip('\ud83d\udfe2 High confidence \u2014 the system is sure about this value. \ud83d\udfe1 Medium \u2014 it may need checking. \ud83d\udd34 Low \u2014 please verify this manually.', 'right');
+              lbl.appendChild(tip);
+            }
           }
         }
         if (level === 'low') input.classList.add('conf-low-border');
@@ -1812,6 +1883,7 @@
       area.innerHTML =
         '<div class="template-prompt-banner">' +
           '<span>This supplier hasn\'t been trained yet. Save as template?</span>' +
+          helpTooltip('Training a supplier helps the system recognise their PO format. Upload one sample PO, correct any mistakes, and save it. Next time a PO from this supplier is uploaded, extraction will be more accurate.', 'right') +
           '<button class="btn-train" onclick="saveCurrentAsTemplate()" style="padding:5px 12px;">Save as Template</button>' +
           '<span class="dismiss" onclick="this.parentNode.remove()">&times;</span>' +
         '</div>';
