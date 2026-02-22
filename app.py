@@ -4,6 +4,7 @@ import io
 import json
 import os
 import re
+import requests as req_lib
 import urllib.request
 from datetime import date, datetime
 from io import BytesIO
@@ -1470,6 +1471,34 @@ def delivery_email_status():
     return jsonify({"configured": False, "key_preview": None, "length": 0})
 
 
+@app.route("/api/test-resend", methods=["GET"])
+def test_resend():
+    """Send a minimal test email via Resend using requests library to debug 403."""
+    api_key = RESEND_API_KEY
+    if not api_key:
+        return jsonify({"error": "No RESEND_API_KEY", "key_first_5": "NO KEY"})
+
+    response = req_lib.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "from": "onboarding@resend.dev",
+            "to": ["nathan@wasteexperts.co.uk"],
+            "subject": "Test Email from PO Extractor",
+            "html": "<p>This is a test email. If you see this, Resend is working!</p>",
+        },
+    )
+
+    return jsonify({
+        "status": response.status_code,
+        "response": response.text,
+        "key_first_5": api_key[:5] if api_key else "NO KEY",
+    })
+
+
 @app.route("/api/send-delivery-email", methods=["POST"])
 def send_delivery_email():
     """Generate PDF and send it via Resend API."""
@@ -1528,26 +1557,25 @@ def send_delivery_email():
     }
 
     try:
-        req_data = json.dumps(resend_payload).encode()
-        req = urllib.request.Request(
+        resp = req_lib.post(
             "https://api.resend.com/emails",
-            data=req_data,
             headers={
                 "Authorization": f"Bearer {resend_key}",
                 "Content-Type": "application/json",
             },
-            method="POST",
+            json=resend_payload,
+            timeout=30,
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            resp_body = json.loads(resp.read().decode())
+        if resp.ok:
+            resp_body = resp.json()
             return jsonify({"success": True, "id": resp_body.get("id")}), 200
-    except urllib.error.HTTPError as e:
-        try:
-            err_body = json.loads(e.read().decode())
-            err_msg = err_body.get("message", str(e))
-        except Exception:
-            err_msg = str(e)
-        return jsonify({"error": f"Resend API error: {err_msg}"}), e.code
+        else:
+            try:
+                err_body = resp.json()
+                err_msg = err_body.get("message", resp.text)
+            except Exception:
+                err_msg = resp.text
+            return jsonify({"error": f"Resend API error: {err_msg}"}), resp.status_code
     except Exception as exc:
         return jsonify({"error": f"Failed to send email: {exc}"}), 500
 
