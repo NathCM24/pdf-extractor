@@ -1407,7 +1407,12 @@ def hubspot_create_deal():
 
 # ─── Customer Delivery Email (via Resend API) ────────────────────────────────
 
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+# Log at startup for debugging
+_resend_startup = os.environ.get("RESEND_API_KEY", "")
+if _resend_startup:
+    print(f"[startup] RESEND_API_KEY is set ({len(_resend_startup)} chars, starts with {_resend_startup[:8]}...)")
+else:
+    print("[startup] RESEND_API_KEY is NOT set")
 
 
 def _build_delivery_email_html(supplier_name, po_number, total_amount):
@@ -1458,10 +1463,21 @@ def _build_delivery_email_html(supplier_name, po_number, total_amount):
 </html>"""
 
 
+@app.route("/api/send-delivery-email/status", methods=["GET"])
+def delivery_email_status():
+    """Debug: check if RESEND_API_KEY is configured."""
+    key = os.environ.get("RESEND_API_KEY", "")
+    if key:
+        masked = key[:8] + "***" + key[-4:] if len(key) > 12 else "***"
+        return jsonify({"configured": True, "key_preview": masked, "length": len(key)})
+    return jsonify({"configured": False, "key_preview": None, "length": 0})
+
+
 @app.route("/api/send-delivery-email", methods=["POST"])
 def send_delivery_email():
     """Generate PDF and send it via Resend API."""
-    if not RESEND_API_KEY:
+    resend_key = os.environ.get("RESEND_API_KEY", "").strip()
+    if not resend_key:
         return jsonify({
             "error": "Email not configured \u2014 add RESEND_API_KEY in Railway environment variables"
         }), 500
@@ -1520,7 +1536,7 @@ def send_delivery_email():
             "https://api.resend.com/emails",
             data=req_data,
             headers={
-                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Authorization": f"Bearer {resend_key}",
                 "Content-Type": "application/json",
             },
             method="POST",
