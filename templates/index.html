@@ -403,6 +403,49 @@
     .template-prompt-banner .dismiss { margin-left: auto; cursor: pointer; opacity: .7; font-size: 14px; }
     .template-prompt-banner .dismiss:hover { opacity: 1; }
 
+    /* --- Customer Delivery confirmation modal --- */
+    .cd-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 900;
+      display: flex; align-items: center; justify-content: center;
+      animation: fadeIn .2s ease-out;
+    }
+    .cd-modal {
+      background: #253a4d; border: 1px solid #2f4a60; border-radius: 4px;
+      width: 420px; max-width: 92vw; box-shadow: 0 8px 40px rgba(0,0,0,.5);
+    }
+    .cd-modal-head {
+      background: #3d5a73; color: #fff; padding: 14px 20px; border-radius: 4px 4px 0 0;
+      font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 10px;
+    }
+    .cd-modal-head svg { width: 20px; height: 20px; flex-shrink: 0; }
+    .cd-modal-body { padding: 20px; }
+    .cd-email-display {
+      font-size: 15px; font-weight: 700; color: #8ec431;
+      background: rgba(142,196,49,.08); border: 1px solid rgba(142,196,49,.25);
+      border-radius: 4px; padding: 10px 14px; margin: 10px 0 14px; word-break: break-all;
+    }
+    .cd-summary { font-size: 13px; color: #c0cdd8; margin-bottom: 16px; }
+    .cd-summary .cd-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #2f4a60; }
+    .cd-summary .cd-row:last-child { border-bottom: none; }
+    .cd-summary .cd-lbl { color: #8aa3b8; font-weight: 600; }
+    .cd-summary .cd-val { color: #e8ecf1; text-align: right; }
+    .cd-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+    /* --- Top-right toast notification --- */
+    .toast-tr {
+      position: fixed; top: 24px; right: 24px; z-index: 9999;
+      padding: 12px 20px; border-radius: 4px; font-size: 13px; font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0,0,0,.35); transform: translateX(120%);
+      transition: transform .3s ease; max-width: 380px;
+    }
+    .toast-tr.show { transform: translateX(0); }
+    .toast-tr.success { background: rgba(142,196,49,.15); color: #8ec431; border: 1px solid #8ec431; }
+    .toast-tr.error { background: rgba(248,113,113,.12); color: #f87171; border: 1px solid rgba(248,113,113,.3); }
+    .toast-tr .toast-close { margin-left: 12px; cursor: pointer; opacity: .7; font-weight: 700; }
+    .toast-tr .toast-close:hover { opacity: 1; }
+    .toast-tr .toast-retry { margin-left: 10px; border: 1px solid #f87171; background: transparent; color: #f87171; border-radius: 4px; padding: 3px 10px; font-weight: 700; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 11px; }
+    .toast-tr .toast-retry:hover { background: rgba(248,113,113,.12); }
+
     /* --- Help tooltips --- */
     .help-tooltip-wrap {
       position: relative; display: inline-flex; align-items: center;
@@ -587,6 +630,10 @@
           <div style="display:flex; gap:10px; align-items:center;">
             <button id="btn-download" class="btn" type="button" onclick="downloadReviewPDF()">Download PDF</button><span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--above">Downloads a formatted PDF of the extracted purchase order data, including all fields and the selected document type.</span></span>
             <button id="btn-csv" class="btn-outline" type="button" onclick="downloadCSV()">Download as CSV</button><span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--above">Downloads the extracted data as a CSV spreadsheet file with all order details, line items, and totals.</span></span>
+            <button id="btn-delivery" class="btn-outline" type="button" onclick="openDeliveryConfirm()" style="display:inline-flex; align-items:center; gap:6px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 12,13 2,7"/></svg>
+              Send to Customer Delivery
+            </button><span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--above">Emails the generated PDF to the configured customer delivery email address.</span></span>
           </div>
           <div style="display:flex; align-items:center;">
             <button id="btn-hubspot" class="btn-hubspot" type="button" onclick="openHubSpotPreview()">
@@ -612,6 +659,12 @@
 
   <!-- Training modal (injected dynamically) -->
   <div id="training-modal-root"></div>
+
+  <!-- Customer Delivery confirmation modal (injected dynamically) -->
+  <div id="cd-modal-root"></div>
+
+  <!-- Top-right toast notification -->
+  <div id="toast-tr" class="toast-tr"></div>
 
   <!-- Toast notification -->
   <div id="toast" class="toast"></div>
@@ -1376,6 +1429,14 @@
                 '<pre id="hs-test-output" class="hidden" style="margin-top:10px; background:#0d1b28; border:1px solid #2a4054; border-radius:4px; padding:14px; color:#c8dce8; font-size:12px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:300px; overflow:auto;"></pre>' +
                 '<div id="owners-list-container" class="owners-list hidden"></div>' +
               '</div>' +
+              '<div style="border-top:1px solid #2f4a60; padding-top:14px; margin-bottom:18px;">' +
+                '<h3 style="margin:0 0 10px; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#c0cdd8;">Customer Delivery Email</h3>' +
+                '<div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">' +
+                  '<label style="margin:0; font-size:11px; font-weight:600; color:#8aa3b8;">Delivery email address</label>' +
+                  helpTooltip('The email address where extracted PDFs are sent when you click \'Send to Customer Delivery\'.', 'right') +
+                '</div>' +
+                '<input type="email" id="settings-delivery-email" value="' + escHtml(getDeliveryEmail()) + '" style="width:100%; border:1px solid #3d5a73; border-radius:4px; padding:10px 12px; font-size:14px; font-family:Montserrat,sans-serif; background:#1e2e3d; color:#e8ecf1;" onchange="saveDeliveryEmail(this.value)" />' +
+              '</div>' +
               '<div style="border-top:1px solid #2f4a60; padding-top:14px;">' +
                 '<div class="collapsible-header" id="templates-toggle" onclick="toggleTemplatesSection()">' +
                   '<span class="collapsible-chevron" id="templates-chevron">&#9656;</span>' +
@@ -1985,6 +2046,125 @@
         loadTemplates();
       } catch(err) { alert(err.message); }
     }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       Customer Delivery Email
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    var _defaultDeliveryEmail = 'nathan@wasteexperts.co.uk';
+
+    function getDeliveryEmail() {
+      try { return localStorage.getItem('delivery_email') || _defaultDeliveryEmail; } catch(e) { return _defaultDeliveryEmail; }
+    }
+
+    function saveDeliveryEmail(email) {
+      try { localStorage.setItem('delivery_email', email.trim()); } catch(e) { /* ignore */ }
+    }
+
+    /* ── Top-right toast ── */
+    var _toastTrTimer = null;
+    function showToastTR(msg, type, retryFn) {
+      var el = document.getElementById('toast-tr');
+      if (!el) return;
+      clearTimeout(_toastTrTimer);
+      var html = '<span>' + escHtml(msg) + '</span>';
+      if (retryFn) {
+        html += '<button class="toast-retry" onclick="' + retryFn + '">Retry</button>';
+      }
+      html += '<span class="toast-close" onclick="hideToastTR()">&#10005;</span>';
+      el.className = 'toast-tr ' + (type || 'success');
+      el.innerHTML = html;
+      /* Force reflow then show */
+      void el.offsetWidth;
+      el.classList.add('show');
+      _toastTrTimer = setTimeout(hideToastTR, 5000);
+    }
+
+    function hideToastTR() {
+      var el = document.getElementById('toast-tr');
+      if (el) el.classList.remove('show');
+    }
+
+    /* ── Open confirmation modal ── */
+    function openDeliveryConfirm() {
+      if (!validateAccount()) return;
+      var payload = collectReviewPayload();
+      var poNumber = payload.purchase_order_number || '\u2014';
+      var supplierName = payload.account_name || payload.supplier || '\u2014';
+      var totalAmount = '\u00a3' + (payload.overall_total || 0).toFixed(2);
+      var email = getDeliveryEmail();
+
+      var modalHtml =
+        '<div class="cd-overlay" id="cd-overlay" onclick="if(event.target===this)closeDeliveryModal()">' +
+          '<div class="cd-modal">' +
+            '<div class="cd-modal-head">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 12,13 2,7"/></svg>' +
+              'Send to Customer Delivery' +
+            '</div>' +
+            '<div class="cd-modal-body">' +
+              '<div style="font-size:13px; color:#8aa3b8; margin-bottom:4px;">Send extracted PDF to:</div>' +
+              '<div class="cd-email-display">' + escHtml(email) + '</div>' +
+              '<div class="cd-summary">' +
+                '<div class="cd-row"><span class="cd-lbl">PO Number</span><span class="cd-val">' + escHtml(poNumber) + '</span></div>' +
+                '<div class="cd-row"><span class="cd-lbl">Supplier</span><span class="cd-val">' + escHtml(supplierName) + '</span></div>' +
+                '<div class="cd-row"><span class="cd-lbl">Total Amount</span><span class="cd-val">' + escHtml(totalAmount) + '</span></div>' +
+              '</div>' +
+              '<div class="cd-actions">' +
+                '<button class="btn-outline" type="button" onclick="closeDeliveryModal()" style="color:#8aa3b8; border-color:#4b5563;">Cancel</button>' +
+                '<button class="btn" type="button" id="btn-cd-send" onclick="sendDeliveryEmail()" style="display:inline-flex; align-items:center; gap:6px;">' +
+                  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 12,13 2,7"/></svg>' +
+                  'Send' +
+                '</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+
+      document.getElementById('cd-modal-root').innerHTML = modalHtml;
+    }
+
+    function closeDeliveryModal() {
+      document.getElementById('cd-modal-root').innerHTML = '';
+    }
+
+    /* ── Send delivery email ── */
+    async function sendDeliveryEmail() {
+      var btn = document.getElementById('btn-cd-send');
+      if (!btn) return;
+      btn.disabled = true;
+      btn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>' +
+        ' Sending\u2026';
+
+      var payload = collectReviewPayload();
+      var email = getDeliveryEmail();
+
+      try {
+        var resp = await fetch('/api/send-delivery-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to_email: email,
+            payload: payload
+          })
+        });
+        var data = await resp.json();
+        if (!resp.ok || data.error) throw new Error(data.error || 'Failed to send email');
+
+        closeDeliveryModal();
+        showToastTR('PDF sent to ' + email + ' \u2713', 'success');
+      } catch(err) {
+        closeDeliveryModal();
+        showToastTR(err.message, 'error', 'openDeliveryConfirm()');
+      }
+    }
+
+    /* Spinner keyframes for send button */
+    (function() {
+      var style = document.createElement('style');
+      style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+      document.head.appendChild(style);
+    })();
 
     /* ── Init templates ── */
     loadTemplates();
