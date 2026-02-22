@@ -1181,22 +1181,15 @@ def save_to_sheets():
         if reference in existing_refs:
             return jsonify({"duplicate": True, "message": "This PO is already in Google Sheets"}), 200
 
-        # Build row (12 columns A-L)
+        # Build row (11 columns A-K)
         date_extracted = date.today().strftime("%d/%m/%Y")
         title_desc = str(data.get("service_description") or "").strip() or "\u2014"
-        quote_expires = "\u2014"  # Not available in current extraction
         prepared_by = PREPARED_BY["name"]
         customer_company = str(data.get("account_name") or data.get("supplier") or "").strip() or "\u2014"
 
-        # Build full address on one line
-        addr_parts = []
-        site_addr = str(data.get("site_address") or "").strip()
-        if site_addr:
-            addr_parts.append(site_addr.replace("\n", ", "))
-        site_pc = str(data.get("site_postcode") or "").strip()
-        if site_pc:
-            addr_parts.append(site_pc)
-        customer_address = ", ".join(addr_parts) if addr_parts else "\u2014"
+        # Bill-to address (supplier_address), not site address
+        supplier_addr = str(data.get("supplier_address") or "").strip()
+        customer_address = supplier_addr.replace("\n", ", ") if supplier_addr else "\u2014"
 
         customer_email = str(data.get("site_contact_email") or "").strip() or "\u2014"
         line_items_cell = _format_line_items_cell(data.get("line_items"))
@@ -1212,15 +1205,14 @@ def save_to_sheets():
             date_extracted,       # A — Date Extracted
             pdf_filename,         # B — PDF Filename
             title_desc,           # C — Title/Description
-            reference,            # D — Reference
-            quote_expires,        # E — Quote Expires
-            prepared_by,          # F — Prepared By
-            customer_company,     # G — Customer Company
-            customer_address,     # H — Customer Address
-            customer_email,       # I — Customer Email
-            line_items_cell,      # J — Line Items
-            total_amount,         # K — Total Amount
-            caveats,              # L — Caveats/Comments
+            "'" + reference,      # D — Reference (prefixed with ' to force text in Sheets)
+            prepared_by,          # E — Prepared By
+            customer_company,     # F — Customer Company
+            customer_address,     # G — Customer Address
+            customer_email,       # H — Customer Email
+            line_items_cell,      # I — Line Items
+            total_amount,         # J — Total Amount
+            caveats,              # K — Caveats/Comments
         ]
 
         sheet.append_row(row, value_input_option="USER_ENTERED")
