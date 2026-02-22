@@ -16,6 +16,15 @@ try:
 except ImportError:
     pass
 
+# Google Sheets integration (optional)
+_gspread_available = False
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials as ServiceCredentials
+    _gspread_available = True
+except ImportError:
+    pass
+
 import anthropic
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -1091,6 +1100,144 @@ def delete_template(supplier):
         del templates[supplier]
         _save_templates(templates)
     return jsonify({"success": True})
+
+
+# ─── Google Sheets integration ────────────────────────────────────────────────
+
+GOOGLE_SHEET_ID = "1xSK6hGLYd9jVbCtU7NVtOlWJLED3_-sB1LdsUyPlKHU"
+_gs_client = None
+
+
+def _get_gsheets_client():
+    """Lazily initialise and return a gspread client, or None."""
+    global _gs_client
+    if _gs_client is not None:
+        return _gs_client
+    if not _gspread_available:
+        return None
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON", "").strip()
+    if not creds_json:
+        return None
+    try:
+        info = json.loads(creds_json)
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds = ServiceCredentials.from_service_account_info(info, scopes=scopes)
+        _gs_client = gspread.authorize(creds)
+        return _gs_client
+    except Exception as exc:
+        print(f"[Google Sheets] Failed to initialise credentials: {exc}")
+        return None
+
+
+def _format_line_items_cell(line_items):
+    """Format line items into a single cell string with newlines."""
+    lines = []
+    for item in (line_items or []):
+        desc = str(item.get("description") or "")
+        try:
+            qty = int(float(item.get("quantity") or 1))
+        except (TypeError, ValueError):
+            qty = 1
+        try:
+            price = float(item.get("unit_price") or 0)
+        except (TypeError, ValueError):
+            price = 0.0
+        try:
+            total = float(item.get("line_total") or 0)
+        except (TypeError, ValueError):
+            total = 0.0
+        lines.append(f"{desc} | Qty: {qty} | \u00a3{price:.2f} | \u00a3{total:.2f}")
+    return "\n".join(lines) if lines else "\u2014"
+
+
+@app.route("/api/save-to-sheets", methods=["POST"])
+def save_to_sheets():
+    """Push extracted PO data to Google Sheets."""
+    client = _get_gsheets_client()
+    if client is None:
+        msg = "Google Sheets not configured"
+        if not _gspread_available:
+            msg += " \u2014 gspread package not installed"
+        elif not os.environ.get("GOOGLE_CREDENTIALS_JSON", "").strip():
+            msg += " \u2014 GOOGLE_CREDENTIALS_JSON not set"
+        return jsonify({"error": msg}), 500
+
+    body = request.get_json(silent=True) or {}
+    data = body.get("data") or {}
+    pdf_filename = body.get("pdf_filename") or "\u2014"
+
+    reference = str(data.get("purchase_order_number") or "").strip()
+    if not reference:
+        return jsonify({"error": "No PO reference number to log"}), 400
+
+    try:
+        sheet = client.open_by_key(GOOGLE_SHEET_ID).sheet1
+
+        # Duplicate prevention: check if reference already exists in column D
+        existing_refs = sheet.col_values(4)  # Column D = Reference
+        if reference in existing_refs:
+            return jsonify({"duplicate": True, "message": "This PO is already in Google Sheets"}), 200
+
+        # Build row (12 columns A-L)
+        date_extracted = date.today().strftime("%d/%m/%Y")
+        title_desc = str(data.get("service_description") or "").strip() or "\u2014"
+        quote_expires = "\u2014"  # Not available in current extraction
+        prepared_by = PREPARED_BY["name"]
+        customer_company = str(data.get("account_name") or data.get("supplier") or "").strip() or "\u2014"
+
+        # Build full address on one line
+        addr_parts = []
+        site_addr = str(data.get("site_address") or "").strip()
+        if site_addr:
+            addr_parts.append(site_addr.replace("\n", ", "))
+        site_pc = str(data.get("site_postcode") or "").strip()
+        if site_pc:
+            addr_parts.append(site_pc)
+        customer_address = ", ".join(addr_parts) if addr_parts else "\u2014"
+
+        customer_email = str(data.get("site_contact_email") or "").strip() or "\u2014"
+        line_items_cell = _format_line_items_cell(data.get("line_items"))
+
+        try:
+            total_amount = f"\u00a3{float(data.get('overall_total') or 0):.2f}"
+        except (TypeError, ValueError):
+            total_amount = "\u00a30.00"
+
+        caveats = str(data.get("special_instructions") or "").strip() or "\u2014"
+
+        row = [
+            date_extracted,       # A — Date Extracted
+            pdf_filename,         # B — PDF Filename
+            title_desc,           # C — Title/Description
+            reference,            # D — Reference
+            quote_expires,        # E — Quote Expires
+            prepared_by,          # F — Prepared By
+            customer_company,     # G — Customer Company
+            customer_address,     # H — Customer Address
+            customer_email,       # I — Customer Email
+            line_items_cell,      # J — Line Items
+            total_amount,         # K — Total Amount
+            caveats,              # L — Caveats/Comments
+        ]
+
+        sheet.append_row(row, value_input_option="USER_ENTERED")
+        return jsonify({"success": True, "message": "Saved to Google Sheets"}), 200
+
+    except Exception as exc:
+        print(f"[Google Sheets] Error saving row: {exc}")
+        return jsonify({"error": f"Google Sheets error: {exc}"}), 500
+
+
+# Check credentials at startup
+if not os.environ.get("GOOGLE_CREDENTIALS_JSON", "").strip():
+    print("[Google Sheets] WARNING: GOOGLE_CREDENTIALS_JSON not set — Google Sheets logging disabled")
+elif not _gspread_available:
+    print("[Google Sheets] WARNING: gspread/google-auth not installed — Google Sheets logging disabled")
+else:
+    print("[Google Sheets] Credentials found — logging enabled")
 
 
 # ─── HubSpot integration ─────────────────────────────────────────────────────
