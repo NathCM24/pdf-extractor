@@ -1102,6 +1102,70 @@ def delete_template(supplier):
     return jsonify({"success": True})
 
 
+# ─── Make.com Webhook integration ────────────────────────────────────────────
+
+MAKE_WEBHOOK_URL = os.environ.get("MAKE_WEBHOOK_URL") or "https://hook.eu1.make.com/79cktukjwpsyscc507c6p1nddb61pydo"
+
+
+@app.route("/api/send-to-webhook", methods=["POST"])
+def send_to_webhook():
+    """Forward extracted PO data to Make.com webhook."""
+    body = request.get_json(silent=True) or {}
+    data = body.get("data") or {}
+    pdf_filename = body.get("pdf_filename") or "\u2014"
+
+    reference = str(data.get("purchase_order_number") or "").strip()
+    if not reference:
+        return jsonify({"error": "No PO reference number"}), 400
+
+    # Build the 11-field payload
+    date_extracted = date.today().strftime("%d/%m/%Y")
+    title_desc = str(data.get("service_description") or "").strip() or "\u2014"
+    prepared_by = PREPARED_BY["name"]
+    customer_company = str(data.get("account_name") or data.get("supplier") or "").strip() or "\u2014"
+
+    supplier_addr = str(data.get("supplier_address") or "").strip()
+    customer_address = supplier_addr.replace("\n", ", ") if supplier_addr else "\u2014"
+
+    customer_email = str(data.get("site_contact_email") or "").strip() or "\u2014"
+    line_items_cell = _format_line_items_cell(data.get("line_items"))
+
+    try:
+        total_amount = f"\u00a3{float(data.get('overall_total') or 0):.2f}"
+    except (TypeError, ValueError):
+        total_amount = "\u00a30.00"
+
+    caveats = str(data.get("special_instructions") or "").strip() or "\u2014"
+
+    webhook_payload = {
+        "date_extracted": date_extracted,
+        "pdf_filename": pdf_filename,
+        "title": title_desc,
+        "reference": reference,
+        "prepared_by": prepared_by,
+        "customer_company": customer_company,
+        "customer_address": customer_address,
+        "customer_email": customer_email,
+        "line_items": line_items_cell,
+        "total_amount": total_amount,
+        "caveats": caveats,
+    }
+
+    try:
+        resp = req_lib.post(
+            MAKE_WEBHOOK_URL,
+            headers={"Content-Type": "application/json"},
+            json=webhook_payload,
+            timeout=30,
+        )
+        if resp.ok:
+            return jsonify({"success": True, "message": "Sent to WasteLogics"}), 200
+        else:
+            return jsonify({"error": f"Webhook returned {resp.status_code}: {resp.text[:200]}"}), 502
+    except Exception as exc:
+        return jsonify({"error": f"Webhook request failed: {exc}"}), 500
+
+
 # ─── Google Sheets integration ────────────────────────────────────────────────
 
 GOOGLE_SHEET_ID = "1xSK6hGLYd9jVbCtU7NVtOlWJLED3_-sB1LdsUyPlKHU"

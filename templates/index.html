@@ -449,15 +449,21 @@
     .toast-tr.warning .toast-retry { border-color: #f59e0b; color: #f59e0b; }
     .toast-tr.warning .toast-retry:hover { background: rgba(245,158,11,.12); }
 
-    /* --- Google Sheets button --- */
-    .btn-gsheets {
+    /* --- WasteLogics button --- */
+    .btn-wastelogics {
       border: 1px solid #6B7280; background: transparent; color: #9CA3AF;
-      border-radius: 4px; padding: 8px 14px; font-weight: 600;
+      border-radius: 4px; padding: 10px 20px; font-weight: 600;
       cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 12px;
       transition: background .2s, color .2s; display: inline-flex; align-items: center; gap: 6px;
     }
-    .btn-gsheets:hover { background: rgba(107,114,128,.15); color: #c0cdd8; }
-    .btn-gsheets:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-wastelogics:hover { background: rgba(107,114,128,.15); color: #c0cdd8; }
+    .btn-wastelogics:disabled { opacity: .5; cursor: not-allowed; }
+    .beta-badge {
+      display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .5px;
+      color: #f59e0b; border: 1px solid rgba(245,158,11,.4); border-radius: 3px;
+      padding: 1px 5px; margin-left: 6px; vertical-align: middle; line-height: 1.4;
+      text-transform: uppercase;
+    }
 
     /* --- Help tooltips --- */
     .help-tooltip-wrap {
@@ -597,7 +603,7 @@
 
           <!-- Document Type as permanent line item row -->
           <div class="full doc-type-row">
-            <span class="dt-label">Document Type<span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--right">Select the document type for this order. This will be included in your downloaded PDF and CSV exports.</span></span></span>
+            <span class="dt-label">Document Type<span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--right">Select the document type for this order. This will be included in your downloaded PDF.</span></span></span>
             <select id="document_type">
               <option>Consignment Note</option>
               <option>Waste Transfer Note</option>
@@ -644,7 +650,7 @@
         </div>
 
         <!-- Action bar (integrations) -->
-        <div style="margin-top:20px; padding-top:20px; border-top:1px solid #3d5a73; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div style="margin-top:20px; padding:20px 0 0; border-top:1px solid #3d5a73; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
           <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
             <button id="btn-hubspot" class="btn-hubspot" type="button" onclick="openHubSpotPreview()" style="padding:10px 20px;">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.83 11.41V7.55a2.2 2.2 0 0 0 1.27-1.98 2.22 2.22 0 0 0-2.22-2.22h-.04V1.5a.75.75 0 0 0-1.5 0v1.85h-.04a2.22 2.22 0 0 0-2.22 2.22c0 .9.54 1.67 1.31 2.01v3.83a5.1 5.1 0 0 0-2.53 1.27l-6.63-5.16a2.03 2.03 0 0 0 .05-.42 2.08 2.08 0 1 0-2.08 2.08c.4 0 .77-.12 1.09-.32l6.45 5.02a5.17 5.17 0 0 0 .42 5.53l-1.79 1.79a1.7 1.7 0 0 0-.5-.08 1.72 1.72 0 1 0 1.72 1.72c0-.17-.03-.34-.08-.5l1.76-1.76a5.18 5.18 0 1 0 5.96-8.52zM16.84 18a2.68 2.68 0 1 1 0-5.37 2.68 2.68 0 0 1 0 5.37z"/></svg>
@@ -655,11 +661,11 @@
               Send to Customer Delivery
             </button><span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--above">Emails the generated PDF to the configured customer delivery email address.</span></span>
           </div>
-          <div>
-            <button id="btn-gsheets" class="btn-gsheets" type="button" onclick="saveToGoogleSheets()" style="padding:10px 20px;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/></svg>
-              Save to Google Sheets
-            </button>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button id="btn-wastelogics" class="btn-wastelogics" type="button" onclick="sendToWasteLogics()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              Send to WasteLogics<span class="beta-badge">BETA</span>
+            </button><span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--above">Sends extracted PO data to WasteLogics via automation. Currently in testing &mdash; data is sent but not yet inputted automatically.</span></span>
           </div>
         </div>
 
@@ -1246,9 +1252,7 @@
         fillForm(json.data || {}, json.confidence || {}, json.supplier_trained);
         requestAnimationFrame(function() { if (editCard) editCard.classList.add('fade-in'); });
 
-        /* Auto-push to Google Sheets (fire-and-forget, don't block the user) */
-        _gsheetsPushedRef = null;
-        saveToGoogleSheets(true);
+        /* Data ready — user can now send to WasteLogics manually */
       } catch (err) {
         alert(err.message);
         setState('upload');
@@ -2053,22 +2057,21 @@
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
-       Google Sheets Integration
+       WasteLogics Webhook Integration
        ═══════════════════════════════════════════════════════════════════════ */
 
-    var _gsheetsPushedRef = null;  /* Track which PO ref was auto-pushed */
-
-    async function saveToGoogleSheets(isAuto) {
+    async function sendToWasteLogics() {
       var payload = collectReviewPayload();
-      var btn = document.getElementById('btn-gsheets');
+      var btn = document.getElementById('btn-wastelogics');
+      var origHTML = btn.innerHTML;
 
-      if (!isAuto && btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/></svg> Saving\u2026';
-      }
+      btn.disabled = true;
+      btn.innerHTML =
+        '<svg width="16" height="16" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>' +
+        ' Sending\u2026';
 
       try {
-        var resp = await fetch('/api/save-to-sheets', {
+        var resp = await fetch('/api/send-to-webhook', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2078,26 +2081,16 @@
         });
         var result = await resp.json();
 
-        if (result.duplicate) {
-          showToastTR('This PO is already in Google Sheets', 'warning');
-          _gsheetsPushedRef = payload.purchase_order_number;
-        } else if (result.success) {
-          showToastTR('Saved to Google Sheets \u2713', 'success');
-          _gsheetsPushedRef = payload.purchase_order_number;
+        if (result.success) {
+          showToastTR('Sent to WasteLogics \u2713', 'success');
         } else {
           throw new Error(result.error || 'Unknown error');
         }
       } catch (err) {
-        if (isAuto) {
-          showToastTR("Couldn\u2019t save to Google Sheets \u2014 use the manual button to retry", 'warning');
-        } else {
-          showToastTR("Couldn\u2019t save to Google Sheets \u2014 " + err.message, 'warning', 'saveToGoogleSheets()');
-        }
+        showToastTR("Couldn\u2019t send to WasteLogics \u2014 " + err.message, 'warning', 'sendToWasteLogics()');
       } finally {
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/></svg> Save to Google Sheets';
-        }
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
       }
     }
 
