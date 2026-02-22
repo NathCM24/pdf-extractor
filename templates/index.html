@@ -1288,6 +1288,44 @@
 
     var uploadedFileName = '';  /* Stored when file is uploaded */
 
+    /* ── HubSpot Owners cache ── */
+    var _cachedOwners = null; /* [{id, firstName, lastName, name, email}] */
+
+    async function ensureOwnersLoaded() {
+      if (_cachedOwners) return _cachedOwners;
+      try {
+        var resp = await fetch('/api/hubspot/owners');
+        var data = await resp.json();
+        if (resp.ok && data.owners) {
+          _cachedOwners = data.owners;
+        } else {
+          _cachedOwners = [];
+        }
+      } catch(e) {
+        _cachedOwners = [];
+      }
+      return _cachedOwners;
+    }
+
+    function getLastSelectedOwnerId() {
+      try { return localStorage.getItem('hs_deal_owner_id') || ''; } catch(e) { return ''; }
+    }
+
+    function saveLastSelectedOwnerId(id) {
+      try { localStorage.setItem('hs_deal_owner_id', id); } catch(e) { /* ignore */ }
+    }
+
+    function getDefaultOwnerId(owners) {
+      /* 1. Last selection from localStorage */
+      var lastId = getLastSelectedOwnerId();
+      if (lastId && owners.some(function(o) { return o.id === lastId; })) return lastId;
+      /* 2. Emma Dedeke */
+      var emma = owners.find(function(o) { return o.name.toLowerCase() === 'emma dedeke'; });
+      if (emma) return emma.id;
+      /* 3. First owner */
+      return owners.length ? owners[0].id : '';
+    }
+
     /* ── Test HubSpot Connection ── */
     async function testHubSpotConnection() {
       var btn = document.getElementById('btn-hs-test');
@@ -1412,7 +1450,7 @@
     }
 
     /* ── HubSpot preview modal ── */
-    function openHubSpotPreview() {
+    async function openHubSpotPreview() {
       var payload = collectReviewPayload();
       var dealName = uploadedFileName || 'Untitled Deal';
       var today = new Date().toISOString().split('T')[0];
@@ -1420,6 +1458,21 @@
       var poNumber = payload.purchase_order_number || '—';
       var supplierName = payload.account_name || payload.supplier || '';
       var items = payload.line_items || [];
+
+      /* Fetch owners (cached after first call) */
+      var owners = await ensureOwnersLoaded();
+      var defaultId = getDefaultOwnerId(owners);
+
+      /* Build owner dropdown options */
+      var ownerOptionsHtml = '';
+      if (owners.length) {
+        owners.forEach(function(o) {
+          var sel = o.id === defaultId ? ' selected' : '';
+          ownerOptionsHtml += '<option value="' + escHtml(o.id) + '"' + sel + '>' + escHtml(o.name) + '</option>';
+        });
+      } else {
+        ownerOptionsHtml = '<option value="">No owners available</option>';
+      }
 
       /* Build description from line items */
       var desc = items.map(function(li, i) {
@@ -1446,12 +1499,25 @@
               'HubSpot Deal Preview' +
             '</div>' +
             '<div class="hs-modal-body">' +
+              /* ── Deal Owner dropdown (above deal details) ── */
+              '<div style="margin-bottom:16px;">' +
+                '<div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">' +
+                  '<label style="margin:0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; color:#8ec431;">Deal Owner</label>' +
+                  '<span class="help-tooltip-wrap" style="margin-left:0;">' +
+                    '<span class="help-tooltip-icon">?</span>' +
+                    '<span class="help-tooltip-popup help-tooltip-popup--right">Choose who this deal will be assigned to in HubSpot. Your last selection is remembered.</span>' +
+                  '</span>' +
+                '</div>' +
+                '<select id="hs-owner-select" style="width:100%; border:1px solid #3d5a73; border-radius:4px; padding:10px 12px; font-size:14px; font-family:Montserrat,sans-serif; background:#1e2e3d; color:#e8ecf1;" onchange="saveLastSelectedOwnerId(this.value)">' +
+                  ownerOptionsHtml +
+                '</select>' +
+              '</div>' +
+
               '<div class="hs-section">Deal Properties</div>' +
               '<div class="hs-row"><span class="hs-label">Deal Name</span><span class="hs-value">' + escHtml(dealName) + '</span></div>' +
               '<div class="hs-row"><span class="hs-label">Create Date</span><span class="hs-value">' + today + '</span></div>' +
               '<div class="hs-row"><span class="hs-label">Close Date</span><span class="hs-value">' + today + '</span></div>' +
               '<div class="hs-row"><span class="hs-label">Forecast Amount</span><span class="hs-value">£' + totalAmount + '</span></div>' +
-              '<div class="hs-row"><span class="hs-label">Deal Owner</span><span class="hs-value">Nathan Malone</span></div>' +
               '<div class="hs-row"><span class="hs-label">Is Deal Closed</span><span class="hs-value">Yes</span></div>' +
               '<div class="hs-row"><span class="hs-label">PO Number</span><span class="hs-value">' + escHtml(poNumber) + '</span></div>' +
 
@@ -1494,6 +1560,13 @@
       var btn = document.getElementById('btn-hs-confirm');
       btn.disabled = true;
       btn.textContent = 'Creating deal…';
+
+      /* Include selected owner ID */
+      var ownerSelect = document.getElementById('hs-owner-select');
+      if (ownerSelect && ownerSelect.value) {
+        window._hsDealData.owner_id = ownerSelect.value;
+        saveLastSelectedOwnerId(ownerSelect.value);
+      }
 
       try {
         var resp = await fetch('/api/hubspot/create-deal', {

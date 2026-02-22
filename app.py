@@ -1157,9 +1157,17 @@ def hubspot_owners():
 
     owners = []
     for o in data.get("results", []):
-        name = f"{o.get('firstName', '')} {o.get('lastName', '')}".strip()
+        first = o.get("firstName", "")
+        last = o.get("lastName", "")
+        name = f"{first} {last}".strip()
         oid = o.get("id")
-        owners.append({"id": oid, "name": name, "email": o.get("email", "")})
+        owners.append({
+            "id": oid,
+            "firstName": first,
+            "lastName": last,
+            "name": name,
+            "email": o.get("email", ""),
+        })
         if name.lower() == "nathan malone":
             _cached_owner_id = oid
 
@@ -1233,8 +1241,8 @@ def hubspot_create_deal():
 
     today_iso = date.today().isoformat()
 
-    # Step 1 — Resolve Nathan Malone's owner ID
-    owner_id = _cached_owner_id
+    # Step 1 — Use owner ID from frontend, fall back to cached/fetched Nathan Malone
+    owner_id = payload.get("owner_id") or _cached_owner_id
     if not owner_id:
         status, data = _hs_request("GET", "/owners?limit=100")
         if status == 200:
