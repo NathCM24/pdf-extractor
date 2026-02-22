@@ -1517,7 +1517,7 @@ def send_delivery_email():
 
     # Send via Resend API
     resend_payload = {
-        "from": "Waste Experts PO Extractor <nathan@wasteexperts.co.uk>",
+        "from": "Waste Experts PO Extractor <onboarding@resend.dev>",
         "to": [to_email],
         "subject": f"Purchase Order \u2014 {po_number} \u2014 {supplier_name}",
         "html": email_html,
