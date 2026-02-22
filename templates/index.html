@@ -1399,6 +1399,26 @@
       }
     }
 
+    /* ── Test Resend API ── */
+    async function testResend() {
+      var btn = document.getElementById('btn-test-resend');
+      var output = document.getElementById('resend-test-output');
+      btn.disabled = true;
+      btn.textContent = 'Testing\u2026';
+      output.classList.remove('hidden');
+      output.textContent = 'Sending test email via Resend\u2026';
+      try {
+        var resp = await fetch('/api/test-resend');
+        var data = await resp.json();
+        output.textContent = JSON.stringify(data, null, 2);
+      } catch(err) {
+        output.textContent = 'Error: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Test Resend';
+      }
+    }
+
     /* Patch uploadAndExtract to remember filename */
     var _origUploadAndExtract = uploadAndExtract;
     uploadAndExtract = async function(file) {
@@ -1436,6 +1456,11 @@
                   helpTooltip('The email address where extracted PDFs are sent when you click \'Send to Customer Delivery\'.', 'right') +
                 '</div>' +
                 '<input type="email" id="settings-delivery-email" value="' + escHtml(getDeliveryEmail()) + '" style="width:100%; border:1px solid #3d5a73; border-radius:4px; padding:10px 12px; font-size:14px; font-family:Montserrat,sans-serif; background:#1e2e3d; color:#e8ecf1;" onchange="saveDeliveryEmail(this.value)" />' +
+                '<div style="margin-top:10px; display:flex; flex-direction:column; gap:3px;">' +
+                  '<button class="btn-debug" type="button" onclick="testResend()" id="btn-test-resend">Test Resend</button>' +
+                  '<span style="font-size:10px; color:#6b7280;">Sends a test email via Resend API to debug 403 issues</span>' +
+                '</div>' +
+                '<pre id="resend-test-output" class="hidden" style="margin-top:10px; background:#0d1b28; border:1px solid #2a4054; border-radius:4px; padding:14px; color:#c8dce8; font-size:12px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:300px; overflow:auto;"></pre>' +
               '</div>' +
               '<div style="border-top:1px solid #2f4a60; padding-top:14px;">' +
                 '<div class="collapsible-header" id="templates-toggle" onclick="toggleTemplatesSection()">' +
