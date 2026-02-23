@@ -2545,6 +2545,386 @@
 
     /* ── Init templates ── */
     loadTemplates();
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       TAB NAVIGATION SYSTEM
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    var _activeTab = 'broker';
+
+    function switchTab(tabName) {
+      if (tabName === 'sales') return;
+      if (tabName === _activeTab) return;
+      _activeTab = tabName;
+      document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
+      });
+      document.querySelectorAll('.tab-content').forEach(function(tc) {
+        tc.classList.toggle('active', tc.id === tabName + '-tab-content');
+      });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       CEF TAB — COMPLETELY INDEPENDENT MODULE
+       ═══════════════════════════════════════════════════════════════════════ */
+    (function() {
+      var cefAppState = 'upload';
+      var cefLottieAnim = null;
+      var cefProgressTimer = null;
+      var cefCurrentProgress = 0;
+      var cefLineItemCounter = 0;
+      var cefDocTypeLineAdded = '';
+      var cefLastExtractedData = null;
+      var cefLastConfidence = null;
+      var cefUploadedFileName = '';
+      var CEF_MT = ['', 'Remove', 'Uplift', 'Exchange', 'WWL', 'Delivery'];
+
+      var cefSC = document.getElementById('cef-state-container');
+      var cefUC = document.getElementById('cef-upload-card');
+      var cefEC = document.getElementById('cef-edit');
+      var cefFI = document.getElementById('cef-file-input');
+      var cefDZ = document.getElementById('cef-drop-zone');
+
+      function cefSF(id, v) { var el = document.getElementById(id); if (el) el.value = v || ''; }
+      function cefGF(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+
+      function cefUpdateNav() {
+        var btn = document.getElementById('cef-nav-upload-btn');
+        if (btn) btn.classList.toggle('nav-hidden', cefAppState === 'upload');
+      }
+
+      function cefSetState(ns, fn) {
+        if (cefAppState === 'scanning') {
+          clearInterval(cefProgressTimer);
+          if (cefLottieAnim) { cefLottieAnim.destroy(); cefLottieAnim = null; }
+        }
+        while (cefSC.firstChild) cefSC.removeChild(cefSC.firstChild);
+        cefAppState = ns;
+        if (ns === 'upload') {
+          cefFI.value = '';
+          cefSC.appendChild(cefUC);
+        } else if (ns === 'scanning') {
+          var s = document.createElement('div');
+          s.className = 'lottie-loading';
+          var sf = (fn || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          s.innerHTML = '<div id="cef-lottie-player"></div>' +
+            '<p class="loading-text">Scanning CEF PO <em>' + sf + '</em>. Hold tight!</p>' +
+            '<div class="progress-wrap"><div class="progress-pct" id="cef-progress-pct">0%</div>' +
+            '<div class="progress-track"><div class="progress-fill" id="cef-progress-fill"></div></div></div>';
+          cefSC.appendChild(s);
+          cefLottieAnim = lottie.loadAnimation({
+            container: document.getElementById('cef-lottie-player'),
+            renderer: 'svg', loop: true, autoplay: true,
+            animationData: JSON.parse(JSON.stringify(scanAnimation))
+          });
+          cefStartProgress();
+        } else if (ns === 'results') {
+          cefEC.classList.remove('fade-in');
+          cefSC.appendChild(cefEC);
+        }
+        cefUpdateNav();
+      }
+
+      function cefStartProgress() {
+        cefCurrentProgress = 0; cefUpdatePUI(0);
+        cefProgressTimer = setInterval(function() {
+          cefCurrentProgress += (90 - cefCurrentProgress) * 0.03;
+          if (cefCurrentProgress > 89.5) cefCurrentProgress = 90;
+          cefUpdatePUI(cefCurrentProgress);
+          if (cefCurrentProgress >= 90) clearInterval(cefProgressTimer);
+        }, 200);
+      }
+      function cefFinishProgress() { clearInterval(cefProgressTimer); cefCurrentProgress = 100; cefUpdatePUI(100); }
+      function cefUpdatePUI(p) {
+        var r = Math.round(p);
+        var a = document.getElementById('cef-progress-pct');
+        var b = document.getElementById('cef-progress-fill');
+        if (a) a.textContent = r + '%';
+        if (b) b.style.width = r + '%';
+      }
+
+      /* Line items */
+      window.cefAddLineItem = function(desc, mt, price, isDoc) {
+        var c = document.getElementById('cef-line-items-container');
+        var idx = cefLineItemCounter++;
+        var row = document.createElement('div');
+        row.className = 'line-item-row'; row.dataset.liIdx = idx;
+        if (isDoc) row.dataset.docTypeLine = 'true';
+        var opts = CEF_MT.map(function(m) {
+          return '<option value="'+escHtml(m)+'"'+((mt||'')===m?' selected':'')+'>'+escHtml(m||'\u2014')+'</option>';
+        }).join('');
+        var sd = (desc||'').replace(/"/g,'&quot;');
+        var pv = (price!=null&&price!=='')?parseFloat(price):0;
+        row.innerHTML =
+          '<div><input type="text" class="li-desc" value="'+sd+'" placeholder="Waste stream" /></div>' +
+          '<div><select class="li-movement">'+opts+'</select></div>' +
+          '<div><div class="li-price-wrap"><span class="li-price-prefix">\u00a3</span><input type="number" class="li-price" value="'+pv.toFixed(2)+'" min="0" step="0.01" onchange="cefRecalcTotal()" /></div></div>' +
+          '<div style="padding-bottom:1px;"><button class="btn-remove" type="button" onclick="cefRemoveLineItem(this)">&times;</button></div>';
+        c.appendChild(row); cefRecalcTotal();
+      };
+      window.cefRemoveLineItem = function(btn) {
+        var row = btn.closest('.line-item-row');
+        if (row.dataset.docTypeLine === 'true') cefDocTypeLineAdded = '';
+        row.remove(); cefRecalcTotal();
+      };
+      window.cefRecalcTotal = function() {
+        var t = 0;
+        document.querySelectorAll('#cef-line-items-container .line-item-row').forEach(function(r) {
+          t += parseFloat(r.querySelector('.li-price').value) || 0;
+        });
+        document.getElementById('cef_overall_total_display').textContent = '\u00a3' + t.toFixed(2);
+      };
+      function cefGetLI() {
+        var items = [];
+        document.querySelectorAll('#cef-line-items-container .line-item-row').forEach(function(r) {
+          items.push({ description: r.querySelector('.li-desc').value.trim(), movement_type: r.querySelector('.li-movement').value, price: parseFloat(r.querySelector('.li-price').value)||0 });
+        });
+        return items;
+      }
+      function cefClearLI() {
+        document.getElementById('cef-line-items-container').innerHTML = '';
+        cefLineItemCounter = 0; cefDocTypeLineAdded = ''; cefRecalcTotal();
+      }
+
+      /* Doc type */
+      window.cefOnDocTypeChange = function() {
+        var dt = cefGF('cef_document_type');
+        document.querySelectorAll('#cef-line-items-container .line-item-row[data-doc-type-line="true"]').forEach(function(r){r.remove();});
+        cefDocTypeLineAdded = '';
+        if (dt === 'Consignment Note' || dt === 'Waste Transfer Note') {
+          var exists = false;
+          document.querySelectorAll('#cef-line-items-container .line-item-row').forEach(function(r) {
+            if ((r.querySelector('.li-desc').value||'').trim().toLowerCase() === dt.toLowerCase()) exists = true;
+          });
+          if (!exists) { cefAddLineItem(dt, '', 40.00, true); cefDocTypeLineAdded = dt; }
+        }
+        cefRecalcTotal();
+      };
+
+      /* Fill form */
+      function cefFillForm(data, conf) {
+        cefLastExtractedData = JSON.parse(JSON.stringify(data));
+        cefLastConfidence = conf || {};
+        cefSF('cef_branch_name', data.cef_branch_name);
+        cefSF('cef_po_reference', data.po_reference);
+        cefSF('cef_branch_address', data.cef_branch_address);
+        cefSF('cef_branch_postcode', data.cef_branch_postcode);
+        cefSF('cef_branch_phone', data.cef_branch_phone);
+        cefSF('cef_branch_email', data.cef_branch_email);
+        cefSF('cef_po_date', data.po_date);
+        cefSF('cef_entered_by', data.entered_by);
+        cefSF('cef_site_contact', data.site_contact);
+        cefSF('cef_delivery_address', data.delivery_address || data.cef_branch_address || '');
+        cefSF('cef_delivery_postcode', data.delivery_postcode || data.cef_branch_postcode || '');
+        var pr = data.po_reference || '';
+        var bn = data.cef_branch_name || 'CEF';
+        document.getElementById('cef-doc-title').textContent = 'CEF Purchase Order' + (pr ? ' \u2014 ' + pr : '');
+        document.getElementById('cef-doc-supplier-label').textContent = 'From: ' + bn;
+        cefClearLI();
+        (data.line_items || []).forEach(function(li) {
+          cefAddLineItem(li.description, li.movement_type || '', li.price != null ? li.price : (li.line_total || li.unit_price || 0));
+        });
+        /* Confidence dots */
+        var fmap = {cef_po_reference:'po_reference',cef_branch_name:'cef_branch_name',cef_branch_address:'cef_branch_address',cef_branch_postcode:'cef_branch_postcode',cef_branch_phone:'cef_branch_phone',cef_branch_email:'cef_branch_email',cef_po_date:'po_date',cef_entered_by:'entered_by',cef_site_contact:'site_contact',cef_delivery_address:'delivery_address',cef_delivery_postcode:'delivery_postcode'};
+        Object.keys(fmap).forEach(function(fid) {
+          var lv = (conf||{})[fmap[fid]] || 'medium';
+          var inp = document.getElementById(fid);
+          if (!inp) return;
+          var w = inp.closest('.field');
+          if (w) { var lb = w.querySelector('label'); if (lb) { lb.querySelectorAll('.conf-dot').forEach(function(d){d.remove();}); var dot = document.createElement('span'); dot.className='conf-dot '+lv; dot.title=lv+' confidence'; lb.appendChild(dot); } }
+          inp.classList.toggle('conf-low-border', lv === 'low');
+        });
+      }
+
+      /* Collect payload */
+      function cefPayload() {
+        var li = cefGetLI();
+        return {
+          cef_branch_name: cefGF('cef_branch_name'), po_reference: cefGF('cef_po_reference'),
+          cef_branch_address: cefGF('cef_branch_address'), cef_branch_postcode: cefGF('cef_branch_postcode'),
+          cef_branch_phone: cefGF('cef_branch_phone'), cef_branch_email: cefGF('cef_branch_email'),
+          po_date: cefGF('cef_po_date'), entered_by: cefGF('cef_entered_by'),
+          site_contact: cefGF('cef_site_contact'),
+          delivery_address: cefGF('cef_delivery_address'), delivery_postcode: cefGF('cef_delivery_postcode'),
+          document_type: cefGF('cef_document_type'), special_instructions: cefGF('cef_special_instructions'),
+          person: cefGF('cef-person-select'),
+          line_items: li, overall_total: li.reduce(function(s,i){return s+(i.price||0);},0)
+        };
+      }
+
+      /* Upload & extract */
+      async function cefUploadAndExtract(file) {
+        cefUploadedFileName = file.name.replace(/\.pdf$/i, '');
+        cefSetState('scanning', file.name);
+        var fd = new FormData(); fd.append('pdf', file);
+        try {
+          var resp = await fetch('/extract-cef', { method: 'POST', body: fd });
+          var json = await resp.json();
+          if (!resp.ok || json.error) throw new Error(json.error || 'Extraction failed');
+          cefFinishProgress();
+          await new Promise(function(r){setTimeout(r,500);});
+          cefSetState('results');
+          cefFillForm(json.data || {}, json.confidence || {});
+          requestAnimationFrame(function(){ if(cefEC) cefEC.classList.add('fade-in'); });
+        } catch(err) { alert(err.message); cefSetState('upload'); }
+      }
+
+      /* Reset */
+      window.cefResetToUpload = function() {
+        ['cef_branch_name','cef_po_reference','cef_branch_address','cef_branch_postcode','cef_branch_phone','cef_branch_email','cef_po_date','cef_entered_by','cef_site_contact','cef_delivery_address','cef_delivery_postcode','cef_special_instructions'].forEach(function(id){cefSF(id,'');});
+        cefSF('cef_document_type',''); cefClearLI();
+        document.getElementById('cef-doc-title').textContent = 'CEF Purchase Order';
+        document.getElementById('cef-doc-supplier-label').textContent = '';
+        document.getElementById('cef-hs-banner-area').innerHTML = '';
+        document.querySelectorAll('#cef-edit .conf-dot').forEach(function(d){d.remove();});
+        document.querySelectorAll('#cef-edit .conf-low-border').forEach(function(el){el.classList.remove('conf-low-border');});
+        cefLastExtractedData = null; cefLastConfidence = null;
+        cefSetState('upload');
+      };
+
+      /* Download PDF */
+      window.cefDownloadReviewPDF = async function() {
+        var btn = document.getElementById('cef-btn-download');
+        var ot = btn.textContent; btn.disabled = true; btn.textContent = 'Generating PDF\u2026';
+        try {
+          var resp = await fetch('/download-cef-review-pdf', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(cefPayload()) });
+          if (!resp.ok) { var e = await resp.json().catch(function(){return{error:'PDF error'};}); throw new Error(e.error); }
+          var blob = await resp.blob();
+          var disp = resp.headers.get('Content-Disposition') || '';
+          var m = disp.match(/filename[^;=\n]*=\s*(?:UTF-8''|"?)([^";\n]+)/i);
+          var fn = m ? decodeURIComponent(m[1].replace(/"/g,'')) : 'cef_review.pdf';
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a'); a.href=url; a.download=fn;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(function(){URL.revokeObjectURL(url);},2000);
+          showToast('CEF PDF downloaded');
+        } catch(err){alert(err.message);} finally{btn.disabled=false; btn.textContent=ot;}
+      };
+
+      /* HubSpot */
+      window.cefOpenHubSpotPreview = async function() {
+        var p = cefPayload();
+        var dn = cefUploadedFileName || 'CEF PO';
+        var td = new Date().toISOString().split('T')[0];
+        var ta = (p.overall_total||0).toFixed(2);
+        var pr = p.po_reference || '\u2014';
+        var bn = p.cef_branch_name || 'CEF';
+        var items = p.line_items || [];
+        var person = p.person || 'Katie Wooton';
+
+        var owners = await ensureOwnersLoaded();
+        var defId = getDefaultOwnerId(owners);
+        var ooHtml = '';
+        if (owners.length) { owners.forEach(function(o){ ooHtml += '<option value="'+escHtml(o.id)+'"'+(o.id===defId?' selected':'')+'>'+escHtml(o.name)+'</option>'; }); }
+        else { ooHtml = '<option value="">No owners</option>'; }
+
+        var desc = items.map(function(li,i){ var mt=li.movement_type?' ['+li.movement_type+']':''; return (i+1)+'. '+(li.description||'Item')+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2); }).join('; ');
+        var dd = [['CEF Branch',bn],['Person',person],['Supplier','Waste Experts'],['Site Contact',p.site_contact],['Delivery Address',p.delivery_address],['Delivery Postcode',p.delivery_postcode]];
+        var ddD = dd.filter(function(f){return f[1];}).map(function(f){return f[0]+': '+f[1];}).join('\n');
+        if (ddD) desc += '\n\nDelivery Details:\n'+ddD;
+
+        var liH = '';
+        if (items.length) {
+          liH = '<table class="hs-li-table"><thead><tr><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
+          items.forEach(function(li){ liH += '<tr><td>'+escHtml(li.description)+'</td><td>'+escHtml(li.movement_type||'\u2014')+'</td><td>\u00a3'+(li.price||0).toFixed(2)+'</td></tr>'; });
+          liH += '</tbody></table>';
+        } else { liH = '<div style="color:#8aa3b8;font-size:12px;">No line items</div>'; }
+
+        var mH = '<div class="hs-overlay" onclick="if(event.target===this)cefCloseHSModal()"><div class="hs-modal">' +
+          '<div class="hs-modal-head"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.83 11.41V7.55a2.2 2.2 0 0 0 1.27-1.98 2.22 2.22 0 0 0-2.22-2.22h-.04V1.5a.75.75 0 0 0-1.5 0v1.85h-.04a2.22 2.22 0 0 0-2.22 2.22c0 .9.54 1.67 1.31 2.01v3.83a5.1 5.1 0 0 0-2.53 1.27l-6.63-5.16a2.03 2.03 0 0 0 .05-.42 2.08 2.08 0 1 0-2.08 2.08c.4 0 .77-.12 1.09-.32l6.45 5.02a5.17 5.17 0 0 0 .42 5.53l-1.79 1.79a1.7 1.7 0 0 0-.5-.08 1.72 1.72 0 1 0 1.72 1.72c0-.17-.03-.34-.08-.5l1.76-1.76a5.18 5.18 0 1 0 5.96-8.52zM16.84 18a2.68 2.68 0 1 1 0-5.37 2.68 2.68 0 0 1 0 5.37z"/></svg> CEF \u2014 HubSpot Deal Preview</div>' +
+          '<div class="hs-modal-body">' +
+            '<div style="margin-bottom:16px;"><label style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#8ec431;">Deal Owner</label>' +
+            '<select id="cef-hs-owner" style="width:100%;border:1px solid #3d5a73;border-radius:4px;padding:10px 12px;font-size:14px;font-family:Montserrat,sans-serif;background:#1e2e3d;color:#e8ecf1;margin-top:4px;" onchange="saveLastSelectedOwnerId(this.value)">' + ooHtml + '</select></div>' +
+            '<div class="hs-section">Deal Properties</div>' +
+            '<div class="hs-row"><span class="hs-label">Deal Name</span><span class="hs-value">'+escHtml(dn)+'</span></div>' +
+            '<div class="hs-row"><span class="hs-label">Person</span><span class="hs-value">'+escHtml(person)+'</span></div>' +
+            '<div class="hs-row"><span class="hs-label">CEF Branch</span><span class="hs-value">'+escHtml(bn)+'</span></div>' +
+            '<div class="hs-row"><span class="hs-label">PO Reference</span><span class="hs-value">'+escHtml(pr)+'</span></div>' +
+            '<div class="hs-row"><span class="hs-label">Amount</span><span class="hs-value">\u00a3'+ta+'</span></div>' +
+            '<div class="hs-row"><span class="hs-label">Close Date</span><span class="hs-value">'+td+'</span></div>' +
+            '<div class="hs-section">Line Items</div>' + liH +
+            '<div class="hs-actions"><button class="btn-outline" type="button" onclick="cefCloseHSModal()">Cancel</button>' +
+            '<button class="btn-hubspot" type="button" id="cef-btn-hs-go" onclick="cefCreateDeal()">Confirm &amp; Create Deal</button></div>' +
+          '</div></div></div>';
+
+        document.getElementById('hs-modal-root').innerHTML = mH;
+        window._cefDeal = { deal_name:dn, amount:p.overall_total||0, po_number:p.po_reference||'', supplier_name:bn, line_items:items, description:desc,
+          delivery_details:{ customer_name:bn, supplier:'Waste Experts', purchase_order_number:p.po_reference||'', site_contact:p.site_contact||'', site_contact_number:p.cef_branch_phone||'', site_contact_email:p.cef_branch_email||'', secondary_site_contact:'', secondary_site_contact_number:'', secondary_site_contact_email:'', site_name:bn, site_address:p.delivery_address||p.cef_branch_address||'', site_postcode:p.delivery_postcode||p.cef_branch_postcode||'', opening_times:'', access:'', site_restrictions:'', special_instructions:p.special_instructions||'' }
+        };
+      };
+      window.cefCloseHSModal = function() { document.getElementById('hs-modal-root').innerHTML = ''; };
+      window.cefCreateDeal = async function() {
+        var btn = document.getElementById('cef-btn-hs-go'); btn.disabled=true; btn.textContent='Creating\u2026';
+        var os = document.getElementById('cef-hs-owner');
+        if (os&&os.value) { window._cefDeal.owner_id=os.value; saveLastSelectedOwnerId(os.value); }
+        try {
+          var resp = await fetch('/api/hubspot/create-deal', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(window._cefDeal) });
+          var data = await resp.json();
+          if (!resp.ok||data.error) throw new Error(data.error||'Failed');
+          cefCloseHSModal();
+          document.getElementById('cef-hs-banner-area').innerHTML = '<div class="hs-banner success"><span>CEF deal created &#10003;</span> <a href="'+escHtml(data.deal_url)+'" target="_blank">View in HubSpot</a><span class="hs-banner-close" onclick="this.parentNode.remove()">&#10005;</span></div>';
+        } catch(err) {
+          cefCloseHSModal();
+          document.getElementById('cef-hs-banner-area').innerHTML = '<div class="hs-banner error"><span>'+escHtml(err.message)+'</span><button class="btn-hubspot" style="padding:6px 12px;font-size:12px;" onclick="cefOpenHubSpotPreview()">Retry</button><span class="hs-banner-close" onclick="this.parentNode.remove()">&#10005;</span></div>';
+        }
+      };
+
+      /* WasteLogics */
+      window.cefSendToWasteLogics = async function() {
+        var p = cefPayload(); var btn = document.getElementById('cef-btn-wastelogics'); var oH = btn.innerHTML;
+        btn.disabled=true; btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg> Sending\u2026';
+        var wp = { account_name:p.cef_branch_name||'C.E.F.', supplier_address:p.cef_branch_address||'', purchase_order_number:p.po_reference||'', customer_name:p.cef_branch_name||'', site_contact:p.site_contact||'', site_contact_number:p.cef_branch_phone||'', site_contact_email:p.cef_branch_email||'', site_name:p.cef_branch_name||'', site_address:p.delivery_address||p.cef_branch_address||'', site_postcode:p.delivery_postcode||p.cef_branch_postcode||'', line_items:p.line_items, overall_total:p.overall_total };
+        try {
+          var resp = await fetch('/api/send-to-webhook', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({data:wp, pdf_filename:(cefUploadedFileName||'cef_po')+'.pdf'}) });
+          var r = await resp.json();
+          if (r.success) showToastTR('CEF sent to WasteLogics \u2713','success');
+          else throw new Error(r.error||'Error');
+        } catch(err) { showToastTR("Couldn\u2019t send \u2014 "+err.message,'warning','cefSendToWasteLogics()'); }
+        finally { btn.disabled=false; btn.innerHTML=oH; }
+      };
+
+      /* Delivery email */
+      window.cefOpenDeliveryConfirm = function() {
+        var p = cefPayload(); var pr = p.po_reference||'\u2014'; var em = getDeliveryEmail(); var person = p.person||'Katie Wooton';
+        var pf = [['CEF Branch',p.cef_branch_name],['Person',person],['PO Reference',pr],['Site Contact',p.site_contact],['Delivery Postcode',p.delivery_postcode||p.cef_branch_postcode]];
+        var ph = pf.map(function(f){ return '<div class="cd-row"><span class="cd-lbl">'+escHtml(f[0])+'</span><span class="cd-val">'+escHtml(f[1]||'\u2014')+'</span></div>'; }).join('');
+        document.getElementById('cd-modal-root').innerHTML =
+          '<div class="cd-overlay" onclick="if(event.target===this)cefCloseDM()"><div class="cd-modal">' +
+          '<div class="cd-modal-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 12,13 2,7"/></svg> Send CEF Delivery Email</div>' +
+          '<div class="cd-modal-body">' +
+            '<div style="font-size:13px;color:#8aa3b8;margin-bottom:4px;">Send delivery details to:</div>' +
+            '<div class="cd-email-display">'+escHtml(em)+'</div>' +
+            '<div style="font-size:11px;color:#8aa3b8;margin-bottom:6px;">Subject: CEF Purchase Order \u2014 '+escHtml(pr)+' \u2014 Waste Experts</div>' +
+            '<div class="cd-summary">'+ph+'</div>' +
+            '<div style="font-size:11px;color:#5a7a94;margin-bottom:12px;">All details + PDF attached.</div>' +
+            '<div class="cd-actions"><button class="btn-outline" type="button" onclick="cefCloseDM()" style="color:#8aa3b8;border-color:#4b5563;">Cancel</button>' +
+            '<button class="btn" type="button" id="cef-btn-cd-send" onclick="cefSendEmail()" style="display:inline-flex;align-items:center;gap:6px;">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 12,13 2,7"/></svg> Send</button></div>' +
+          '</div></div></div>';
+      };
+      window.cefCloseDM = function() { document.getElementById('cd-modal-root').innerHTML = ''; };
+      window.cefSendEmail = async function() {
+        var btn = document.getElementById('cef-btn-cd-send'); if(!btn)return;
+        btn.disabled=true; btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg> Sending\u2026';
+        var p = cefPayload(); var em = getDeliveryEmail();
+        try {
+          var resp = await fetch('/api/send-cef-delivery-email', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({to_email:em, payload:p, person:p.person||'Katie Wooton'}) });
+          var data = await resp.json();
+          if (!resp.ok||data.error) throw new Error(data.error||'Failed');
+          cefCloseDM(); showToastTR('CEF PDF sent to '+em+' \u2713','success');
+        } catch(err) { cefCloseDM(); showToastTR(err.message,'error','cefOpenDeliveryConfirm()'); }
+      };
+
+      /* Drag & drop */
+      cefDZ.addEventListener('dragover', function(e){ e.preventDefault(); cefDZ.classList.add('drag-over'); });
+      cefDZ.addEventListener('dragleave', function(){ cefDZ.classList.remove('drag-over'); });
+      cefDZ.addEventListener('drop', function(e){ e.preventDefault(); cefDZ.classList.remove('drag-over'); var f=e.dataTransfer.files[0]; if(f&&f.name.toLowerCase().endsWith('.pdf')) cefUploadAndExtract(f); });
+      cefFI.addEventListener('change', function(e){ var f=e.target.files[0]; if(f) cefUploadAndExtract(f); });
+
+      /* Init CEF */
+      cefSetState('upload');
+    })();
+
   </script>
 </body>
 </html>
