@@ -956,6 +956,331 @@ def extract():
         return jsonify({"error": str(exc)}), 500
 
 
+# ─── CEF Purchase Order Extraction ───────────────────────────────────────────
+
+CEF_EXTRACT_PROMPT = """\
+You are extracting data from a C.E.F. (City Electrical Factors) purchase order PDF.
+
+All CEF POs follow a consistent format. Extract the following fields and return ONLY valid JSON.
+
+EXTRACTION RULES:
+
+1. PO Reference: Always in the top-right area of the PO (e.g. "AIR/135200", "HRG/121460"). This is the purchase order reference number.
+
+2. CEF Branch (Supplier/Customer): The branch details are at the top of the PO. Examples:
+   - "C.E.F. (Airdrie), Unit 3, Block 2, Victoria Industrial Estate, Airdrie, Lanarkshire, ML6 9BY"
+   - "C.E.F. (Harrogate), Unit A, Claro Way, Harrogate, North Yorkshire, HG1 4DE"
+   Extract the full branch name (e.g. "C.E.F. (Airdrie)"), full address, phone number, and email if present.
+
+3. Delivery Address:
+   - If the PO has "Delivery Details" that says "AS PER CEF [BRANCH NAME]" — the delivery address IS the CEF branch address from the top of the PO.
+   - If there are specific delivery details provided that differ from the branch, use those instead.
+   - If no delivery details section exists, default to the CEF branch address from the top.
+
+4. Line Items / Products & Services: From the table in the middle of the PO:
+   - Extract: Qty, Item code, Description, Cost, Per unit, Required date, Goods total
+   - Each line item (e.g. "WEEE Green Empty & Replace", "Lamp Green Steel Empty & Replace", "Ea Consignment Note")
+   - Use the description and goods total for each line.
+
+5. Entered By: The person who entered/created the PO (e.g. "Lewis Grant", "George Hall"). Usually near top or bottom.
+
+6. Total: The Goods Total at the bottom of the PO (e.g. "£504.64", "£977.43").
+
+7. Date: The PO date, usually in the top-right area near the PO reference.
+
+8. Contact Name on PO: Some POs have a contact name at the bottom of the line items area or in delivery details (e.g. "katie", "KATIE WOOTON"). Extract this as the site contact.
+
+Return ONLY valid JSON with this shape:
+{
+  "po_reference": "PO reference number (e.g. AIR/135200), or null",
+  "cef_branch_name": "Full CEF branch name (e.g. C.E.F. (Airdrie)), or null",
+  "cef_branch_address": "Full branch address excluding postcode, newline separated, or null",
+  "cef_branch_postcode": "Branch postcode, or null",
+  "cef_branch_phone": "Branch phone number, or null",
+  "cef_branch_email": "Branch email, or null",
+  "delivery_address": "Delivery address if different from branch, or null (null means same as branch)",
+  "delivery_postcode": "Delivery postcode if different from branch, or null",
+  "entered_by": "Person who entered/created the PO, or null",
+  "po_date": "PO date as found on document, or null",
+  "site_contact": "Contact name found on PO (e.g. from delivery details or bottom of items), or null",
+  "line_items": [
+    {
+      "description": "Product or service description. Max 8 words.",
+      "quantity": 1,
+      "item_code": "Item/product code if present, or null",
+      "unit_price": 0.00,
+      "line_total": 0.00
+    }
+  ],
+  "overall_total": 0.00
+}
+
+RULES:
+- Use null when a value is genuinely not found.
+- Use numeric types for quantity, unit_price, line_total, overall_total.
+- Extract ALL line items from the products/services table.
+- overall_total is the goods total at the bottom of the PO.
+- Return JSON only. No markdown. No explanation.
+"""
+
+
+def _normalise_cef_data(parsed):
+    """Normalise CEF extraction response into a consistent shape."""
+    result = {}
+    for key in [
+        "po_reference", "cef_branch_name", "cef_branch_address",
+        "cef_branch_postcode", "cef_branch_phone", "cef_branch_email",
+        "delivery_address", "delivery_postcode",
+        "entered_by", "po_date", "site_contact",
+    ]:
+        val = parsed.get(key)
+        result[key] = str(val).strip() if val is not None else None
+
+    # Line items
+    raw_items = parsed.get("line_items") or []
+    line_items = []
+    for item in raw_items:
+        if isinstance(item, dict):
+            li = {
+                "description": str(item.get("description") or "").strip(),
+                "quantity": item.get("quantity", 1),
+                "item_code": item.get("item_code"),
+                "unit_price": float(item.get("unit_price") or 0),
+                "line_total": float(item.get("line_total") or 0),
+            }
+            # Use line_total as price for frontend compatibility
+            li["price"] = li["line_total"] if li["line_total"] else li["unit_price"]
+            line_items.append(li)
+
+    overall_total = parsed.get("overall_total")
+    if overall_total is not None:
+        try:
+            overall_total = float(overall_total)
+        except (ValueError, TypeError):
+            overall_total = 0.0
+    else:
+        overall_total = sum(li.get("price", 0) for li in line_items)
+
+    result["line_items"] = line_items
+    result["overall_total"] = overall_total
+    return result
+
+
+def _calculate_cef_confidence(data):
+    """Calculate per-field confidence for CEF extraction (no templates needed)."""
+    confidence = {}
+    fields = [
+        "po_reference", "cef_branch_name", "cef_branch_address",
+        "cef_branch_postcode", "cef_branch_phone", "cef_branch_email",
+        "delivery_address", "delivery_postcode",
+        "entered_by", "po_date", "site_contact",
+    ]
+    for field in fields:
+        value = data.get(field)
+        has_value = value is not None and str(value).strip() != ""
+        # CEF POs follow a consistent format so confidence is high when found
+        confidence[field] = "high" if has_value else "low"
+
+    line_items = data.get("line_items", [])
+    confidence["line_items"] = "high" if line_items else "low"
+    confidence["overall_total"] = confidence["line_items"]
+    return confidence
+
+
+@app.route("/extract-cef", methods=["POST"])
+def extract_cef():
+    """Extract data from a CEF purchase order PDF."""
+    if "pdf" not in request.files:
+        return jsonify({"error": "No PDF uploaded"}), 400
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return jsonify({"error": "ANTHROPIC_API_KEY not set"}), 500
+
+    pdf_bytes = request.files["pdf"].read()
+    b64_pdf = base64.standard_b64encode(pdf_bytes).decode()
+    client = anthropic.Anthropic(api_key=api_key)
+
+    try:
+        resp = client.messages.create(
+            model="claude-opus-4-1",
+            max_tokens=1800,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "document",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "application/pdf",
+                                "data": b64_pdf,
+                            },
+                        },
+                        {"type": "text", "text": CEF_EXTRACT_PROMPT},
+                    ],
+                }
+            ],
+        )
+
+        parsed = _clean_json_payload(resp.content[0].text)
+        normalised = _normalise_cef_data(parsed)
+        confidence = _calculate_cef_confidence(normalised)
+
+        return jsonify({
+            "success": True,
+            "data": normalised,
+            "confidence": confidence,
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/download-cef-review-pdf", methods=["POST"])
+def download_cef_review_pdf():
+    """Generate a branded PDF for a CEF purchase order review."""
+    payload = request.get_json(silent=True) or {}
+
+    # Map CEF fields into the standard payload format for PDF generation
+    mapped = {
+        "account_name": payload.get("cef_branch_name") or "C.E.F.",
+        "supplier_address": payload.get("cef_branch_address") or "",
+        "purchase_order_number": payload.get("po_reference") or "",
+        "service_description": payload.get("service_description") or "",
+        "document_type": payload.get("document_type") or "",
+        "customer_name": payload.get("cef_branch_name") or "",
+        "sic_code": "",
+        "site_contact": payload.get("site_contact") or "",
+        "site_contact_number": payload.get("cef_branch_phone") or "",
+        "site_contact_email": payload.get("cef_branch_email") or "",
+        "secondary_site_contact": "",
+        "secondary_site_contact_number": "",
+        "secondary_site_contact_email": "",
+        "site_name": payload.get("cef_branch_name") or "",
+        "site_address": payload.get("delivery_address") or payload.get("cef_branch_address") or "",
+        "site_postcode": payload.get("delivery_postcode") or payload.get("cef_branch_postcode") or "",
+        "opening_times": "",
+        "access": "",
+        "site_restrictions": "",
+        "special_instructions": payload.get("special_instructions") or "",
+        "line_items": payload.get("line_items") or [],
+        "overall_total": payload.get("overall_total") or 0,
+    }
+
+    try:
+        pdf_buffer = _build_review_pdf(mapped)
+    except Exception as exc:
+        return jsonify({"error": f"PDF generation failed: {exc}"}), 500
+
+    po_ref = _sanitise_filename(mapped["purchase_order_number"]) or "Unknown"
+    branch = _sanitise_filename(mapped["account_name"]) or "CEF"
+    postcode = _sanitise_filename(mapped["site_postcode"]) or "Unknown"
+    filename = f"{branch} - {po_ref} - {postcode}.pdf"
+
+    return send_file(
+        pdf_buffer,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@app.route("/api/send-cef-delivery-email", methods=["POST"])
+def send_cef_delivery_email():
+    """Send a CEF delivery email via Resend API."""
+    resend_key = RESEND_API_KEY
+    if not resend_key:
+        return jsonify({
+            "error": "Email not configured — add RESEND_API_KEY in Railway environment variables"
+        }), 500
+
+    body = request.get_json(silent=True) or {}
+    to_email = (body.get("to_email") or "").strip()
+    payload = body.get("payload") or {}
+    person = body.get("person") or "Katie Wooton"
+
+    if not to_email:
+        return jsonify({"error": "No recipient email provided"}), 400
+
+    # Map CEF fields into standard payload format for email/PDF
+    mapped = {
+        "account_name": payload.get("cef_branch_name") or "C.E.F.",
+        "supplier_address": payload.get("cef_branch_address") or "",
+        "purchase_order_number": payload.get("po_reference") or "",
+        "service_description": payload.get("service_description") or "",
+        "document_type": payload.get("document_type") or "",
+        "customer_name": payload.get("cef_branch_name") or "",
+        "sic_code": "",
+        "site_contact": payload.get("site_contact") or "",
+        "site_contact_number": payload.get("cef_branch_phone") or "",
+        "site_contact_email": payload.get("cef_branch_email") or "",
+        "secondary_site_contact": "",
+        "secondary_site_contact_number": "",
+        "secondary_site_contact_email": "",
+        "site_name": payload.get("cef_branch_name") or "",
+        "site_address": payload.get("delivery_address") or payload.get("cef_branch_address") or "",
+        "site_postcode": payload.get("delivery_postcode") or payload.get("cef_branch_postcode") or "",
+        "opening_times": "",
+        "access": "",
+        "site_restrictions": "",
+        "special_instructions": payload.get("special_instructions") or "",
+        "line_items": payload.get("line_items") or [],
+        "overall_total": payload.get("overall_total") or 0,
+        "person": person,
+    }
+
+    # Generate the PDF
+    try:
+        pdf_buffer = _build_review_pdf(mapped)
+    except Exception as exc:
+        return jsonify({"error": f"PDF generation failed: {exc}"}), 500
+
+    po_number = mapped["purchase_order_number"] or "Unknown"
+    supplier_name = "Waste Experts"
+
+    pdf_bytes = pdf_buffer.getvalue()
+    pdf_b64 = base64.standard_b64encode(pdf_bytes).decode()
+
+    safe_po = _sanitise_filename(po_number)
+    attachment_filename = f"CEF_PO_{safe_po}.pdf"
+
+    email_html = _build_delivery_email_html(mapped)
+
+    resend_payload = {
+        "from": "Waste Experts PO Extractor <onboarding@resend.dev>",
+        "to": [to_email],
+        "subject": f"CEF Purchase Order — {po_number} — {supplier_name}",
+        "html": email_html,
+        "attachments": [{
+            "filename": attachment_filename,
+            "content": pdf_b64,
+        }],
+    }
+
+    try:
+        resp = req_lib.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {resend_key}",
+                "Content-Type": "application/json",
+            },
+            json=resend_payload,
+            timeout=30,
+        )
+        if resp.ok:
+            resp_body = resp.json()
+            return jsonify({"success": True, "id": resp_body.get("id")}), 200
+        else:
+            try:
+                err_body = resp.json()
+                err_msg = err_body.get("message", resp.text)
+            except Exception:
+                err_msg = resp.text
+            return jsonify({"error": f"Resend API error: {err_msg}"}), resp.status_code
+    except Exception as exc:
+        return jsonify({"error": f"Failed to send email: {exc}"}), 500
+
+
 @app.route("/brokers", methods=["GET"])
 def get_brokers():
     return jsonify({"brokers": [{"name": name, "address": addr} for name, addr in BROKERS.items()]})
