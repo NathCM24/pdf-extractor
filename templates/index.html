@@ -1165,8 +1165,8 @@
         'opening_times', 'access', 'site_restrictions', 'special_instructions'
       ].forEach(key => setField(key, data[key]));
 
-      /* Account name left blank — user must select via typeahead */
-      setField('account_name', '');
+      /* Pre-fill account name with extracted supplier (if it matches a broker) */
+      setField('account_name', data.account_name || '');
 
       /* Document Type: set to extracted value or empty */
       var docType = (data.document_type || '').trim();
@@ -1179,7 +1179,8 @@
       document.getElementById('doc-title').textContent = 'Purchase Order' + (poNum ? ' \u2014 ' + poNum : '');
       document.getElementById('doc-supplier-label').textContent = 'From: ' + supplierName;
 
-      setField('supplier_address', '');
+      /* Set supplier address from pre-filled account name */
+      updateSupplierAddress();
       validateAccount();
 
       /* Populate line items (map from old format to new) */
@@ -1590,7 +1591,7 @@
 
       /* Append delivery details to description */
       var ddFields = [
-        ['Account Name (WL)', payload.customer_name || payload.account_name],
+        ['Account Name (WL)', payload.account_name],
         ['Supplier', 'Waste Experts'],
         ['Site Contact', payload.site_contact],
         ['Site Contact Number', payload.site_contact_number],
@@ -1676,7 +1677,7 @@
         line_items: items,
         description: desc,
         delivery_details: {
-          customer_name: payload.customer_name || payload.account_name || '',
+          customer_name: payload.account_name || '',
           supplier: 'Waste Experts',
           purchase_order_number: payload.purchase_order_number || '',
           site_contact: payload.site_contact || '',
@@ -2220,7 +2221,7 @@
 
       /* Build preview of delivery details email */
       var previewFields = [
-        ['Account Name (WL)', payload.customer_name || payload.account_name],
+        ['Account Name (WL)', payload.account_name],
         ['Supplier', 'Waste Experts'],
         ['Purchase Order Number', poNumber],
         ['Site Contact', payload.site_contact],

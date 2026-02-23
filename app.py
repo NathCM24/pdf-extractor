@@ -43,12 +43,38 @@ LAST_REVIEW_PAYLOAD = {}
 SCRIPT_DIR = Path(__file__).parent
 
 # ─── Supplier template storage ────────────────────────────────────────────────
-# Use TEMPLATES_DIR env var to point to a persistent volume (e.g. Railway volume
-# mount at /data). Defaults to SCRIPT_DIR which works locally but is ephemeral
-# on platforms like Railway that rebuild containers on deploy.
-TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", str(SCRIPT_DIR)))
-TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
-TEMPLATES_FILE = TEMPLATES_DIR / "supplier_templates.json"
+# Use TEMPLATES_PATH env var to set the full path to the templates JSON file.
+# Defaults to /data/supplier_templates.json (Railway persistent volume).
+# Falls back to a local file next to app.py when /data/ is not available
+# (e.g. local development without a mounted volume).
+_default_templates_path = Path("/data/supplier_templates.json")
+_local_templates_path = SCRIPT_DIR / "supplier_templates.json"
+
+def _resolve_templates_path():
+    """Pick the best writable location for the templates file."""
+    explicit = os.environ.get("TEMPLATES_PATH")
+    if explicit:
+        p = Path(explicit)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+    # Default: try /data/ (Railway volume)
+    try:
+        _default_templates_path.parent.mkdir(parents=True, exist_ok=True)
+        # Verify the directory is actually writable
+        test_file = _default_templates_path.parent / ".write_test"
+        test_file.touch()
+        test_file.unlink()
+        return _default_templates_path
+    except OSError:
+        # /data/ not available — fall back to local file for development
+        return _local_templates_path
+
+TEMPLATES_FILE = _resolve_templates_path()
+
+# Ensure the file exists on startup with an empty object
+if not TEMPLATES_FILE.exists():
+    TEMPLATES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TEMPLATES_FILE.write_text("{}")
 TRAINING_PDF_CACHE = {}  # supplier -> base64 pdf data (temporary, per-session)
 
 
@@ -608,7 +634,7 @@ def _build_review_pdf(payload: dict) -> BytesIO:
 
     sections = [
         ("ORDER DETAILS", [
-            ("Account Name (Waste Logics)", payload.get("customer_name") or payload.get("account_name")),
+            ("Account Name (Waste Logics)", payload.get("account_name")),
             ("Supplier", "Waste Experts"),
             ("Purchase Order Number", payload.get("purchase_order_number")),
         ]),
@@ -743,7 +769,7 @@ def _normalise_data(data: dict):
     supplier = (data.get("supplier") or "").strip()
 
     data["supplier"] = supplier
-    data["account_name"] = ""  # User must select via typeahead
+    data["account_name"] = supplier if supplier and supplier in BROKERS else ""
     data["supplier_found"] = bool(supplier and supplier in BROKERS)
     data["supplier_address"] = BROKERS.get(supplier, "")
     data["document_type"] = data.get("document_type") or "Consignment Note"
@@ -1675,12 +1701,10 @@ def _build_delivery_email_html(payload):
             f'<tr><td colspan="2" {section_style}>{_esc(title)}</td></tr>'
         )
 
-    customer_name = _val("customer_name", _val("account_name"))
-
     table_rows = "".join([
         # Order Details
         section_header("Order Details"),
-        row("Account Name (Waste Logics)", customer_name),
+        row("Account Name (Waste Logics)", _val("account_name")),
         row("Supplier", "Waste Experts"),
         row("Purchase Order Number", _val("purchase_order_number")),
 
