@@ -43,12 +43,38 @@ LAST_REVIEW_PAYLOAD = {}
 SCRIPT_DIR = Path(__file__).parent
 
 # ─── Supplier template storage ────────────────────────────────────────────────
-# Use TEMPLATES_DIR env var to point to a persistent volume (e.g. Railway volume
-# mount at /data). Defaults to SCRIPT_DIR which works locally but is ephemeral
-# on platforms like Railway that rebuild containers on deploy.
-TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", str(SCRIPT_DIR)))
-TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
-TEMPLATES_FILE = TEMPLATES_DIR / "supplier_templates.json"
+# Use TEMPLATES_PATH env var to set the full path to the templates JSON file.
+# Defaults to /data/supplier_templates.json (Railway persistent volume).
+# Falls back to a local file next to app.py when /data/ is not available
+# (e.g. local development without a mounted volume).
+_default_templates_path = Path("/data/supplier_templates.json")
+_local_templates_path = SCRIPT_DIR / "supplier_templates.json"
+
+def _resolve_templates_path():
+    """Pick the best writable location for the templates file."""
+    explicit = os.environ.get("TEMPLATES_PATH")
+    if explicit:
+        p = Path(explicit)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+    # Default: try /data/ (Railway volume)
+    try:
+        _default_templates_path.parent.mkdir(parents=True, exist_ok=True)
+        # Verify the directory is actually writable
+        test_file = _default_templates_path.parent / ".write_test"
+        test_file.touch()
+        test_file.unlink()
+        return _default_templates_path
+    except OSError:
+        # /data/ not available — fall back to local file for development
+        return _local_templates_path
+
+TEMPLATES_FILE = _resolve_templates_path()
+
+# Ensure the file exists on startup with an empty object
+if not TEMPLATES_FILE.exists():
+    TEMPLATES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TEMPLATES_FILE.write_text("{}")
 TRAINING_PDF_CACHE = {}  # supplier -> base64 pdf data (temporary, per-session)
 
 
