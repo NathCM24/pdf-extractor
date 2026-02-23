@@ -2854,7 +2854,12 @@
       /* HubSpot */
       window.cefOpenHubSpotPreview = async function() {
         var p = cefPayload();
-        var dn = cefUploadedFileName || 'CEF PO';
+        /* Build deal name to match downloaded PDF filename: {Branch} - {PO Ref} - {Postcode} */
+        var _sanFn = function(t){ return t.replace(/[/\\:*?"<>|]/g, '-').trim() || 'Unknown'; };
+        var _dnBranch = _sanFn(p.cef_branch_name || 'CEF');
+        var _dnPoRef  = _sanFn(p.po_reference || 'Unknown');
+        var _dnPostcode = _sanFn(p.cef_branch_postcode || 'Unknown');
+        var dn = _dnBranch + ' - ' + _dnPoRef + ' - ' + _dnPostcode;
         var td = new Date().toISOString().split('T')[0];
         var ta = (p.overall_total||0).toFixed(2);
         var pr = p.po_reference || '\u2014';
