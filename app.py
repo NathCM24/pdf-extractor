@@ -608,7 +608,7 @@ def _build_review_pdf(payload: dict) -> BytesIO:
 
     sections = [
         ("ORDER DETAILS", [
-            ("Account Name (Waste Logics)", payload.get("customer_name") or payload.get("account_name")),
+            ("Account Name (Waste Logics)", payload.get("account_name")),
             ("Supplier", "Waste Experts"),
             ("Purchase Order Number", payload.get("purchase_order_number")),
         ]),
@@ -743,7 +743,7 @@ def _normalise_data(data: dict):
     supplier = (data.get("supplier") or "").strip()
 
     data["supplier"] = supplier
-    data["account_name"] = ""  # User must select via typeahead
+    data["account_name"] = supplier if supplier and supplier in BROKERS else ""
     data["supplier_found"] = bool(supplier and supplier in BROKERS)
     data["supplier_address"] = BROKERS.get(supplier, "")
     data["document_type"] = data.get("document_type") or "Consignment Note"
@@ -1675,12 +1675,10 @@ def _build_delivery_email_html(payload):
             f'<tr><td colspan="2" {section_style}>{_esc(title)}</td></tr>'
         )
 
-    customer_name = _val("customer_name", _val("account_name"))
-
     table_rows = "".join([
         # Order Details
         section_header("Order Details"),
-        row("Account Name (Waste Logics)", customer_name),
+        row("Account Name (Waste Logics)", _val("account_name")),
         row("Supplier", "Waste Experts"),
         row("Purchase Order Number", _val("purchase_order_number")),
 
