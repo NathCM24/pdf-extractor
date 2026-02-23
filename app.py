@@ -979,10 +979,11 @@ EXTRACTION RULES:
    - "C.E.F. (Harrogate), Unit A, Claro Way, Harrogate, North Yorkshire, HG1 4DE"
    Extract the full branch name (e.g. "C.E.F. (Airdrie)"), full address, phone number, and email if present.
 
-3. Delivery Address:
-   - If the PO has "Delivery Details" that says "AS PER CEF [BRANCH NAME]" — the delivery address IS the CEF branch address from the top of the PO.
-   - If there are specific delivery details provided that differ from the branch, use those instead.
-   - If no delivery details section exists, default to the CEF branch address from the top.
+3. Delivery Address — IMPORTANT, follow these rules strictly:
+   - If no "Delivery Details" section exists at all on the PO → set delivery_address and delivery_postcode to null (the system will use the CEF branch address automatically).
+   - If the "Delivery Details" section says "AS PER CEF", "AS PER CEF [BRANCH NAME]", "AS ABOVE", or contains text that refers back to the CEF branch rather than providing a distinct address → set delivery_address and delivery_postcode to null.
+   - ONLY set delivery_address and delivery_postcode to non-null values if the "Delivery Details" section contains a genuinely different address that is NOT the CEF branch address from the top of the PO.
+   - When in doubt, set them to null — the system will fall back to the branch address.
 
 4. Line Items / Products & Services: From the table in the middle of the PO:
    - Extract: Qty, Item code, Description, Cost, Per unit, Required date, Goods total
@@ -1005,8 +1006,8 @@ Return ONLY valid JSON with this shape:
   "cef_branch_postcode": "Branch postcode, or null",
   "cef_branch_phone": "Branch phone number, or null",
   "cef_branch_email": "Branch email, or null",
-  "delivery_address": "Delivery address if different from branch, or null (null means same as branch)",
-  "delivery_postcode": "Delivery postcode if different from branch, or null",
+  "delivery_address": "Delivery address ONLY if genuinely different from the CEF branch address, or null. If delivery says 'AS PER CEF' or similar, use null.",
+  "delivery_postcode": "Delivery postcode ONLY if genuinely different from branch postcode, or null. If delivery says 'AS PER CEF' or similar, use null.",
   "entered_by": "Person who entered/created the PO, or null",
   "po_date": "PO date as found on document, or null",
   "site_contact": "Contact name found on PO (e.g. from delivery details or bottom of items), or null",
@@ -1042,6 +1043,12 @@ def _normalise_cef_data(parsed):
     ]:
         val = parsed.get(key)
         result[key] = str(val).strip() if val is not None else None
+
+    # Delivery address: treat "AS PER CEF …" / "AS ABOVE" as null (same as branch)
+    _del_addr = result.get("delivery_address") or ""
+    if re.search(r"(?i)\b(as\s+per\s+cef|as\s+above)\b", _del_addr):
+        result["delivery_address"] = None
+        result["delivery_postcode"] = None
 
     # Line items
     raw_items = parsed.get("line_items") or []
