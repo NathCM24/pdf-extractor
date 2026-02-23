@@ -896,6 +896,27 @@
             <label>Special Instructions</label>
             <textarea id="cef_special_instructions"></textarea>
           </div>
+
+          <!-- ===== Prepared By ===== -->
+          <div class="section-title" style="margin-top:10px;">Prepared By</div>
+          <div class="full" id="cef-prepared-by-block" style="background:#162432; border:1px solid #3d5a73; border-radius:6px; padding:14px 16px; display:grid; grid-template-columns:1fr 1fr; gap:6px 20px;">
+            <div>
+              <span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; color:#8ec431;">Name</span>
+              <div id="cef-prep-name" style="font-size:14px; font-weight:600; color:#e8ecf1; margin-top:2px;">Katie Wooton</div>
+            </div>
+            <div>
+              <span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; color:#8ec431;">Title</span>
+              <div id="cef-prep-title" style="font-size:13px; color:#c5d0db; margin-top:2px;">CEF Internal Account Manager</div>
+            </div>
+            <div>
+              <span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; color:#8ec431;">Email</span>
+              <div id="cef-prep-email" style="font-size:13px; color:#c5d0db; margin-top:2px;">katie@wasteexperts.co.uk</div>
+            </div>
+            <div>
+              <span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; color:#8ec431;">Phone</span>
+              <div id="cef-prep-phone" style="font-size:13px; color:#c5d0db; margin-top:2px;">01388 721 000</div>
+            </div>
+          </div>
         </div>
 
         <!-- Download PDF (top area) -->
@@ -2579,6 +2600,29 @@
       var cefUploadedFileName = '';
       var CEF_MT = ['', 'Remove', 'Uplift', 'Exchange', 'WWL', 'Delivery'];
 
+      /* Person details mapping */
+      var CEF_PERSONS = {
+        'Katie Wooton': { name: 'Katie Wooton', title: 'CEF Internal Account Manager', email: 'katie@wasteexperts.co.uk', phone: '01388 721 000' },
+        'David Williams': { name: 'David Williams', title: 'CEF Team Leader', email: 'david@wasteexperts.co.uk', phone: '01388 721 000' }
+      };
+
+      function cefUpdatePreparedBy() {
+        var sel = document.getElementById('cef-person-select');
+        var person = sel ? sel.value : 'Katie Wooton';
+        var details = CEF_PERSONS[person] || CEF_PERSONS['Katie Wooton'];
+        var ne = document.getElementById('cef-prep-name');
+        var te = document.getElementById('cef-prep-title');
+        var ee = document.getElementById('cef-prep-email');
+        var pe = document.getElementById('cef-prep-phone');
+        if (ne) ne.textContent = details.name;
+        if (te) te.textContent = details.title;
+        if (ee) ee.textContent = details.email;
+        if (pe) pe.textContent = details.phone;
+      }
+
+      /* Wire up person dropdown */
+      document.getElementById('cef-person-select').addEventListener('change', cefUpdatePreparedBy);
+
       var cefSC = document.getElementById('cef-state-container');
       var cefUC = document.getElementById('cef-upload-card');
       var cefEC = document.getElementById('cef-edit');
@@ -2739,6 +2783,8 @@
       /* Collect payload */
       function cefPayload() {
         var li = cefGetLI();
+        var personName = cefGF('cef-person-select') || 'Katie Wooton';
+        var personDetails = CEF_PERSONS[personName] || CEF_PERSONS['Katie Wooton'];
         return {
           cef_branch_name: cefGF('cef_branch_name'), po_reference: cefGF('cef_po_reference'),
           cef_branch_address: cefGF('cef_branch_address'), cef_branch_postcode: cefGF('cef_branch_postcode'),
@@ -2747,7 +2793,11 @@
           site_contact: cefGF('cef_site_contact'),
           delivery_address: cefGF('cef_delivery_address'), delivery_postcode: cefGF('cef_delivery_postcode'),
           document_type: cefGF('cef_document_type'), special_instructions: cefGF('cef_special_instructions'),
-          person: cefGF('cef-person-select'),
+          person: personName,
+          person_name: personDetails.name,
+          person_title: personDetails.title,
+          person_email: personDetails.email,
+          person_phone: personDetails.phone,
           line_items: li, overall_total: li.reduce(function(s,i){return s+(i.price||0);},0)
         };
       }
@@ -2818,8 +2868,11 @@
         if (owners.length) { owners.forEach(function(o){ ooHtml += '<option value="'+escHtml(o.id)+'"'+(o.id===defId?' selected':'')+'>'+escHtml(o.name)+'</option>'; }); }
         else { ooHtml = '<option value="">No owners</option>'; }
 
+        var personDetails = CEF_PERSONS[person] || CEF_PERSONS['Katie Wooton'];
         var desc = items.map(function(li,i){ var mt=li.movement_type?' ['+li.movement_type+']':''; return (i+1)+'. '+(li.description||'Item')+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2); }).join('; ');
-        var dd = [['CEF Branch',bn],['Person',person],['Supplier','Waste Experts'],['Site Contact',p.site_contact],['Delivery Address',p.delivery_address],['Delivery Postcode',p.delivery_postcode]];
+        desc += '\n\nPrepared By: '+personDetails.name+' | '+personDetails.title+' | '+personDetails.email+' | '+personDetails.phone;
+        if (p.po_date) desc += '\nPO Date: '+p.po_date;
+        var dd = [['CEF Branch',bn],['Supplier','Waste Experts'],['Site Contact',p.site_contact],['Delivery Address',p.delivery_address],['Delivery Postcode',p.delivery_postcode]];
         var ddD = dd.filter(function(f){return f[1];}).map(function(f){return f[0]+': '+f[1];}).join('\n');
         if (ddD) desc += '\n\nDelivery Details:\n'+ddD;
 
@@ -2837,11 +2890,16 @@
             '<select id="cef-hs-owner" style="width:100%;border:1px solid #3d5a73;border-radius:4px;padding:10px 12px;font-size:14px;font-family:Montserrat,sans-serif;background:#1e2e3d;color:#e8ecf1;margin-top:4px;" onchange="saveLastSelectedOwnerId(this.value)">' + ooHtml + '</select></div>' +
             '<div class="hs-section">Deal Properties</div>' +
             '<div class="hs-row"><span class="hs-label">Deal Name</span><span class="hs-value">'+escHtml(dn)+'</span></div>' +
-            '<div class="hs-row"><span class="hs-label">Person</span><span class="hs-value">'+escHtml(person)+'</span></div>' +
             '<div class="hs-row"><span class="hs-label">CEF Branch</span><span class="hs-value">'+escHtml(bn)+'</span></div>' +
             '<div class="hs-row"><span class="hs-label">PO Reference</span><span class="hs-value">'+escHtml(pr)+'</span></div>' +
+            (p.po_date ? '<div class="hs-row"><span class="hs-label">PO Date</span><span class="hs-value">'+escHtml(p.po_date)+'</span></div>' : '') +
             '<div class="hs-row"><span class="hs-label">Amount</span><span class="hs-value">\u00a3'+ta+'</span></div>' +
             '<div class="hs-row"><span class="hs-label">Close Date</span><span class="hs-value">'+td+'</span></div>' +
+            '<div class="hs-section">Prepared By</div>' +
+            '<div class="hs-row"><span class="hs-label">Name</span><span class="hs-value">'+escHtml(personDetails.name)+'</span></div>' +
+            '<div class="hs-row"><span class="hs-label">Title</span><span class="hs-value">'+escHtml(personDetails.title)+'</span></div>' +
+            '<div class="hs-row"><span class="hs-label">Email</span><span class="hs-value">'+escHtml(personDetails.email)+'</span></div>' +
+            '<div class="hs-row"><span class="hs-label">Phone</span><span class="hs-value">'+escHtml(personDetails.phone)+'</span></div>' +
             '<div class="hs-section">Line Items</div>' + liH +
             '<div class="hs-actions"><button class="btn-outline" type="button" onclick="cefCloseHSModal()">Cancel</button>' +
             '<button class="btn-hubspot" type="button" id="cef-btn-hs-go" onclick="cefCreateDeal()">Confirm &amp; Create Deal</button></div>' +
@@ -2873,7 +2931,7 @@
       window.cefSendToWasteLogics = async function() {
         var p = cefPayload(); var btn = document.getElementById('cef-btn-wastelogics'); var oH = btn.innerHTML;
         btn.disabled=true; btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg> Sending\u2026';
-        var wp = { account_name:p.cef_branch_name||'C.E.F.', supplier_address:p.cef_branch_address||'', purchase_order_number:p.po_reference||'', customer_name:p.cef_branch_name||'', site_contact:p.site_contact||'', site_contact_number:p.cef_branch_phone||'', site_contact_email:p.cef_branch_email||'', site_name:p.cef_branch_name||'', site_address:p.delivery_address||p.cef_branch_address||'', site_postcode:p.delivery_postcode||p.cef_branch_postcode||'', line_items:p.line_items, overall_total:p.overall_total };
+        var wp = { account_name:p.cef_branch_name||'C.E.F.', supplier_address:p.cef_branch_address||'', purchase_order_number:p.po_reference||'', customer_name:p.cef_branch_name||'', site_contact:p.site_contact||'', site_contact_number:p.cef_branch_phone||'', site_contact_email:p.cef_branch_email||'', site_name:p.cef_branch_name||'', site_address:p.delivery_address||p.cef_branch_address||'', site_postcode:p.delivery_postcode||p.cef_branch_postcode||'', line_items:p.line_items, overall_total:p.overall_total, po_date:p.po_date||'', person_name:p.person_name||'', person_title:p.person_title||'', person_email:p.person_email||'', person_phone:p.person_phone||'' };
         try {
           var resp = await fetch('/api/send-to-webhook', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({data:wp, pdf_filename:(cefUploadedFileName||'cef_po')+'.pdf'}) });
           var r = await resp.json();
@@ -2886,7 +2944,7 @@
       /* Delivery email */
       window.cefOpenDeliveryConfirm = function() {
         var p = cefPayload(); var pr = p.po_reference||'\u2014'; var em = getDeliveryEmail(); var person = p.person||'Katie Wooton';
-        var pf = [['CEF Branch',p.cef_branch_name],['Person',person],['PO Reference',pr],['Site Contact',p.site_contact],['Delivery Postcode',p.delivery_postcode||p.cef_branch_postcode]];
+        var pf = [['CEF Branch',p.cef_branch_name],['PO Date',p.po_date],['Prepared By',p.person_name+' \u2014 '+p.person_title],['Email',p.person_email],['Phone',p.person_phone],['PO Reference',pr],['Site Contact',p.site_contact],['Delivery Postcode',p.delivery_postcode||p.cef_branch_postcode]];
         var ph = pf.map(function(f){ return '<div class="cd-row"><span class="cd-lbl">'+escHtml(f[0])+'</span><span class="cd-val">'+escHtml(f[1]||'\u2014')+'</span></div>'; }).join('');
         document.getElementById('cd-modal-root').innerHTML =
           '<div class="cd-overlay" onclick="if(event.target===this)cefCloseDM()"><div class="cd-modal">' +
