@@ -473,20 +473,27 @@ def _build_review_pdf(payload: dict) -> BytesIO:
     down(6 * mm)
 
     # ── Prepared By row ───────────────────────────────────────────────────
+    # Use person details from payload if available (CEF), else default
+    prep_person = {
+        "name": payload.get("person_name") or PREPARED_BY["name"],
+        "title": payload.get("person_title") or PREPARED_BY["title"],
+        "email": payload.get("person_email") or PREPARED_BY["email"],
+        "phone": payload.get("person_phone") or PREPARED_BY["phone"],
+    }
     prep_h = 17 * mm
     ensure_space(prep_h + 6 * mm)
     _rounded_rect(c, MARGIN, y - prep_h, CONTENT_W, prep_h, fill=BG_BOX, stroke=MID_GREY)
     section_label(MARGIN + 3 * mm, y - 4 * mm, "Prepared By")
     c.setFont(FONT_B, 9)
     c.setFillColor(NAVY)
-    c.drawString(MARGIN + 3 * mm, y - 9 * mm, PREPARED_BY["name"])
+    c.drawString(MARGIN + 3 * mm, y - 9 * mm, prep_person["name"])
     c.setFont(FONT_R, 8.5)
     c.setFillColor(TEXT_BODY)
-    c.drawString(MARGIN + 3 * mm, y - 14 * mm, PREPARED_BY["title"])
+    c.drawString(MARGIN + 3 * mm, y - 14 * mm, prep_person["title"])
     c.drawRightString(
         PAGE_W - MARGIN - 3 * mm,
         y - 14 * mm,
-        f"{PREPARED_BY['email']}  |  {PREPARED_BY['phone']}",
+        f"{prep_person['email']}  |  {prep_person['phone']}",
     )
     down(prep_h + 6 * mm)
 
@@ -1165,6 +1172,10 @@ def download_cef_review_pdf():
         "special_instructions": payload.get("special_instructions") or "",
         "line_items": payload.get("line_items") or [],
         "overall_total": payload.get("overall_total") or 0,
+        "person_name": payload.get("person_name") or "",
+        "person_title": payload.get("person_title") or "",
+        "person_email": payload.get("person_email") or "",
+        "person_phone": payload.get("person_phone") or "",
     }
 
     try:
@@ -1227,6 +1238,11 @@ def send_cef_delivery_email():
         "line_items": payload.get("line_items") or [],
         "overall_total": payload.get("overall_total") or 0,
         "person": person,
+        "person_name": payload.get("person_name") or "",
+        "person_title": payload.get("person_title") or "",
+        "person_email": payload.get("person_email") or "",
+        "person_phone": payload.get("person_phone") or "",
+        "po_date": payload.get("po_date") or "",
     }
 
     # Generate the PDF
@@ -1469,7 +1485,8 @@ def send_to_webhook():
     # Build the 11-field payload
     date_extracted = date.today().strftime("%d/%m/%Y")
     title_desc = str(data.get("service_description") or "").strip() or "\u2014"
-    prepared_by = PREPARED_BY["name"]
+    # Use person details from data if available, otherwise fall back to default
+    prepared_by = str(data.get("person_name") or "").strip() or PREPARED_BY["name"]
     customer_company = str(data.get("account_name") or data.get("supplier") or "").strip() or "\u2014"
 
     supplier_addr = str(data.get("supplier_address") or "").strip()
@@ -1491,6 +1508,10 @@ def send_to_webhook():
         "title": title_desc,
         "reference": reference,
         "prepared_by": prepared_by,
+        "prepared_by_title": str(data.get("person_title") or "").strip() or "\u2014",
+        "prepared_by_email": str(data.get("person_email") or "").strip() or "\u2014",
+        "prepared_by_phone": str(data.get("person_phone") or "").strip() or "\u2014",
+        "po_date": str(data.get("po_date") or "").strip() or "\u2014",
         "customer_company": customer_company,
         "customer_address": customer_address,
         "customer_email": customer_email,
@@ -2026,12 +2047,28 @@ def _build_delivery_email_html(payload):
             f'<tr><td colspan="2" {section_style}>{_esc(title)}</td></tr>'
         )
 
+    # Prepared By details
+    prep_name = _val("person_name", "")
+    prep_title = _val("person_title", "")
+    prep_email = _val("person_email", "")
+    prep_phone = _val("person_phone", "")
+
     table_rows = "".join([
         # Order Details
         section_header("Order Details"),
         row("Account Name (Waste Logics)", _val("account_name")),
         row("Supplier", "Waste Experts"),
         row("Purchase Order Number", _val("purchase_order_number")),
+        row("PO Date", _val("po_date")),
+
+        # Prepared By
+        *(([
+            section_header("Prepared By"),
+            row("Name", prep_name),
+            row("Title", prep_title),
+            row("Email", prep_email),
+            row("Phone", prep_phone),
+        ]) if prep_name else []),
 
         # Contact Information
         section_header("Contact Information"),
