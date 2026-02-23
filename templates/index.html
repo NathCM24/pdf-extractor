@@ -324,27 +324,6 @@
     }
     .btn-remove:hover { background: rgba(180,35,24,.35); }
 
-    /* --- Delivery Details collapsible --- */
-    .delivery-details-section { margin-top: 6px; grid-column: 1 / -1; }
-    .delivery-details-header {
-      display: flex; align-items: center; gap: 8px; cursor: pointer;
-      padding: 12px 0; user-select: none; border-top: 2px solid #5a7a94;
-    }
-    .delivery-details-header h3 {
-      margin: 0; font-size: 12px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .6px; color: #fff;
-    }
-    .delivery-details-chevron {
-      font-size: 12px; color: #8aa3b8; transition: transform .2s; display: inline-block;
-    }
-    .delivery-details-header.open .delivery-details-chevron { transform: rotate(90deg); }
-    .delivery-details-body {
-      max-height: 0; overflow: hidden; transition: max-height .3s ease;
-    }
-    .delivery-details-body.open {
-      max-height: 3000px;
-    }
-    .delivery-details-body .grid { margin-top: 8px; }
 
     @media (max-width: 760px) {
       .grid { grid-template-columns: 1fr; }
@@ -665,43 +644,36 @@
             </span>
           </div>
 
-          <!-- ===== Delivery Details (collapsible) ===== -->
-          <div class="delivery-details-section">
-            <div class="delivery-details-header" id="delivery-details-toggle" onclick="toggleDeliveryDetails()">
-              <span class="delivery-details-chevron" id="delivery-details-chevron">&#9656;</span>
-              <h3>Delivery Details</h3>
-              <span class="help-tooltip-wrap" style="margin-left:0;">
-                <span class="help-tooltip-icon">?</span>
-                <span class="help-tooltip-popup help-tooltip-popup--right">Delivery details used in the customer delivery email. Fill in or correct any fields the AI didn't extract from the PO.</span>
-              </span>
-            </div>
-            <div class="delivery-details-body" id="delivery-details-body">
-              <div class="grid">
-                <div class="field"><label>Account Name (Waste Logics)</label><input id="dd_account_name" type="text" placeholder="Account/client name" /></div>
-                <div class="field"><label>Supplier</label><input id="dd_supplier" type="text" value="Waste Experts" /></div>
-                <div class="field full"><label>Purchase Order Number</label><input id="dd_po_number" type="text" placeholder="PO reference number" /></div>
+          <!-- ===== Customer / Site Information ===== -->
+          <div class="section-title">Customer / Site Information<span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--right">Customer and site details extracted from the PO. All fields are editable &mdash; correct anything the AI didn&rsquo;t extract accurately.</span></span></div>
 
-                <div class="section-title" style="margin-top:10px;">Contact Information</div>
-                <div class="field"><label>Site Contact</label><input id="site_contact" type="text" /></div>
-                <div class="field"><label>Site Contact Number</label><input id="site_contact_number" type="text" /></div>
-                <div class="field full"><label>Site Contact Email</label><input id="site_contact_email" type="email" /></div>
-                <div class="field"><label>Secondary Site Contact</label><input id="secondary_site_contact" type="text" /></div>
-                <div class="field"><label>Secondary Site Contact Number</label><input id="secondary_site_contact_number" type="text" /></div>
-                <div class="field full"><label>Secondary Site Contact Email</label><input id="secondary_site_contact_email" type="email" /></div>
-
-                <div class="section-title" style="margin-top:10px;">Site Information</div>
-                <div class="field"><label>Site Name</label><input id="site_name" type="text" /></div>
-                <div class="field"><label>Site Postcode</label><input id="site_postcode" type="text" /></div>
-                <div class="field full"><label>Site Address</label><textarea id="site_address"></textarea></div>
-
-                <div class="section-title" style="margin-top:10px;">Access &amp; Instructions</div>
-                <div class="field"><label>Opening Times</label><textarea id="opening_times"></textarea></div>
-                <div class="field"><label>Access</label><textarea id="access"></textarea></div>
-                <div class="field"><label>Site Restrictions</label><textarea id="site_restrictions"></textarea></div>
-                <div class="field"><label>Special Instructions</label><textarea id="special_instructions"></textarea></div>
-              </div>
-            </div>
+          <div class="field">
+            <label>Customer Name / Waste Producer</label>
+            <input id="customer_name" type="text" placeholder="Extracted from PO" />
           </div>
+          <div class="field">
+            <label>SIC Code</label>
+            <input id="sic_code" type="text" placeholder="AI-extracted or enter manually" />
+          </div>
+
+          <div class="section-title" style="margin-top:10px;">Contact Information</div>
+          <div class="field"><label>Site Contact</label><input id="site_contact" type="text" /></div>
+          <div class="field"><label>Site Contact Number</label><input id="site_contact_number" type="text" /></div>
+          <div class="field full"><label>Site Contact Email</label><input id="site_contact_email" type="email" /></div>
+          <div class="field"><label>Secondary Site Contact</label><input id="secondary_site_contact" type="text" /></div>
+          <div class="field"><label>Secondary Site Contact Number</label><input id="secondary_site_contact_number" type="text" /></div>
+          <div class="field full"><label>Secondary Site Contact Email</label><input id="secondary_site_contact_email" type="email" /></div>
+
+          <div class="section-title" style="margin-top:10px;">Site Information</div>
+          <div class="field"><label>Site Name</label><input id="site_name" type="text" /></div>
+          <div class="field"><label>Site Postcode</label><input id="site_postcode" type="text" /></div>
+          <div class="field full"><label>Site Address</label><textarea id="site_address"></textarea></div>
+
+          <div class="section-title" style="margin-top:10px;">Access &amp; Instructions</div>
+          <div class="field"><label>Opening Times</label><textarea id="opening_times"></textarea></div>
+          <div class="field"><label>Access</label><textarea id="access"></textarea></div>
+          <div class="field"><label>Site Restrictions</label><textarea id="site_restrictions"></textarea></div>
+          <div class="field"><label>Special Instructions</label><textarea id="special_instructions"></textarea></div>
         </div>
 
         <!-- Download PDF (top area) -->
@@ -888,14 +860,13 @@
       /* Clear all form fields while edit card is still in DOM */
       [
         'supplier', 'purchase_order_number', 'service_description',
+        'customer_name', 'sic_code',
         'site_contact', 'site_contact_number', 'site_contact_email',
         'secondary_site_contact', 'secondary_site_contact_number', 'secondary_site_contact_email',
         'site_name', 'site_address', 'site_postcode',
         'opening_times', 'access', 'site_restrictions', 'special_instructions',
-        'account_name', 'supplier_address',
-        'dd_account_name', 'dd_po_number'
+        'account_name', 'supplier_address'
       ].forEach(function(key) { setField(key, ''); });
-      setField('dd_supplier', 'Waste Experts');
       setField('document_type', '');
       clearLineItems();
       var elDocTitle = document.getElementById('doc-title');
@@ -982,8 +953,6 @@
       if (dropdown) dropdown.classList.remove('open');
       updateSupplierAddress();
       validateAccount();
-      /* Sync to Delivery Details */
-      setField('dd_account_name', name);
     }
 
     dropdown.addEventListener('mousedown', e => {
@@ -1177,15 +1146,6 @@
       recalcOverallTotal();
     }
 
-    /* ── Delivery Details toggle ── */
-    function toggleDeliveryDetails() {
-      var header = document.getElementById('delivery-details-toggle');
-      var body = document.getElementById('delivery-details-body');
-      if (!header || !body) return;
-      header.classList.toggle('open');
-      body.classList.toggle('open');
-    }
-
     /* ── Fill form from extraction response ── */
     var _lastExtractedData = null;  /* Stored for template save */
     var _lastConfidence = null;
@@ -1198,6 +1158,7 @@
 
       [
         'supplier', 'purchase_order_number', 'service_description',
+        'customer_name', 'sic_code',
         'site_contact', 'site_contact_number', 'site_contact_email',
         'secondary_site_contact', 'secondary_site_contact_number', 'secondary_site_contact_email',
         'site_name', 'site_address', 'site_postcode',
@@ -1232,19 +1193,6 @@
       /* Auto-add doc type £40 line item if applicable */
       onDocTypeChange();
 
-      /* Populate Delivery Details fields */
-      setField('dd_account_name', data.account_name || '');
-      setField('dd_supplier', 'Waste Experts');
-      setField('dd_po_number', data.purchase_order_number || '');
-
-      /* Open Delivery Details section by default */
-      var ddHeader = document.getElementById('delivery-details-toggle');
-      var ddBody = document.getElementById('delivery-details-body');
-      if (ddHeader && !ddHeader.classList.contains('open')) {
-        ddHeader.classList.add('open');
-        ddBody.classList.add('open');
-      }
-
       /* Render confidence dots */
       renderConfidenceDots(confidence || {});
 
@@ -1262,6 +1210,8 @@
         purchase_order_number: getField('purchase_order_number'),
         service_description: getField('service_description'),
         document_type: getField('document_type'),
+        customer_name: getField('customer_name'),
+        sic_code: getField('sic_code'),
         site_contact: getField('site_contact'),
         site_contact_number: getField('site_contact_number'),
         site_contact_email: getField('site_contact_email'),
@@ -1276,11 +1226,7 @@
         site_restrictions: getField('site_restrictions'),
         special_instructions: getField('special_instructions'),
         line_items: items,
-        overall_total: overallTotal,
-        /* Delivery Details (fall back to main form values if empty) */
-        dd_account_name: getField('dd_account_name') || getField('account_name'),
-        dd_supplier: getField('dd_supplier') || 'Waste Experts',
-        dd_po_number: getField('dd_po_number') || getField('purchase_order_number')
+        overall_total: overallTotal
       };
     }
 
@@ -1644,8 +1590,8 @@
 
       /* Append delivery details to description */
       var ddFields = [
-        ['Account Name (WL)', payload.dd_account_name],
-        ['Supplier', payload.dd_supplier],
+        ['Account Name (WL)', payload.customer_name || payload.account_name],
+        ['Supplier', 'Waste Experts'],
         ['Site Contact', payload.site_contact],
         ['Site Contact Number', payload.site_contact_number],
         ['Site Contact Email', payload.site_contact_email],
@@ -1730,9 +1676,9 @@
         line_items: items,
         description: desc,
         delivery_details: {
-          dd_account_name: payload.dd_account_name || '',
-          dd_supplier: payload.dd_supplier || 'Waste Experts',
-          dd_po_number: payload.dd_po_number || payload.purchase_order_number || '',
+          customer_name: payload.customer_name || payload.account_name || '',
+          supplier: 'Waste Experts',
+          purchase_order_number: payload.purchase_order_number || '',
           site_contact: payload.site_contact || '',
           site_contact_number: payload.site_contact_number || '',
           site_contact_email: payload.site_contact_email || '',
@@ -2269,13 +2215,13 @@
       if (!validateAccount()) return;
       var payload = collectReviewPayload();
       var poNumber = payload.purchase_order_number || '\u2014';
-      var supplierName = payload.dd_supplier || 'Waste Experts';
+      var supplierName = 'Waste Experts';
       var email = getDeliveryEmail();
 
       /* Build preview of delivery details email */
       var previewFields = [
-        ['Account Name (Waste Logics)', payload.dd_account_name],
-        ['Supplier', payload.dd_supplier || 'Waste Experts'],
+        ['Account Name (WL)', payload.customer_name || payload.account_name],
+        ['Supplier', 'Waste Experts'],
         ['Purchase Order Number', poNumber],
         ['Site Contact', payload.site_contact],
         ['Site Name', payload.site_name],
