@@ -179,7 +179,7 @@
     .hs-li-table { width: 100%; font-size: 12px; border-collapse: collapse; margin-top: 6px; }
     .hs-li-table th { text-align: left; color: #8aa3b8; font-weight: 600; padding: 4px 6px; border-bottom: 1px solid #3d5a73; }
     .hs-li-table td { padding: 4px 6px; color: #c0cdd8; border-bottom: 1px solid #2f4a60; }
-    .hs-li-table td:nth-child(n+2) { text-align: right; }
+    .hs-li-table td:last-child { text-align: right; }
     .hs-actions { display: flex; gap: 10px; margin-top: 18px; justify-content: flex-end; }
     .hs-match { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
     .hs-match.found { color: #8ec431; }
@@ -293,23 +293,62 @@
     }
     .toast.show { opacity: 1; }
 
-    /* --- Line items --- */
+    /* --- Line items (3-column: Waste Stream | Movement Type | Price | Remove) --- */
     .line-item-row {
-      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px;
-      align-items: end; padding: 6px 0; border-bottom: 1px solid #2f4a60;
+      display: grid; grid-template-columns: 3fr 2fr 1.5fr auto; gap: 10px;
+      align-items: end; padding: 8px 0; border-bottom: 1px solid #2f4a60;
     }
     .line-item-row:last-child { border-bottom: none; }
-    .line-item-row input { font-size: 13px; padding: 8px 10px; }
+    .line-item-row input, .line-item-row select { font-size: 13px; padding: 8px 10px; }
     .line-item-row .li-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #8aa3b8; margin-bottom: 2px; }
+    .line-item-row select {
+      border: 1px solid #3d5a73; border-radius: 4px;
+      background: #1e2e3d; color: #e8ecf1;
+      font-family: 'Montserrat', sans-serif; cursor: pointer;
+    }
+    .line-item-row select option { background: #1e2e3d; color: #e8ecf1; }
+    .li-price-wrap {
+      display: flex; align-items: center; position: relative;
+    }
+    .li-price-wrap .li-price-prefix {
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      font-size: 13px; font-weight: 600; color: #8aa3b8; pointer-events: none; z-index: 1;
+    }
+    .li-price-wrap input {
+      padding-left: 24px; text-align: right; width: 100%;
+    }
     .btn-remove {
       border: none; background: rgba(180,35,24,.2); color: #f87171; border-radius: 4px;
       padding: 8px 10px; cursor: pointer; font-weight: 700; font-size: 13px;
       font-family: 'Montserrat', sans-serif; transition: background .2s;
     }
     .btn-remove:hover { background: rgba(180,35,24,.35); }
+
+    /* --- Delivery Details collapsible --- */
+    .delivery-details-section { margin-top: 6px; grid-column: 1 / -1; }
+    .delivery-details-header {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      padding: 12px 0; user-select: none; border-top: 2px solid #5a7a94;
+    }
+    .delivery-details-header h3 {
+      margin: 0; font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .6px; color: #fff;
+    }
+    .delivery-details-chevron {
+      font-size: 12px; color: #8aa3b8; transition: transform .2s; display: inline-block;
+    }
+    .delivery-details-header.open .delivery-details-chevron { transform: rotate(90deg); }
+    .delivery-details-body {
+      max-height: 0; overflow: hidden; transition: max-height .3s ease;
+    }
+    .delivery-details-body.open {
+      max-height: 3000px;
+    }
+    .delivery-details-body .grid { margin-top: 8px; }
+
     @media (max-width: 760px) {
       .grid { grid-template-columns: 1fr; }
-      .line-item-row { grid-template-columns: 1fr 1fr; }
+      .line-item-row { grid-template-columns: 1fr; }
     }
 
     /* --- Supplier Template Management --- */
@@ -597,51 +636,72 @@
           <!-- ===== Products & Services ===== -->
           <div class="section-title">Products &amp; Services<span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--right">All line items found in the purchase order. Check quantities, unit prices, and totals are correct. You can edit any field by clicking on it.</span></span></div>
 
-          <div class="full" id="line-items-container">
-            <!-- Line item rows are injected here by JS -->
+          <!-- Document Type row -->
+          <div class="full doc-type-row">
+            <span class="dt-label">Document Type<span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--right">Select the document type for this order. Consignment Note or Waste Transfer Note will automatically add a &pound;40 line item.</span></span></span>
+            <select id="document_type" onchange="onDocTypeChange()">
+              <option value="">None</option>
+              <option value="Consignment Note">Consignment Note</option>
+              <option value="Waste Transfer Note">Waste Transfer Note</option>
+            </select>
           </div>
 
-          <!-- Document Type as permanent line item row -->
-          <div class="full doc-type-row">
-            <span class="dt-label">Document Type<span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--right">Select the document type for this order. This will be included in your downloaded PDF.</span></span></span>
-            <select id="document_type">
-              <option>Consignment Note</option>
-              <option>Waste Transfer Note</option>
-            </select>
+          <!-- Line item header row -->
+          <div class="full" style="display:grid; grid-template-columns:3fr 2fr 1.5fr auto; gap:10px; padding:6px 0; border-bottom:1px solid #3d5a73;">
+            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Waste Stream</span>
+            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Movement Type</span>
+            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Price</span>
+            <span style="width:38px;"></span>
+          </div>
+
+          <div class="full" id="line-items-container">
+            <!-- Line item rows are injected here by JS -->
           </div>
 
           <div class="full" style="display:flex; gap:10px; align-items:center; margin-bottom:4px;">
             <button class="btn-outline" type="button" onclick="addLineItem()">+ Add Line Item</button>
             <span style="margin-left:auto; font-weight:700; font-size:14px; color:#8ec431;">
-              Overall Total: <span id="overall_total_display">£0.00</span>
+              Overall Total: <span id="overall_total_display">&pound;0.00</span>
             </span>
           </div>
 
-          <!-- ===== Contact Info ===== -->
-          <div class="section-title">Contact Information</div>
+          <!-- ===== Delivery Details (collapsible) ===== -->
+          <div class="delivery-details-section">
+            <div class="delivery-details-header" id="delivery-details-toggle" onclick="toggleDeliveryDetails()">
+              <span class="delivery-details-chevron" id="delivery-details-chevron">&#9656;</span>
+              <h3>Delivery Details</h3>
+              <span class="help-tooltip-wrap" style="margin-left:0;">
+                <span class="help-tooltip-icon">?</span>
+                <span class="help-tooltip-popup help-tooltip-popup--right">Delivery details used in the customer delivery email. Fill in or correct any fields the AI didn't extract from the PO.</span>
+              </span>
+            </div>
+            <div class="delivery-details-body" id="delivery-details-body">
+              <div class="grid">
+                <div class="field"><label>Account Name (Waste Logics)</label><input id="dd_account_name" type="text" placeholder="Account/client name" /></div>
+                <div class="field"><label>Supplier</label><input id="dd_supplier" type="text" value="Waste Experts" /></div>
+                <div class="field full"><label>Purchase Order Number</label><input id="dd_po_number" type="text" placeholder="PO reference number" /></div>
 
-          <div class="field"><label>Site Contact</label><input id="site_contact" type="text" /></div>
-          <div class="field"><label>Site Contact Number</label><input id="site_contact_number" type="text" /></div>
-          <div class="field full"><label>Site Contact Email</label><input id="site_contact_email" type="email" /></div>
+                <div class="section-title" style="margin-top:10px;">Contact Information</div>
+                <div class="field"><label>Site Contact</label><input id="site_contact" type="text" /></div>
+                <div class="field"><label>Site Contact Number</label><input id="site_contact_number" type="text" /></div>
+                <div class="field full"><label>Site Contact Email</label><input id="site_contact_email" type="email" /></div>
+                <div class="field"><label>Secondary Site Contact</label><input id="secondary_site_contact" type="text" /></div>
+                <div class="field"><label>Secondary Site Contact Number</label><input id="secondary_site_contact_number" type="text" /></div>
+                <div class="field full"><label>Secondary Site Contact Email</label><input id="secondary_site_contact_email" type="email" /></div>
 
-          <div class="field"><label>Secondary Site Contact</label><input id="secondary_site_contact" type="text" /></div>
-          <div class="field"><label>Secondary Site Contact Number</label><input id="secondary_site_contact_number" type="text" /></div>
-          <div class="field full"><label>Secondary Site Contact Email</label><input id="secondary_site_contact_email" type="email" /></div>
+                <div class="section-title" style="margin-top:10px;">Site Information</div>
+                <div class="field"><label>Site Name</label><input id="site_name" type="text" /></div>
+                <div class="field"><label>Site Postcode</label><input id="site_postcode" type="text" /></div>
+                <div class="field full"><label>Site Address</label><textarea id="site_address"></textarea></div>
 
-          <!-- ===== Site Info ===== -->
-          <div class="section-title">Site Information</div>
-
-          <div class="field"><label>Site Name</label><input id="site_name" type="text" /></div>
-          <div class="field"><label>Site Postcode</label><input id="site_postcode" type="text" /></div>
-          <div class="field full"><label>Site Address</label><textarea id="site_address"></textarea></div>
-
-          <!-- ===== Instructions ===== -->
-          <div class="section-title">Access &amp; Instructions</div>
-
-          <div class="field"><label>Opening Times</label><textarea id="opening_times"></textarea></div>
-          <div class="field"><label>Access</label><textarea id="access"></textarea></div>
-          <div class="field"><label>Site Restrictions</label><textarea id="site_restrictions"></textarea></div>
-          <div class="field"><label>Special Instructions</label><textarea id="special_instructions"></textarea></div>
+                <div class="section-title" style="margin-top:10px;">Access &amp; Instructions</div>
+                <div class="field"><label>Opening Times</label><textarea id="opening_times"></textarea></div>
+                <div class="field"><label>Access</label><textarea id="access"></textarea></div>
+                <div class="field"><label>Site Restrictions</label><textarea id="site_restrictions"></textarea></div>
+                <div class="field"><label>Special Instructions</label><textarea id="special_instructions"></textarea></div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Download PDF (top area) -->
@@ -832,9 +892,11 @@
         'secondary_site_contact', 'secondary_site_contact_number', 'secondary_site_contact_email',
         'site_name', 'site_address', 'site_postcode',
         'opening_times', 'access', 'site_restrictions', 'special_instructions',
-        'account_name', 'supplier_address'
+        'account_name', 'supplier_address',
+        'dd_account_name', 'dd_po_number'
       ].forEach(function(key) { setField(key, ''); });
-      setField('document_type', 'Consignment Note');
+      setField('dd_supplier', 'Waste Experts');
+      setField('document_type', '');
       clearLineItems();
       var elDocTitle = document.getElementById('doc-title');
       if (elDocTitle) elDocTitle.textContent = 'Purchase Order';
@@ -920,6 +982,8 @@
       if (dropdown) dropdown.classList.remove('open');
       updateSupplierAddress();
       validateAccount();
+      /* Sync to Delivery Details */
+      setField('dd_account_name', name);
     }
 
     dropdown.addEventListener('mousedown', e => {
@@ -1015,45 +1079,54 @@
       return valid;
     }
 
+    /* ── HTML escaping (used throughout) ── */
+    function escHtml(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     /* ── Line items ── */
     let lineItemCounter = 0;
+    const MOVEMENT_TYPES = ['', 'Remove', 'Uplift', 'Exchange', 'WWL', 'Delivery'];
 
-    function addLineItem(desc, qty, unitPrice, lineTotal) {
+    function addLineItem(desc, movementType, price, isDocTypeLine) {
       const container = document.getElementById('line-items-container');
       const idx = lineItemCounter++;
       const row = document.createElement('div');
       row.className = 'line-item-row';
       row.dataset.liIdx = idx;
-      row.innerHTML = `
-        <div><div class="li-label">Description</div><input type="text" class="li-desc" value="${(desc || '').replace(/"/g, '&quot;')}" /></div>
-        <div><div class="li-label">Quantity</div><input type="number" class="li-qty" value="${qty || 1}" min="0" step="1" onchange="recalcLineItem(this)" /></div>
-        <div><div class="li-label">Price / Unit</div><input type="number" class="li-unit" value="${unitPrice || 0}" min="0" step="0.01" onchange="recalcLineItem(this)" /></div>
-        <div><div class="li-label">Line Total</div><input type="number" class="li-total" value="${lineTotal || 0}" min="0" step="0.01" onchange="recalcOverallTotal()" /></div>
-        <div style="padding-bottom:1px;"><button class="btn-remove" type="button" onclick="removeLineItem(this)">&times;</button></div>
-      `;
+      if (isDocTypeLine) row.dataset.docTypeLine = 'true';
+      var mtOptions = MOVEMENT_TYPES.map(function(mt) {
+        var sel = (movementType || '') === mt ? ' selected' : '';
+        var label = mt || '\u2014';
+        return '<option value="' + escHtml(mt) + '"' + sel + '>' + escHtml(label) + '</option>';
+      }).join('');
+      var safeDesc = (desc || '').replace(/"/g, '&quot;');
+      var priceVal = (price != null && price !== '') ? parseFloat(price) : 0;
+      row.innerHTML =
+        '<div><input type="text" class="li-desc" value="' + safeDesc + '" placeholder="Waste stream description" /></div>' +
+        '<div><select class="li-movement">' + mtOptions + '</select></div>' +
+        '<div><div class="li-price-wrap"><span class="li-price-prefix">\u00a3</span><input type="number" class="li-price" value="' + priceVal.toFixed(2) + '" min="0" step="0.01" onchange="recalcOverallTotal()" /></div></div>' +
+        '<div style="padding-bottom:1px;"><button class="btn-remove" type="button" onclick="removeLineItem(this)">&times;</button></div>';
       container.appendChild(row);
       recalcOverallTotal();
     }
 
     function removeLineItem(btn) {
-      btn.closest('.line-item-row').remove();
-      recalcOverallTotal();
-    }
-
-    function recalcLineItem(input) {
-      const row = input.closest('.line-item-row');
-      const qty = parseFloat(row.querySelector('.li-qty').value) || 0;
-      const unit = parseFloat(row.querySelector('.li-unit').value) || 0;
-      row.querySelector('.li-total').value = (qty * unit).toFixed(2);
+      var row = btn.closest('.line-item-row');
+      /* If removing a doc-type auto-added line, reset the tracking */
+      if (row.dataset.docTypeLine === 'true') {
+        _docTypeLineAdded = '';
+      }
+      row.remove();
       recalcOverallTotal();
     }
 
     function recalcOverallTotal() {
       let total = 0;
       document.querySelectorAll('.line-item-row').forEach(row => {
-        total += parseFloat(row.querySelector('.li-total').value) || 0;
+        total += parseFloat(row.querySelector('.li-price').value) || 0;
       });
-      document.getElementById('overall_total_display').textContent = '£' + total.toFixed(2);
+      document.getElementById('overall_total_display').textContent = '\u00a3' + total.toFixed(2);
     }
 
     function getLineItems() {
@@ -1061,9 +1134,8 @@
       document.querySelectorAll('.line-item-row').forEach(row => {
         items.push({
           description: row.querySelector('.li-desc').value.trim(),
-          quantity: parseFloat(row.querySelector('.li-qty').value) || 1,
-          unit_price: parseFloat(row.querySelector('.li-unit').value) || 0,
-          line_total: parseFloat(row.querySelector('.li-total').value) || 0
+          movement_type: row.querySelector('.li-movement').value,
+          price: parseFloat(row.querySelector('.li-price').value) || 0
         });
       });
       return items;
@@ -1072,7 +1144,46 @@
     function clearLineItems() {
       document.getElementById('line-items-container').innerHTML = '';
       lineItemCounter = 0;
+      _docTypeLineAdded = '';
       recalcOverallTotal();
+    }
+
+    /* ── Document Type auto-add £40 line item ── */
+    var _docTypeLineAdded = '';  /* Tracks which doc type line was auto-added */
+
+    function onDocTypeChange() {
+      var docType = getField('document_type');
+      var noteTypes = ['Consignment Note', 'Waste Transfer Note'];
+
+      /* Remove any existing auto-added doc type line */
+      document.querySelectorAll('.line-item-row[data-doc-type-line="true"]').forEach(function(row) {
+        row.remove();
+      });
+      _docTypeLineAdded = '';
+
+      /* If a note type is selected, add the £40 line item */
+      if (noteTypes.indexOf(docType) !== -1) {
+        /* Check if user already manually added this as a line item */
+        var alreadyExists = false;
+        document.querySelectorAll('.line-item-row').forEach(function(row) {
+          var desc = (row.querySelector('.li-desc').value || '').trim().toLowerCase();
+          if (desc === docType.toLowerCase()) alreadyExists = true;
+        });
+        if (!alreadyExists) {
+          addLineItem(docType, '', 40.00, true);
+          _docTypeLineAdded = docType;
+        }
+      }
+      recalcOverallTotal();
+    }
+
+    /* ── Delivery Details toggle ── */
+    function toggleDeliveryDetails() {
+      var header = document.getElementById('delivery-details-toggle');
+      var body = document.getElementById('delivery-details-body');
+      if (!header || !body) return;
+      header.classList.toggle('open');
+      body.classList.toggle('open');
     }
 
     /* ── Fill form from extraction response ── */
@@ -1096,24 +1207,43 @@
       /* Account name left blank — user must select via typeahead */
       setField('account_name', '');
 
-      const docType = data.document_type === 'Waste Transfer Note' ? 'Waste Transfer Note' : 'Consignment Note';
+      /* Document Type: set to extracted value or empty */
+      var docType = (data.document_type || '').trim();
+      if (docType !== 'Consignment Note' && docType !== 'Waste Transfer Note') docType = '';
       setField('document_type', docType);
 
       /* Update document header */
       const supplierName = data.supplier || 'Unknown Supplier';
       const poNum = data.purchase_order_number || '';
-      document.getElementById('doc-title').textContent = 'Purchase Order' + (poNum ? ' — ' + poNum : '');
+      document.getElementById('doc-title').textContent = 'Purchase Order' + (poNum ? ' \u2014 ' + poNum : '');
       document.getElementById('doc-supplier-label').textContent = 'From: ' + supplierName;
 
       setField('supplier_address', '');
       validateAccount();
 
-      /* Populate line items */
+      /* Populate line items (map from old format to new) */
       clearLineItems();
       const items = data.line_items || [];
       items.forEach(item => {
-        addLineItem(item.description, item.quantity, item.unit_price, item.line_total);
+        var price = item.price != null ? item.price : (item.line_total || item.unit_price || 0);
+        addLineItem(item.description, item.movement_type || '', price);
       });
+
+      /* Auto-add doc type £40 line item if applicable */
+      onDocTypeChange();
+
+      /* Populate Delivery Details fields */
+      setField('dd_account_name', data.account_name || '');
+      setField('dd_supplier', 'Waste Experts');
+      setField('dd_po_number', data.purchase_order_number || '');
+
+      /* Open Delivery Details section by default */
+      var ddHeader = document.getElementById('delivery-details-toggle');
+      var ddBody = document.getElementById('delivery-details-body');
+      if (ddHeader && !ddHeader.classList.contains('open')) {
+        ddHeader.classList.add('open');
+        ddBody.classList.add('open');
+      }
 
       /* Render confidence dots */
       renderConfidenceDots(confidence || {});
@@ -1125,7 +1255,7 @@
     /* ── Collect payload ── */
     function collectReviewPayload() {
       const items = getLineItems();
-      const overallTotal = items.reduce((sum, i) => sum + (i.line_total || 0), 0);
+      const overallTotal = items.reduce((sum, i) => sum + (i.price || 0), 0);
       return {
         account_name: getField('account_name'),
         supplier_address: getField('supplier_address'),
@@ -1146,7 +1276,11 @@
         site_restrictions: getField('site_restrictions'),
         special_instructions: getField('special_instructions'),
         line_items: items,
-        overall_total: overallTotal
+        overall_total: overallTotal,
+        /* Delivery Details (fall back to main form values if empty) */
+        dd_account_name: getField('dd_account_name') || getField('account_name'),
+        dd_supplier: getField('dd_supplier') || 'Waste Experts',
+        dd_po_number: getField('dd_po_number') || getField('purchase_order_number')
       };
     }
 
@@ -1477,10 +1611,6 @@
       }
     }
 
-    function escHtml(s) {
-      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
     /* ── HubSpot preview modal ── */
     async function openHubSpotPreview() {
       var payload = collectReviewPayload();
@@ -1506,17 +1636,36 @@
         ownerOptionsHtml = '<option value="">No owners available</option>';
       }
 
-      /* Build description from line items */
+      /* Build description from line items + delivery details */
       var desc = items.map(function(li, i) {
-        return (i+1) + '. ' + (li.description || 'Item') + ' (x' + li.quantity + ' @ £' + (li.unit_price||0).toFixed(2) + ')';
+        var mt = li.movement_type ? ' [' + li.movement_type + ']' : '';
+        return (i+1) + '. ' + (li.description || 'Item') + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
       }).join('; ');
+
+      /* Append delivery details to description */
+      var ddFields = [
+        ['Account Name (WL)', payload.dd_account_name],
+        ['Supplier', payload.dd_supplier],
+        ['Site Contact', payload.site_contact],
+        ['Site Contact Number', payload.site_contact_number],
+        ['Site Contact Email', payload.site_contact_email],
+        ['Site Name', payload.site_name],
+        ['Site Address', payload.site_address],
+        ['Site Postcode', payload.site_postcode],
+        ['Opening Times', payload.opening_times],
+        ['Access', payload.access],
+        ['Site Restrictions', payload.site_restrictions],
+        ['Special Instructions', payload.special_instructions]
+      ];
+      var ddDesc = ddFields.filter(function(f) { return f[1]; }).map(function(f) { return f[0] + ': ' + f[1]; }).join('\n');
+      if (ddDesc) desc += '\n\nDelivery Details:\n' + ddDesc;
 
       /* Build line items table */
       var liHtml = '';
       if (items.length) {
-        liHtml = '<table class="hs-li-table"><thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Line Total</th></tr></thead><tbody>';
+        liHtml = '<table class="hs-li-table"><thead><tr><th>Waste Stream</th><th>Movement Type</th><th>Price</th></tr></thead><tbody>';
         items.forEach(function(li) {
-          liHtml += '<tr><td>' + escHtml(li.description) + '</td><td>' + li.quantity + '</td><td>£' + (li.unit_price||0).toFixed(2) + '</td><td>£' + (li.line_total||0).toFixed(2) + '</td></tr>';
+          liHtml += '<tr><td>' + escHtml(li.description) + '</td><td>' + escHtml(li.movement_type || '\u2014') + '</td><td>\u00a3' + (li.price||0).toFixed(2) + '</td></tr>';
         });
         liHtml += '</tbody></table>';
       } else {
@@ -1579,7 +1728,25 @@
         po_number: payload.purchase_order_number || '',
         supplier_name: supplierName,
         line_items: items,
-        description: desc
+        description: desc,
+        delivery_details: {
+          dd_account_name: payload.dd_account_name || '',
+          dd_supplier: payload.dd_supplier || 'Waste Experts',
+          dd_po_number: payload.dd_po_number || payload.purchase_order_number || '',
+          site_contact: payload.site_contact || '',
+          site_contact_number: payload.site_contact_number || '',
+          site_contact_email: payload.site_contact_email || '',
+          secondary_site_contact: payload.secondary_site_contact || '',
+          secondary_site_contact_number: payload.secondary_site_contact_number || '',
+          secondary_site_contact_email: payload.secondary_site_contact_email || '',
+          site_name: payload.site_name || '',
+          site_address: payload.site_address || '',
+          site_postcode: payload.site_postcode || '',
+          opening_times: payload.opening_times || '',
+          access: payload.access || '',
+          site_restrictions: payload.site_restrictions || '',
+          special_instructions: payload.special_instructions || ''
+        }
       };
     }
 
@@ -1856,17 +2023,21 @@
       html += '<div class="full" id="train-line-items">';
       var items = data.line_items || [];
       if (items.length) {
-        html += '<div class="train-li-row" style="border:none; padding-bottom:2px;">' +
-          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Description</span>' +
-          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Qty</span>' +
-          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Unit Price</span>' +
-          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Total</span></div>';
+        html += '<div class="train-li-row" style="border:none; padding-bottom:2px; grid-template-columns:3fr 2fr 1.5fr;">' +
+          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Waste Stream</span>' +
+          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Movement Type</span>' +
+          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Price</span></div>';
         items.forEach(function(li) {
-          html += '<div class="train-li-row">' +
+          var mtOpts = ['', 'Remove', 'Uplift', 'Exchange', 'WWL', 'Delivery'].map(function(mt) {
+            var sel = (li.movement_type || '') === mt ? ' selected' : '';
+            var label = mt || '\u2014';
+            return '<option value="' + escHtml(mt) + '"' + sel + '>' + escHtml(label) + '</option>';
+          }).join('');
+          var priceVal = li.price != null ? li.price : (li.line_total || li.unit_price || 0);
+          html += '<div class="train-li-row" style="grid-template-columns:3fr 2fr 1.5fr;">' +
             '<input type="text" class="tli-desc" value="' + escHtml(String(li.description || '')) + '" />' +
-            '<input type="number" class="tli-qty" value="' + (li.quantity || 1) + '" min="0" step="1" />' +
-            '<input type="number" class="tli-unit" value="' + (li.unit_price || 0) + '" min="0" step="0.01" />' +
-            '<input type="number" class="tli-total" value="' + (li.line_total || 0) + '" min="0" step="0.01" />' +
+            '<select class="tli-movement" style="font-size:12px; padding:6px 8px; background:#1e2e3d; color:#e8ecf1; border:1px solid #3d5a73; border-radius:4px;">' + mtOpts + '</select>' +
+            '<input type="number" class="tli-price" value="' + (parseFloat(priceVal) || 0).toFixed(2) + '" min="0" step="0.01" />' +
             '</div>';
         });
       } else {
@@ -1905,9 +2076,8 @@
         if (!desc) return;
         lineItems.push({
           description: desc.value || '',
-          quantity: parseFloat((row.querySelector('.tli-qty') || {}).value) || 1,
-          unit_price: parseFloat((row.querySelector('.tli-unit') || {}).value) || 0,
-          line_total: parseFloat((row.querySelector('.tli-total') || {}).value) || 0,
+          movement_type: (row.querySelector('.tli-movement') || {}).value || '',
+          price: parseFloat((row.querySelector('.tli-price') || {}).value) || 0,
         });
       });
       corrected.line_items = lineItems;
@@ -2099,9 +2269,21 @@
       if (!validateAccount()) return;
       var payload = collectReviewPayload();
       var poNumber = payload.purchase_order_number || '\u2014';
-      var supplierName = payload.account_name || payload.supplier || '\u2014';
-      var totalAmount = '\u00a3' + (payload.overall_total || 0).toFixed(2);
+      var supplierName = payload.dd_supplier || 'Waste Experts';
       var email = getDeliveryEmail();
+
+      /* Build preview of delivery details email */
+      var previewFields = [
+        ['Account Name (Waste Logics)', payload.dd_account_name],
+        ['Supplier', payload.dd_supplier || 'Waste Experts'],
+        ['Purchase Order Number', poNumber],
+        ['Site Contact', payload.site_contact],
+        ['Site Name', payload.site_name],
+        ['Site Postcode', payload.site_postcode]
+      ];
+      var previewHtml = previewFields.map(function(f) {
+        return '<div class="cd-row"><span class="cd-lbl">' + escHtml(f[0]) + '</span><span class="cd-val">' + escHtml(f[1] || '\u2014') + '</span></div>';
+      }).join('');
 
       var modalHtml =
         '<div class="cd-overlay" id="cd-overlay" onclick="if(event.target===this)closeDeliveryModal()">' +
@@ -2111,13 +2293,11 @@
               'Send to Customer Delivery' +
             '</div>' +
             '<div class="cd-modal-body">' +
-              '<div style="font-size:13px; color:#8aa3b8; margin-bottom:4px;">Send extracted PDF to:</div>' +
+              '<div style="font-size:13px; color:#8aa3b8; margin-bottom:4px;">Send delivery details email to:</div>' +
               '<div class="cd-email-display">' + escHtml(email) + '</div>' +
-              '<div class="cd-summary">' +
-                '<div class="cd-row"><span class="cd-lbl">PO Number</span><span class="cd-val">' + escHtml(poNumber) + '</span></div>' +
-                '<div class="cd-row"><span class="cd-lbl">Supplier</span><span class="cd-val">' + escHtml(supplierName) + '</span></div>' +
-                '<div class="cd-row"><span class="cd-lbl">Total Amount</span><span class="cd-val">' + escHtml(totalAmount) + '</span></div>' +
-              '</div>' +
+              '<div style="font-size:11px; color:#8aa3b8; margin-bottom:6px;">Subject: Purchase Order \u2014 ' + escHtml(poNumber) + ' \u2014 ' + escHtml(supplierName) + '</div>' +
+              '<div class="cd-summary">' + previewHtml + '</div>' +
+              '<div style="font-size:11px; color:#5a7a94; margin-bottom:12px;">All delivery detail fields will be included in the email body. PDF attached.</div>' +
               '<div class="cd-actions">' +
                 '<button class="btn-outline" type="button" onclick="closeDeliveryModal()" style="color:#8aa3b8; border-color:#4b5563;">Cancel</button>' +
                 '<button class="btn" type="button" id="btn-cd-send" onclick="sendDeliveryEmail()" style="display:inline-flex; align-items:center; gap:6px;">' +

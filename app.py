@@ -489,33 +489,26 @@ def _build_review_pdf(payload: dict) -> BytesIO:
 
     down(box_h + 8 * mm)
 
-    # ── Products & Services table ─────────────────────────────────────────
+    # ── Products & Services table (Waste Stream | Movement Type | Price) ──
     line_items = list(payload.get("line_items") or [])
 
-    # Inject document type as a line item
+    # Inject document type as a line item if applicable
     doc_type = (payload.get("document_type") or "").strip()
-    if doc_type:
+    if doc_type in ("Consignment Note", "Waste Transfer Note"):
         note_names = {"consignment note", "waste transfer note"}
         already_listed = any(
             (it.get("description") or "").strip().lower() in note_names
             for it in line_items
         )
         if not already_listed:
-            has_quote = any(float(it.get("unit_price") or 0) > 0 for it in line_items)
-            if has_quote:
-                line_items.append({
-                    "description": doc_type, "quantity": 1,
-                    "unit_price": 0, "line_total": 0,
-                })
-            else:
-                line_items.append({
-                    "description": doc_type, "quantity": 1,
-                    "unit_price": 40.00, "line_total": 40.00,
-                })
+            line_items.append({
+                "description": doc_type, "movement_type": "",
+                "price": 40.00,
+            })
 
     if line_items:
-        ps_col_w = [CONTENT_W * 0.50, CONTENT_W * 0.11, CONTENT_W * 0.19, CONTENT_W * 0.20]
-        ps_headers = ["PRODUCTS & SERVICES", "QTY", "PRICE / UNIT", "LINE TOTAL"]
+        ps_col_w = [CONTENT_W * 0.45, CONTENT_W * 0.30, CONTENT_W * 0.25]
+        ps_headers = ["WASTE STREAM", "MOVEMENT TYPE", "PRICE"]
         ps_hdr_h = 9 * mm
         ps_row_h = 8 * mm
 
@@ -528,8 +521,10 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             for i, hdr in enumerate(ps_headers):
                 if i == 0:
                     c.drawString(hx, y - ps_hdr_h + 2.5 * mm, hdr)
-                else:
+                elif i == 2:
                     c.drawRightString(hx + ps_col_w[i] - 3 * mm, y - ps_hdr_h + 2.5 * mm, hdr)
+                else:
+                    c.drawString(hx, y - ps_hdr_h + 2.5 * mm, hdr)
                 hx += ps_col_w[i]
             down(ps_hdr_h)
 
@@ -547,20 +542,13 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             ensure_space(ps_row_h)
 
             desc = str(item.get("description") or "")
+            movement_type = str(item.get("movement_type") or "")
             try:
-                qty_f = float(item.get("quantity") or 1)
+                price = float(item.get("price") or item.get("line_total") or item.get("unit_price") or 0)
             except (TypeError, ValueError):
-                qty_f = 1.0
-            try:
-                unit = float(item.get("unit_price") or 0)
-            except (TypeError, ValueError):
-                unit = 0.0
-            try:
-                total = float(item.get("line_total") or (qty_f * unit))
-            except (TypeError, ValueError):
-                total = qty_f * unit
+                price = 0.0
 
-            grand_total += total
+            grand_total += price
 
             row_fill = LIGHT_ROW if idx % 2 == 0 else WHITE
             c.setFillColor(row_fill)
@@ -570,40 +558,33 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             c.line(MARGIN, y - ps_row_h, MARGIN + CONTENT_W, y - ps_row_h)
 
             text_y = y - ps_row_h + 2.5 * mm
-            max_desc = ps_col_w[0] - 6 * mm
 
+            # Waste Stream (description)
+            max_desc = ps_col_w[0] - 6 * mm
             desc_str = desc
             c.setFont(FONT_R, 9)
             while desc_str and c.stringWidth(desc_str, FONT_R, 9) > max_desc:
                 desc_str = desc_str[:-1]
             if desc_str != desc and len(desc_str) > 1:
                 desc_str = desc_str[:-1] + "\u2026"
-
             c.setFillColor(TEXT_BODY)
             c.drawString(MARGIN + 3 * mm, text_y, desc_str)
 
-            is_doc_line = desc.strip().lower() in {"consignment note", "waste transfer note"}
-            rx = MARGIN + ps_col_w[0]
+            # Movement Type
+            mt_x = MARGIN + ps_col_w[0]
             c.setFont(FONT_R, 9)
-            c.drawRightString(rx + ps_col_w[1] - 3 * mm, text_y,
-                              str(int(qty_f) if qty_f == int(qty_f) else qty_f))
-            rx += ps_col_w[1]
-            if is_doc_line and unit == 0:
-                c.setFillColor(LABEL_GREY)
-                c.drawRightString(rx + ps_col_w[2] - 3 * mm, text_y, "\u2014")
-                rx += ps_col_w[2]
-                c.setFont(FONT_B, 9)
-                c.drawRightString(rx + ps_col_w[3] - 3 * mm, text_y, "\u2014")
-            else:
-                c.drawRightString(rx + ps_col_w[2] - 3 * mm, text_y, _money(unit))
-                rx += ps_col_w[2]
-                c.setFont(FONT_B, 9)
-                c.setFillColor(NAVY)
-                c.drawRightString(rx + ps_col_w[3] - 3 * mm, text_y, _money(total))
+            c.setFillColor(TEXT_BODY)
+            c.drawString(mt_x + 3 * mm, text_y, movement_type or "\u2014")
+
+            # Price
+            price_x = MARGIN + ps_col_w[0] + ps_col_w[1]
+            c.setFont(FONT_B, 9)
+            c.setFillColor(NAVY)
+            c.drawRightString(price_x + ps_col_w[2] - 3 * mm, text_y, _money(price))
 
             down(ps_row_h)
 
-        # Overall total row — use grand_total which includes any doc type charge
+        # Overall total row
         overall_total = grand_total
         tot_row_h = 10 * mm
         ensure_space(tot_row_h)
@@ -623,6 +604,11 @@ def _build_review_pdf(payload: dict) -> BytesIO:
     section_hdr_h = 7 * mm
 
     sections = [
+        ("DELIVERY DETAILS", [
+            ("Account Name (Waste Logics)", payload.get("dd_account_name") or payload.get("account_name")),
+            ("Supplier", payload.get("dd_supplier") or "Waste Experts"),
+            ("Purchase Order Number", payload.get("dd_po_number") or payload.get("purchase_order_number")),
+        ]),
         ("CONTACT INFORMATION", [
             ("Site Contact", payload.get("site_contact")),
             ("Site Contact Number", payload.get("site_contact_number")),
@@ -762,24 +748,30 @@ def _normalise_data(data: dict):
     # Normalise line_items
     line_items = data.get("line_items") or []
     for item in line_items:
-        try:
-            item["quantity"] = float(item.get("quantity") or 1)
-        except (TypeError, ValueError):
-            item["quantity"] = 1.0
-        try:
-            item["unit_price"] = float(item.get("unit_price") or 0)
-        except (TypeError, ValueError):
-            item["unit_price"] = 0.0
-        try:
-            item["line_total"] = float(item.get("line_total") or item["quantity"] * item["unit_price"])
-        except (TypeError, ValueError):
-            item["line_total"] = item["quantity"] * item["unit_price"]
         item["description"] = str(item.get("description") or "")
+        item["movement_type"] = str(item.get("movement_type") or "")
+        # Support both old format (quantity/unit_price/line_total) and new format (price)
+        if "price" in item:
+            try:
+                item["price"] = float(item.get("price") or 0)
+            except (TypeError, ValueError):
+                item["price"] = 0.0
+        else:
+            # Convert from old format
+            try:
+                unit_price = float(item.get("unit_price") or 0)
+            except (TypeError, ValueError):
+                unit_price = 0.0
+            try:
+                line_total = float(item.get("line_total") or unit_price)
+            except (TypeError, ValueError):
+                line_total = unit_price
+            item["price"] = line_total if line_total else unit_price
 
     try:
-        overall_total = float(data.get("overall_total") or sum(i["line_total"] for i in line_items))
+        overall_total = float(data.get("overall_total") or sum(i["price"] for i in line_items))
     except (TypeError, ValueError):
-        overall_total = sum(i["line_total"] for i in line_items)
+        overall_total = sum(i["price"] for i in line_items)
 
     ordered_fields = [
         "account_name",
@@ -1149,6 +1141,23 @@ def send_to_webhook():
         "line_items": line_items_cell,
         "total_amount": total_amount,
         "caveats": caveats,
+        # Delivery detail fields
+        "dd_account_name": str(data.get("dd_account_name") or data.get("account_name") or "").strip() or "\u2014",
+        "dd_supplier": str(data.get("dd_supplier") or "Waste Experts").strip(),
+        "dd_po_number": str(data.get("dd_po_number") or data.get("purchase_order_number") or "").strip() or "\u2014",
+        "site_contact": str(data.get("site_contact") or "").strip() or "\u2014",
+        "site_contact_number": str(data.get("site_contact_number") or "").strip() or "\u2014",
+        "site_contact_email": str(data.get("site_contact_email") or "").strip() or "\u2014",
+        "secondary_site_contact": str(data.get("secondary_site_contact") or "").strip() or "\u2014",
+        "secondary_site_contact_number": str(data.get("secondary_site_contact_number") or "").strip() or "\u2014",
+        "secondary_site_contact_email": str(data.get("secondary_site_contact_email") or "").strip() or "\u2014",
+        "site_name": str(data.get("site_name") or "").strip() or "\u2014",
+        "site_address": str(data.get("site_address") or "").strip() or "\u2014",
+        "site_postcode": str(data.get("site_postcode") or "").strip() or "\u2014",
+        "opening_times": str(data.get("opening_times") or "").strip() or "\u2014",
+        "access_details": str(data.get("access") or "").strip() or "\u2014",
+        "site_restrictions": str(data.get("site_restrictions") or "").strip() or "\u2014",
+        "special_instructions": str(data.get("special_instructions") or "").strip() or "\u2014",
     }
 
     try:
@@ -1201,19 +1210,13 @@ def _format_line_items_cell(line_items):
     lines = []
     for item in (line_items or []):
         desc = str(item.get("description") or "")
+        mt = str(item.get("movement_type") or "")
         try:
-            qty = int(float(item.get("quantity") or 1))
-        except (TypeError, ValueError):
-            qty = 1
-        try:
-            price = float(item.get("unit_price") or 0)
+            price = float(item.get("price") or item.get("line_total") or item.get("unit_price") or 0)
         except (TypeError, ValueError):
             price = 0.0
-        try:
-            total = float(item.get("line_total") or 0)
-        except (TypeError, ValueError):
-            total = 0.0
-        lines.append(f"{desc} | Qty: {qty} | \u00a3{price:.2f} | \u00a3{total:.2f}")
+        mt_str = f" [{mt}]" if mt else ""
+        lines.append(f"{desc}{mt_str} | \u00a3{price:.2f}")
     return "\n".join(lines) if lines else "\u2014"
 
 
@@ -1442,6 +1445,7 @@ def hubspot_create_deal():
     supplier_name = payload.get("supplier_name", "")
     line_items = payload.get("line_items", [])
     description = payload.get("description", "")
+    delivery_details = payload.get("delivery_details", {})
 
     today_iso = date.today().isoformat()
 
@@ -1566,19 +1570,21 @@ def hubspot_create_deal():
         if assoc_status not in (200, 201):
             association_errors.append(f"Contact association failed: {assoc_data.get('message', '')}")
 
-    # Step 6 — Create line items
+    # Step 6 — Create line items (include movement type in name)
     line_item_ids = []
     for item in line_items:
+        desc = item.get("description", "Item")
+        mt = item.get("movement_type", "")
+        li_name = f"{desc} [{mt}]" if mt else desc
+        # Use 'price' field (new format) or fall back to 'unit_price' (old format)
+        item_price = item.get("price", item.get("unit_price", 0))
         li_body = {
             "properties": {
-                "name": item.get("description", "Item"),
-                "quantity": str(item.get("quantity", 1)),
-                "price": str(item.get("unit_price", 0)),
-                "hs_product_id": None,
+                "name": li_name,
+                "quantity": "1",
+                "price": str(item_price),
             }
         }
-        # Remove None values
-        li_body["properties"] = {k: v for k, v in li_body["properties"].items() if v is not None}
 
         li_status, li_data = _hs_request("POST", "/objects/line_items", li_body)
         if li_status in (200, 201):
@@ -1616,52 +1622,55 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip() or "re_RzdFeJwp_Bv
 print(f"RESEND_API_KEY: {'SET' if RESEND_API_KEY else 'NOT SET'}")
 
 
-def _build_delivery_email_html(supplier_name, po_number, total_amount):
-    """Build a clean, branded HTML email body."""
-    return f"""\
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="margin:0; padding:0; background:#f4f7fb; font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f7fb; padding:32px 0;">
-    <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:4px; box-shadow:0 2px 8px rgba(0,0,0,.08);">
-        <tr>
-          <td style="background:#1e2e3d; padding:24px 32px; border-radius:4px 4px 0 0; text-align:center;">
-            <img src="https://i0.wp.com/wasteexperts.co.uk/wp-content/uploads/2022/11/green-grey-logo-1080.png?w=1920&ssl=1" alt="Waste Experts" width="180" style="display:block; margin:0 auto;" />
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:32px;">
-            <p style="margin:0 0 16px; font-size:15px; color:#2d3748;">Hi,</p>
-            <p style="margin:0 0 20px; font-size:15px; color:#2d3748;">Please find the attached purchase order details.</p>
-            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px; border:1px solid #e2e8f0; border-radius:4px;">
-              <tr style="background:#f7fafc;">
-                <td style="padding:10px 16px; font-size:13px; font-weight:bold; color:#718096; border-bottom:1px solid #e2e8f0;">Supplier</td>
-                <td style="padding:10px 16px; font-size:13px; color:#2d3748; border-bottom:1px solid #e2e8f0;">{supplier_name}</td>
-              </tr>
-              <tr>
-                <td style="padding:10px 16px; font-size:13px; font-weight:bold; color:#718096; border-bottom:1px solid #e2e8f0;">PO Number</td>
-                <td style="padding:10px 16px; font-size:13px; color:#2d3748; border-bottom:1px solid #e2e8f0;">{po_number}</td>
-              </tr>
-              <tr style="background:#f7fafc;">
-                <td style="padding:10px 16px; font-size:13px; font-weight:bold; color:#718096;">Total</td>
-                <td style="padding:10px 16px; font-size:13px; color:#2d3748;">&pound;{total_amount}</td>
-              </tr>
-            </table>
-            <p style="margin:0; font-size:12px; color:#a0aec0;">This was automatically generated by the PO Extractor.</p>
-          </td>
-        </tr>
-        <tr>
-          <td style="background:#1e2e3d; padding:16px 32px; border-radius:0 0 4px 4px; text-align:center;">
-            <p style="margin:0; font-size:11px; color:#8ec431;">Made with \U0001f49a by Marketing &mdash; Waste Experts</p>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>"""
+def _build_delivery_email_plain(payload):
+    """Build a clean, plain-text operations-style email body with delivery details."""
+    def _val(key, default=""):
+        v = str(payload.get(key) or "").strip()
+        return v if v else default
+
+    lines = []
+    lines.append(f"Account Name (Waste Logics): {_val('dd_account_name', _val('account_name'))}")
+    lines.append(f"Supplier: {_val('dd_supplier', 'Waste Experts')}")
+    lines.append(f"Purchase Order Number: {_val('dd_po_number', _val('purchase_order_number'))}")
+    lines.append("")
+    lines.append(f"Site Contact: {_val('site_contact')}")
+    lines.append(f"Site Contact Number: {_val('site_contact_number')}")
+    lines.append(f"Site Contact Email: {_val('site_contact_email')}")
+    lines.append("")
+    lines.append(f"Secondary Site Contact: {_val('secondary_site_contact')}")
+    lines.append(f"Secondary Site Contact Number: {_val('secondary_site_contact_number')}")
+    lines.append(f"Secondary Site Contact Email: {_val('secondary_site_contact_email')}")
+    lines.append("")
+    lines.append(f"Site Name: {_val('site_name')}")
+    lines.append(f"Site Address: {_val('site_address')}")
+    lines.append(f"Site Postcode: {_val('site_postcode')}")
+    lines.append("")
+    lines.append(f"Opening Times: {_val('opening_times')}")
+    lines.append(f"Access: {_val('access')}")
+    lines.append(f"Site Restrictions: {_val('site_restrictions')}")
+    lines.append(f"Special Instructions: {_val('special_instructions')}")
+
+    # Add line items summary
+    line_items = payload.get("line_items") or []
+    if line_items:
+        lines.append("")
+        lines.append("--- Products & Services ---")
+        for item in line_items:
+            desc = str(item.get("description") or "")
+            mt = str(item.get("movement_type") or "")
+            try:
+                price = float(item.get("price") or 0)
+            except (TypeError, ValueError):
+                price = 0.0
+            mt_str = f" [{mt}]" if mt else ""
+            lines.append(f"  {desc}{mt_str} — £{price:.2f}")
+        try:
+            total = float(payload.get("overall_total") or 0)
+        except (TypeError, ValueError):
+            total = 0.0
+        lines.append(f"  Total: £{total:.2f}")
+
+    return "\n".join(lines)
 
 
 @app.route("/api/send-delivery-email/status", methods=["GET"])
@@ -1731,9 +1740,8 @@ def send_delivery_email():
         return jsonify({"error": f"PDF generation failed: {exc}"}), 500
 
     # Prepare email fields
-    po_number = (payload.get("purchase_order_number") or "").strip() or "Unknown"
-    supplier_name = account_name or "Unknown"
-    total_amount = f"{payload.get('overall_total', 0):.2f}"
+    po_number = (payload.get("purchase_order_number") or payload.get("dd_po_number") or "").strip() or "Unknown"
+    supplier_name = (payload.get("dd_supplier") or "Waste Experts").strip()
 
     # Base64-encode the PDF for attachment
     pdf_bytes = pdf_buffer.getvalue()
@@ -1744,15 +1752,15 @@ def send_delivery_email():
     safe_supplier = _sanitise_filename(supplier_name)
     attachment_filename = f"PO_{safe_po}_{safe_supplier}.pdf"
 
-    # Build email HTML
-    email_html = _build_delivery_email_html(supplier_name, po_number, total_amount)
+    # Build plain text email body with delivery details
+    email_text = _build_delivery_email_plain(payload)
 
-    # Send via Resend API
+    # Send via Resend API (plain text, no HTML branding)
     resend_payload = {
         "from": "Waste Experts PO Extractor <onboarding@resend.dev>",
         "to": [to_email],
         "subject": f"Purchase Order \u2014 {po_number} \u2014 {supplier_name}",
-        "html": email_html,
+        "text": email_text,
         "attachments": [{
             "filename": attachment_filename,
             "content": pdf_b64,
