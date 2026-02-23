@@ -1819,7 +1819,7 @@ def test_resend():
         },
         json={
             "from": "onboarding@resend.dev",
-            "to": ["nathan@wasteexperts.co.uk"],
+            "to": ["orders@wasteexperts.co.uk"],
             "subject": "Test Email from PO Extractor",
             "html": "<p>This is a test email. If you see this, Resend is working!</p>",
         },
