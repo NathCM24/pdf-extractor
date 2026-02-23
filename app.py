@@ -81,6 +81,8 @@ STEP 2 — Return ONLY valid JSON with this shape:
   "supplier": "Best matching supplier from approved list, or null",
   "purchase_order_number": "PO/order reference, or null",
   "service_description": "Short product/service description from the products or pricing table (e.g. 'Corrugated Flo Tube Pipe - Exchange'), or null",
+  "customer_name": "Customer name or waste producer name (company receiving the service), or null",
+  "sic_code": "SIC code (Standard Industrial Classification) if mentioned, or null",
   "site_contact": "Primary contact, or null",
   "site_contact_number": "Primary contact number, or null",
   "site_contact_email": "Primary contact email, or null",
@@ -143,6 +145,7 @@ def _calculate_confidence(data, template):
     confidence = {}
     fields = [
         "purchase_order_number", "service_description",
+        "customer_name", "sic_code",
         "site_contact", "site_contact_number", "site_contact_email",
         "secondary_site_contact", "secondary_site_contact_number",
         "secondary_site_contact_email",
@@ -604,10 +607,9 @@ def _build_review_pdf(payload: dict) -> BytesIO:
     section_hdr_h = 7 * mm
 
     sections = [
-        ("DELIVERY DETAILS", [
-            ("Account Name (Waste Logics)", payload.get("dd_account_name") or payload.get("account_name")),
-            ("Supplier", payload.get("dd_supplier") or "Waste Experts"),
-            ("Purchase Order Number", payload.get("dd_po_number") or payload.get("purchase_order_number")),
+        ("CUSTOMER / WASTE PRODUCER", [
+            ("Customer Name / Waste Producer", payload.get("customer_name")),
+            ("SIC Code", payload.get("sic_code")),
         ]),
         ("CONTACT INFORMATION", [
             ("Site Contact", payload.get("site_contact")),
@@ -778,6 +780,8 @@ def _normalise_data(data: dict):
         "supplier",
         "purchase_order_number",
         "service_description",
+        "customer_name",
+        "sic_code",
         "site_contact",
         "site_contact_number",
         "site_contact_email",
@@ -1141,10 +1145,9 @@ def send_to_webhook():
         "line_items": line_items_cell,
         "total_amount": total_amount,
         "caveats": caveats,
-        # Delivery detail fields
-        "dd_account_name": str(data.get("dd_account_name") or data.get("account_name") or "").strip() or "\u2014",
-        "dd_supplier": str(data.get("dd_supplier") or "Waste Experts").strip(),
-        "dd_po_number": str(data.get("dd_po_number") or data.get("purchase_order_number") or "").strip() or "\u2014",
+        # Customer / site detail fields
+        "customer_name": str(data.get("customer_name") or "").strip() or "\u2014",
+        "sic_code": str(data.get("sic_code") or "").strip() or "\u2014",
         "site_contact": str(data.get("site_contact") or "").strip() or "\u2014",
         "site_contact_number": str(data.get("site_contact_number") or "").strip() or "\u2014",
         "site_contact_email": str(data.get("site_contact_email") or "").strip() or "\u2014",
@@ -1622,55 +1625,97 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip() or "re_RzdFeJwp_Bv
 print(f"RESEND_API_KEY: {'SET' if RESEND_API_KEY else 'NOT SET'}")
 
 
-def _build_delivery_email_plain(payload):
-    """Build a clean, plain-text operations-style email body with delivery details."""
-    def _val(key, default=""):
+def _build_delivery_email_html(payload):
+    """Build a branded HTML email with all operations detail fields in a styled table."""
+    import html as html_mod
+
+    def _val(key, default="\u2014"):
         v = str(payload.get(key) or "").strip()
-        return v if v else default
+        return html_mod.escape(v) if v else html_mod.escape(default)
 
-    lines = []
-    lines.append(f"Account Name (Waste Logics): {_val('dd_account_name', _val('account_name'))}")
-    lines.append(f"Supplier: {_val('dd_supplier', 'Waste Experts')}")
-    lines.append(f"Purchase Order Number: {_val('dd_po_number', _val('purchase_order_number'))}")
-    lines.append("")
-    lines.append(f"Site Contact: {_val('site_contact')}")
-    lines.append(f"Site Contact Number: {_val('site_contact_number')}")
-    lines.append(f"Site Contact Email: {_val('site_contact_email')}")
-    lines.append("")
-    lines.append(f"Secondary Site Contact: {_val('secondary_site_contact')}")
-    lines.append(f"Secondary Site Contact Number: {_val('secondary_site_contact_number')}")
-    lines.append(f"Secondary Site Contact Email: {_val('secondary_site_contact_email')}")
-    lines.append("")
-    lines.append(f"Site Name: {_val('site_name')}")
-    lines.append(f"Site Address: {_val('site_address')}")
-    lines.append(f"Site Postcode: {_val('site_postcode')}")
-    lines.append("")
-    lines.append(f"Opening Times: {_val('opening_times')}")
-    lines.append(f"Access: {_val('access')}")
-    lines.append(f"Site Restrictions: {_val('site_restrictions')}")
-    lines.append(f"Special Instructions: {_val('special_instructions')}")
+    def _row(label, value_html):
+        return (
+            f'<tr><td style="padding:10px 14px;font-weight:600;color:#4a5568;'
+            f'border-bottom:1px solid #e2e8f0;width:40%;font-size:14px;">'
+            f'{html_mod.escape(label)}</td>'
+            f'<td style="padding:10px 14px;color:#1a202c;border-bottom:1px solid #e2e8f0;'
+            f'font-size:14px;">{value_html}</td></tr>'
+        )
 
-    # Add line items summary
-    line_items = payload.get("line_items") or []
-    if line_items:
-        lines.append("")
-        lines.append("--- Products & Services ---")
-        for item in line_items:
-            desc = str(item.get("description") or "")
-            mt = str(item.get("movement_type") or "")
-            try:
-                price = float(item.get("price") or 0)
-            except (TypeError, ValueError):
-                price = 0.0
-            mt_str = f" [{mt}]" if mt else ""
-            lines.append(f"  {desc}{mt_str} — £{price:.2f}")
-        try:
-            total = float(payload.get("overall_total") or 0)
-        except (TypeError, ValueError):
-            total = 0.0
-        lines.append(f"  Total: £{total:.2f}")
+    def _section_row(title):
+        return (
+            f'<tr><td colspan="2" style="padding:14px 14px 6px;font-size:11px;'
+            f'font-weight:700;text-transform:uppercase;letter-spacing:1px;'
+            f'color:#8ec431;border-bottom:2px solid #e2e8f0;">'
+            f'{html_mod.escape(title)}</td></tr>'
+        )
 
-    return "\n".join(lines)
+    # Build the table rows
+    rows = []
+    rows.append(_section_row("Account Details"))
+    rows.append(_row("Account Name (Waste Logics)", _val("customer_name", _val("account_name"))))
+    rows.append(_row("Supplier", "Waste Experts"))
+    rows.append(_row("Purchase Order Number", _val("purchase_order_number")))
+
+    rows.append(_section_row("Primary Contact"))
+    rows.append(_row("Site Contact", _val("site_contact")))
+    rows.append(_row("Site Contact Number", _val("site_contact_number")))
+    rows.append(_row("Site Contact Email", _val("site_contact_email")))
+
+    rows.append(_section_row("Secondary Contact"))
+    rows.append(_row("Secondary Site Contact", _val("secondary_site_contact")))
+    rows.append(_row("Secondary Site Contact Number", _val("secondary_site_contact_number")))
+    rows.append(_row("Secondary Site Contact Email", _val("secondary_site_contact_email")))
+
+    rows.append(_section_row("Site Information"))
+    rows.append(_row("Site Name", _val("site_name")))
+    rows.append(_row("Site Address", _val("site_address").replace("\n", "<br>")))
+    rows.append(_row("Site Postcode", _val("site_postcode")))
+
+    rows.append(_section_row("Access & Instructions"))
+    rows.append(_row("Opening Times", _val("opening_times").replace("\n", "<br>")))
+    rows.append(_row("Access", _val("access").replace("\n", "<br>")))
+    rows.append(_row("Site Restrictions", _val("site_restrictions").replace("\n", "<br>")))
+    rows.append(_row("Special Instructions", _val("special_instructions").replace("\n", "<br>")))
+
+    table_rows_html = "\n".join(rows)
+
+    logo_url = (
+        "https://i0.wp.com/wasteexperts.co.uk/wp-content/uploads/"
+        "2022/11/green-grey-logo-1080.png?w=1920&amp;ssl=1"
+    )
+
+    return f"""\
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:24px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+  <!-- Header -->
+  <tr><td style="background:#1e2e3d;padding:24px 30px;text-align:center;">
+    <img src="{logo_url}" alt="Waste Experts" width="180" style="display:block;margin:0 auto;" />
+  </td></tr>
+  <!-- Green accent bar -->
+  <tr><td style="background:#8ec431;height:4px;font-size:0;line-height:0;">&nbsp;</td></tr>
+  <!-- Body -->
+  <tr><td style="padding:28px 30px 12px;">
+    <h2 style="margin:0 0 6px;font-size:18px;color:#1e2e3d;">Purchase Order Details</h2>
+    <p style="margin:0 0 20px;font-size:13px;color:#718096;">Please find the full delivery details below. PDF attached.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:6px;border-collapse:separate;overflow:hidden;">
+      {table_rows_html}
+    </table>
+  </td></tr>
+  <!-- Footer -->
+  <tr><td style="background:#f7fafc;padding:18px 30px;text-align:center;border-top:1px solid #e2e8f0;">
+    <p style="margin:0;font-size:12px;color:#8ec431;font-weight:600;">Made with \U0001f49a by Marketing \u2014 Waste Experts</p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
 
 
 @app.route("/api/send-delivery-email/status", methods=["GET"])
@@ -1740,27 +1785,25 @@ def send_delivery_email():
         return jsonify({"error": f"PDF generation failed: {exc}"}), 500
 
     # Prepare email fields
-    po_number = (payload.get("purchase_order_number") or payload.get("dd_po_number") or "").strip() or "Unknown"
-    supplier_name = (payload.get("dd_supplier") or "Waste Experts").strip()
+    po_number = (payload.get("purchase_order_number") or "").strip() or "Unknown"
 
     # Base64-encode the PDF for attachment
     pdf_bytes = pdf_buffer.getvalue()
     pdf_b64 = base64.standard_b64encode(pdf_bytes).decode()
 
     # Sanitised filename
+    supplier_name = "Waste Experts"
     safe_po = _sanitise_filename(po_number)
     safe_supplier = _sanitise_filename(supplier_name)
     attachment_filename = f"PO_{safe_po}_{safe_supplier}.pdf"
 
-    # Build plain text email body with delivery details
-    email_text = _build_delivery_email_plain(payload)
-
-    # Send via Resend API (plain text, no HTML branding)
+    # Build branded HTML email body with all delivery detail fields
+    email_html = _build_delivery_email_html(payload)
     resend_payload = {
         "from": "Waste Experts PO Extractor <onboarding@resend.dev>",
         "to": [to_email],
         "subject": f"Purchase Order \u2014 {po_number} \u2014 {supplier_name}",
-        "text": email_text,
+        "html": email_html,
         "attachments": [{
             "filename": attachment_filename,
             "content": pdf_b64,
