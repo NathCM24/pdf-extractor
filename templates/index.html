@@ -293,13 +293,31 @@
     }
     .toast.show { opacity: 1; }
 
-    /* --- Line items (7-column: Container | Qty | WEEE # | Waste Stream | Movement Type | Price | Remove) --- */
+    /* --- Line items (7-column: Qty | Container | WEEE # | Waste Stream | Movement Type | Price | Remove) --- */
+    .line-item-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 6px 0; border-bottom: 1px solid #3d5a73;
+    }
+    .line-item-header span {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      color: #8ec431; letter-spacing: .3px; flex-shrink: 0;
+    }
+    .line-item-header .lih-qty { width: 55px; }
+    .line-item-header .lih-container { width: 140px; }
+    .line-item-header .lih-weee { width: 55px; }
+    .line-item-header .lih-waste { flex: 1 1 0; min-width: 80px; }
+    .line-item-header .lih-mt { width: 140px; }
+    .line-item-header .lih-price { width: 120px; }
+    .line-item-header .lih-del { width: 35px; }
+
     .line-item-row {
-      display: grid; grid-template-columns: 14% 7% 7% 28% 16% 14% 4%; gap: 6px;
-      align-items: end; padding: 8px 0; border-bottom: 1px solid #2f4a60;
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 0; border-bottom: 1px solid #2f4a60; flex-wrap: nowrap;
     }
     .line-item-row:last-child { border-bottom: none; }
-    .line-item-row input, .line-item-row select { font-size: 12px; padding: 7px 8px; }
+    .line-item-row input, .line-item-row select {
+      font-size: 12px; padding: 8px 10px; border-radius: 4px;
+    }
     .line-item-row .li-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #8aa3b8; margin-bottom: 2px; }
     .line-item-row select {
       border: 1px solid #3d5a73; border-radius: 4px;
@@ -307,13 +325,35 @@
       font-family: 'Montserrat', sans-serif; cursor: pointer;
     }
     .line-item-row select option { background: #1e2e3d; color: #e8ecf1; }
-    /* WEEE # dropdown: compact */
-    .li-weee-num {
-      width: 50px; min-width: 42px; text-align: center;
+    /* Column wrappers */
+    .li-col-qty { width: 55px; flex-shrink: 0; }
+    .li-col-container { width: 140px; flex-shrink: 0; }
+    .li-col-weee { width: 55px; flex-shrink: 0; }
+    .li-col-waste { flex: 1 1 0; min-width: 80px; }
+    .li-col-mt { width: 140px; flex-shrink: 0; }
+    .li-col-price { width: 120px; flex-shrink: 0; }
+    .li-col-del { width: 35px; flex-shrink: 0; }
+    /* Qty number input: compact */
+    .li-qty {
+      width: 100%; min-width: 0; text-align: right;
       border: 1px solid #3d5a73; border-radius: 4px;
       background: #1e2e3d; color: #e8ecf1;
       font-family: 'Montserrat', sans-serif; font-size: 12px;
-      padding: 7px 4px; cursor: pointer;
+      padding: 8px 10px; box-sizing: border-box;
+      -moz-appearance: textfield;
+    }
+    .li-qty::-webkit-outer-spin-button,
+    .li-qty::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .li-qty:focus { outline: none; border-color: #8ec431; box-shadow: 0 0 0 2px rgba(142,196,49,.2); }
+    /* Container dropdown */
+    .li-container { width: 100%; box-sizing: border-box; }
+    /* WEEE # dropdown: compact */
+    .li-weee-num {
+      width: 100%; min-width: 0; text-align: center;
+      border: 1px solid #3d5a73; border-radius: 4px;
+      background: #1e2e3d; color: #e8ecf1;
+      font-family: 'Montserrat', sans-serif; font-size: 12px;
+      padding: 8px 4px; cursor: pointer; box-sizing: border-box;
     }
     .li-weee-num option { background: #1e2e3d; color: #e8ecf1; }
     /* WEEE tooltip wrapper */
@@ -336,42 +376,33 @@
       width: 100%; border: 1px solid #3d5a73; border-radius: 4px;
       background: #1e2e3d; color: #e8ecf1;
       font-family: 'Montserrat', sans-serif; font-size: 12px;
-      padding: 7px 8px;
+      padding: 8px 10px; box-sizing: border-box;
     }
     .li-waste-desc:focus { outline: none; border-color: #8ec431; box-shadow: 0 0 0 2px rgba(142,196,49,.2); }
-    /* Qty number input: compact */
-    .li-qty {
-      width: 55px; min-width: 45px; text-align: right;
-      border: 1px solid #3d5a73; border-radius: 4px;
-      background: #1e2e3d; color: #e8ecf1;
-      font-family: 'Montserrat', sans-serif; font-size: 12px;
-      padding: 7px 6px;
-      -moz-appearance: textfield;
-    }
-    .li-qty::-webkit-outer-spin-button,
-    .li-qty::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    .li-qty:focus { outline: none; border-color: #8ec431; box-shadow: 0 0 0 2px rgba(142,196,49,.2); }
+    /* Movement type dropdown */
+    .li-movement { width: 100%; box-sizing: border-box; }
+    /* Price wrapper */
     .li-price-wrap {
-      display: flex; align-items: center; position: relative;
+      display: flex; align-items: center; position: relative; width: 100%;
     }
     .li-price-wrap .li-price-prefix {
       position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
       font-size: 12px; font-weight: 600; color: #8aa3b8; pointer-events: none; z-index: 1;
     }
     .li-price-wrap input {
-      padding-left: 22px; text-align: right; width: 100%;
+      padding-left: 22px; text-align: right; width: 100%; box-sizing: border-box;
     }
     .btn-remove {
       border: none; background: rgba(180,35,24,.2); color: #f87171; border-radius: 4px;
-      padding: 7px 8px; cursor: pointer; font-weight: 700; font-size: 13px;
+      padding: 8px 10px; cursor: pointer; font-weight: 700; font-size: 13px;
       font-family: 'Montserrat', sans-serif; transition: background .2s;
+      width: 100%; box-sizing: border-box;
     }
     .btn-remove:hover { background: rgba(180,35,24,.35); }
 
 
     @media (max-width: 760px) {
       .grid { grid-template-columns: 1fr; }
-      .line-item-row { grid-template-columns: 1fr; }
     }
 
     /* --- Supplier Template Management --- */
@@ -709,14 +740,14 @@
           </div>
 
           <!-- Line item header row -->
-          <div class="full" style="display:grid; grid-template-columns:14% 7% 7% 28% 16% 14% 4%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Container</span>
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Qty</span>
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">WEEE</span>
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Waste Stream</span>
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Movement Type</span>
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Price</span>
-            <span></span>
+          <div class="full line-item-header">
+            <span class="lih-qty">QTY</span>
+            <span class="lih-container">CONTAINER</span>
+            <span class="lih-weee">WEEE</span>
+            <span class="lih-waste">WASTE STREAM</span>
+            <span class="lih-mt">MOVEMENT TYPE</span>
+            <span class="lih-price">PRICE</span>
+            <span class="lih-del"></span>
           </div>
 
           <div class="full" id="line-items-container">
@@ -902,14 +933,14 @@
           </div>
 
           <!-- Line item header row -->
-          <div class="full" style="display:grid; grid-template-columns:14% 7% 7% 28% 16% 14% 4%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Container</span>
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Qty</span>
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">WEEE</span>
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Waste Stream</span>
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Movement Type</span>
-            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Price</span>
-            <span></span>
+          <div class="full line-item-header">
+            <span class="lih-qty">QTY</span>
+            <span class="lih-container">CONTAINER</span>
+            <span class="lih-weee">WEEE</span>
+            <span class="lih-waste">WASTE STREAM</span>
+            <span class="lih-mt">MOVEMENT TYPE</span>
+            <span class="lih-price">PRICE</span>
+            <span class="lih-del"></span>
           </div>
 
           <div class="full" id="cef-line-items-container">
@@ -1439,13 +1470,13 @@
       var priceVal = (price != null && price !== '') ? parseFloat(price) : 0;
       var descVal = desc || '';
       row.innerHTML =
-        '<div><select class="li-container">' + ctOptions + '</select></div>' +
-        '<div><input type="number" class="li-qty" value="' + qtyVal + '" min="1" step="1" /></div>' +
-        '<div><div class="weee-wrap"><select class="li-weee-num" onchange="updateWeeeTooltip(this)">' + weeeOpts + '</select><span class="weee-tooltip">' + escHtml(tooltipText) + '</span></div></div>' +
-        '<div><input type="text" class="li-waste-desc" value="' + escHtml(descVal) + '" placeholder="Product description" /></div>' +
-        '<div><select class="li-movement">' + mtOptions + '</select></div>' +
-        '<div><div class="li-price-wrap"><span class="li-price-prefix">\u00a3</span><input type="number" class="li-price" value="' + priceVal.toFixed(2) + '" min="0" step="0.01" onchange="recalcOverallTotal()" /></div></div>' +
-        '<div style="padding-bottom:1px;"><button class="btn-remove" type="button" onclick="removeLineItem(this)">&times;</button></div>';
+        '<div class="li-col-qty"><input type="number" class="li-qty" value="' + qtyVal + '" min="1" step="1" /></div>' +
+        '<div class="li-col-container"><select class="li-container">' + ctOptions + '</select></div>' +
+        '<div class="li-col-weee"><div class="weee-wrap"><select class="li-weee-num" onchange="updateWeeeTooltip(this)">' + weeeOpts + '</select><span class="weee-tooltip">' + escHtml(tooltipText) + '</span></div></div>' +
+        '<div class="li-col-waste"><input type="text" class="li-waste-desc" value="' + escHtml(descVal) + '" placeholder="Product description" /></div>' +
+        '<div class="li-col-mt"><select class="li-movement">' + mtOptions + '</select></div>' +
+        '<div class="li-col-price"><div class="li-price-wrap"><span class="li-price-prefix">\u00a3</span><input type="number" class="li-price" value="' + priceVal.toFixed(2) + '" min="0" step="0.01" onchange="recalcOverallTotal()" /></div></div>' +
+        '<div class="li-col-del"><button class="btn-remove" type="button" onclick="removeLineItem(this)">&times;</button></div>';
       containerEl.appendChild(row);
       recalcOverallTotal();
     }
@@ -2858,13 +2889,13 @@
         var pv = (price!=null&&price!=='')?parseFloat(price):0;
         var descVal = desc || '';
         row.innerHTML =
-          '<div><select class="li-container">'+ctOpts+'</select></div>' +
-          '<div><input type="number" class="li-qty" value="'+qtyVal+'" min="1" step="1" /></div>' +
-          '<div><div class="weee-wrap"><select class="li-weee-num" onchange="updateWeeeTooltip(this)">'+weeeOpts+'</select><span class="weee-tooltip">'+escHtml(tooltipText)+'</span></div></div>' +
-          '<div><input type="text" class="li-waste-desc" value="'+escHtml(descVal)+'" placeholder="Product description" /></div>' +
-          '<div><select class="li-movement">'+opts+'</select></div>' +
-          '<div><div class="li-price-wrap"><span class="li-price-prefix">\u00a3</span><input type="number" class="li-price" value="'+pv.toFixed(2)+'" min="0" step="0.01" onchange="cefRecalcTotal()" /></div></div>' +
-          '<div style="padding-bottom:1px;"><button class="btn-remove" type="button" onclick="cefRemoveLineItem(this)">&times;</button></div>';
+          '<div class="li-col-qty"><input type="number" class="li-qty" value="'+qtyVal+'" min="1" step="1" /></div>' +
+          '<div class="li-col-container"><select class="li-container">'+ctOpts+'</select></div>' +
+          '<div class="li-col-weee"><div class="weee-wrap"><select class="li-weee-num" onchange="updateWeeeTooltip(this)">'+weeeOpts+'</select><span class="weee-tooltip">'+escHtml(tooltipText)+'</span></div></div>' +
+          '<div class="li-col-waste"><input type="text" class="li-waste-desc" value="'+escHtml(descVal)+'" placeholder="Product description" /></div>' +
+          '<div class="li-col-mt"><select class="li-movement">'+opts+'</select></div>' +
+          '<div class="li-col-price"><div class="li-price-wrap"><span class="li-price-prefix">\u00a3</span><input type="number" class="li-price" value="'+pv.toFixed(2)+'" min="0" step="0.01" onchange="cefRecalcTotal()" /></div></div>' +
+          '<div class="li-col-del"><button class="btn-remove" type="button" onclick="cefRemoveLineItem(this)">&times;</button></div>';
         c.appendChild(row); cefRecalcTotal();
       };
       window.cefRemoveLineItem = function(btn) {
