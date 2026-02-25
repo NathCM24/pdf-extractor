@@ -1354,7 +1354,7 @@
     /* ── Line items ── */
     let lineItemCounter = 0;
     const MOVEMENT_TYPES = ['', 'Remove', 'Uplift', 'Exchange', 'WWL', 'Delivery'];
-    const CONTAINER_TYPES = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD'];
+    const CONTAINER_TYPES = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD', 'Data POD', 'Electric POD', 'Lighting POD', 'Toner POD', 'Haz Box'];
 
     /* WEEE category number → name mapping */
     const WEEE_CATEGORIES = {
@@ -2344,7 +2344,7 @@
           '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Waste Stream</span>' +
           '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Movement Type</span>' +
           '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Price</span></div>';
-        var trainContainerTypes = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD'];
+        var trainContainerTypes = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD', 'Data POD', 'Electric POD', 'Lighting POD', 'Toner POD', 'Haz Box'];
         var trainWsCategories = ['', '1. Large Household Appliances', '2. Small Household Appliances', '3. IT and Telecommunications Equipment', '4. Consumer Equipment', '5. Lighting Equipment', '6. Electrical and Electronic Tools', '7. Toys, Leisure and Sports Equipment', '8. Medical Devices', '9. Monitoring and Control Equipment', '10. Automatic Dispensers', '11. Display Equipment', '12. Appliances Containing Refrigerants', '13. Gas Discharge Lamps and LED Light Sources', '14. PV Panels (Solar Panels)', '15. Vapes and Electronic Cigarettes'];
         items.forEach(function(li) {
           var ctOpts = trainContainerTypes.map(function(ct) {
@@ -2810,7 +2810,7 @@
       }
 
       /* Line items */
-      var CEF_CONTAINER_TYPES = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD'];
+      var CEF_CONTAINER_TYPES = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD', 'Data POD', 'Electric POD', 'Lighting POD', 'Toner POD', 'Haz Box'];
       window.cefAddLineItem = function(desc, mt, price, isDoc, containerType, wasteStream) {
         var c = document.getElementById('cef-line-items-container');
         var idx = cefLineItemCounter++;
