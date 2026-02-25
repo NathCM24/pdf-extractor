@@ -1448,6 +1448,31 @@
       return li.waste_stream || '';
     }
 
+    /* Two-line waste stream: returns {weee: "13. Gas Discharge...", desc: "Lamp Green..."} */
+    function wasteStreamParts(li) {
+      var cat = li.weee_category || '';
+      var num = li.weee_number || '';
+      var desc = li.description || '';
+      // Try to resolve number from category name
+      if (cat && !num) {
+        for (var n in WEEE_CATEGORIES) {
+          if (WEEE_CATEGORIES[n] === cat) { num = n; break; }
+        }
+      }
+      // Try to parse from waste_stream string "N. Category Name"
+      if (!cat && li.waste_stream) {
+        var m = (li.waste_stream || '').match(/^(\d{1,2})\.\s+(.+)/);
+        if (m) { num = m[1]; cat = m[2].trim(); }
+        else {
+          for (var n2 in WEEE_CATEGORIES) {
+            if (WEEE_CATEGORIES[n2] === li.waste_stream) { num = n2; cat = li.waste_stream; break; }
+          }
+        }
+      }
+      var weeeLine = (cat && num) ? num + '. ' + cat : cat;
+      return { weee: weeeLine, desc: desc };
+    }
+
     function removeLineItem(btn) {
       var row = btn.closest('.line-item-row');
       /* If removing a doc-type auto-added line, reset the tracking */
@@ -1914,13 +1939,16 @@
         ownerOptionsHtml = '<option value="">No owners available</option>';
       }
 
-      /* Build description from line items + delivery details */
+      /* Build description from line items + delivery details (two-line waste stream) */
       var desc = items.map(function(li, i) {
         var ct = li.container ? li.container + ' | ' : '';
-        var wsDisplay = formatWasteStreamDisplay(li);
+        var parts = wasteStreamParts(li);
         var mt = li.movement_type ? ' [' + li.movement_type + ']' : '';
-        return (i+1) + '. ' + ct + (wsDisplay || 'Item') + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
-      }).join('; ');
+        if (parts.weee && parts.desc) {
+          return (i+1) + '. ' + ct + parts.weee + '\n   ' + parts.desc + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
+        }
+        return (i+1) + '. ' + ct + (parts.weee || parts.desc || 'Item') + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
+      }).join('\n');
 
       /* Append delivery details to description */
       var ddFields = [
@@ -1940,12 +1968,19 @@
       var ddDesc = ddFields.filter(function(f) { return f[1]; }).map(function(f) { return f[0] + ': ' + f[1]; }).join('\n');
       if (ddDesc) desc += '\n\nDelivery Details:\n' + ddDesc;
 
-      /* Build line items table */
+      /* Build line items table (two-line waste stream) */
       var liHtml = '';
       if (items.length) {
         liHtml = '<table class="hs-li-table"><thead><tr><th>Container</th><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
         items.forEach(function(li) {
-          liHtml += '<tr><td>' + escHtml(li.container || '\u2014') + '</td><td>' + escHtml(formatWasteStreamDisplay(li) || '\u2014') + '</td><td>' + escHtml(li.movement_type || '\u2014') + '</td><td>\u00a3' + (li.price||0).toFixed(2) + '</td></tr>';
+          var pts = wasteStreamParts(li);
+          var wsCell = '';
+          if (pts.weee && pts.desc) {
+            wsCell = '<span style="font-size:10px;color:#718096;">' + escHtml(pts.weee) + '</span><br/>' + escHtml(pts.desc);
+          } else {
+            wsCell = escHtml(pts.weee || pts.desc || formatWasteStreamDisplay(li) || '\u2014');
+          }
+          liHtml += '<tr><td>' + escHtml(li.container || '\u2014') + '</td><td>' + wsCell + '</td><td>' + escHtml(li.movement_type || '\u2014') + '</td><td>\u00a3' + (li.price||0).toFixed(2) + '</td></tr>';
         });
         liHtml += '</tbody></table>';
       } else {
@@ -2976,7 +3011,7 @@
         else { ooHtml = '<option value="">No owners</option>'; }
 
         var personDetails = CEF_PERSONS[person] || CEF_PERSONS['Katie Wooton'];
-        var desc = items.map(function(li,i){ var ct=li.container?li.container+' | ':''; var wsD=formatWasteStreamDisplay(li); var mt=li.movement_type?' ['+li.movement_type+']':''; return (i+1)+'. '+ct+(wsD||'Item')+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2); }).join('; ');
+        var desc = items.map(function(li,i){ var ct=li.container?li.container+' | ':''; var pts=wasteStreamParts(li); var mt=li.movement_type?' ['+li.movement_type+']':''; if(pts.weee&&pts.desc){return (i+1)+'. '+ct+pts.weee+'\n   '+pts.desc+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2);} return (i+1)+'. '+ct+(pts.weee||pts.desc||'Item')+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2); }).join('\n');
         desc += '\n\nPrepared By: '+personDetails.name+' | '+personDetails.title+' | '+personDetails.email+' | '+personDetails.phone;
         if (p.po_date) desc += '\nPO Date: '+p.po_date;
         var dd = [['CEF Branch',bn],['Supplier','Waste Experts'],['Site Contact',p.site_contact],['Delivery Address',p.delivery_address],['Delivery Postcode',p.delivery_postcode]];
@@ -2986,7 +3021,7 @@
         var liH = '';
         if (items.length) {
           liH = '<table class="hs-li-table"><thead><tr><th>Container</th><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
-          items.forEach(function(li){ liH += '<tr><td>'+escHtml(li.container||'\u2014')+'</td><td>'+escHtml(formatWasteStreamDisplay(li)||'\u2014')+'</td><td>'+escHtml(li.movement_type||'\u2014')+'</td><td>\u00a3'+(li.price||0).toFixed(2)+'</td></tr>'; });
+          items.forEach(function(li){ var pts=wasteStreamParts(li); var wsC=''; if(pts.weee&&pts.desc){wsC='<span style="font-size:10px;color:#718096;">'+escHtml(pts.weee)+'</span><br/>'+escHtml(pts.desc);}else{wsC=escHtml(pts.weee||pts.desc||formatWasteStreamDisplay(li)||'\u2014');} liH += '<tr><td>'+escHtml(li.container||'\u2014')+'</td><td>'+wsC+'</td><td>'+escHtml(li.movement_type||'\u2014')+'</td><td>\u00a3'+(li.price||0).toFixed(2)+'</td></tr>'; });
           liH += '</tbody></table>';
         } else { liH = '<div style="color:#8aa3b8;font-size:12px;">No line items</div>'; }
 

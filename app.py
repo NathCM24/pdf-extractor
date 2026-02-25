@@ -440,6 +440,55 @@ def _format_waste_stream_display(item):
     return str(item.get("waste_stream") or item.get("description") or "")
 
 
+def _waste_stream_parts(item):
+    """Return (weee_line, desc_line) for two-line display.
+    weee_line: e.g. '13. Gas Discharge Lamps and LED Light Sources'
+    desc_line: e.g. 'Lamp Green Steel Empty & Replace'
+    Either may be empty string if not available."""
+    weee_num = item.get("weee_number") or ""
+    weee_cat = item.get("weee_category") or ""
+    desc = str(item.get("description") or "").strip()
+
+    # Resolve category from weee_number if weee_category is missing
+    if weee_num and not weee_cat:
+        try:
+            weee_cat = WEEE_CATEGORIES.get(int(weee_num), "")
+        except (ValueError, TypeError):
+            pass
+
+    # Resolve weee_num from weee_category name if we have category but no number
+    if weee_cat and not weee_num:
+        for num, name in WEEE_CATEGORIES.items():
+            if name == weee_cat:
+                weee_num = str(num)
+                break
+
+    # If no weee_cat, try to parse from waste_stream string "N. Category Name"
+    if not weee_cat:
+        ws = str(item.get("waste_stream") or "").strip()
+        if ws:
+            m = re.match(r"^(\d{1,2})\.\s+(.+)", ws)
+            if m:
+                weee_num = m.group(1)
+                weee_cat = m.group(2).strip()
+            elif ws in WEEE_CATEGORIES.values():
+                weee_cat = ws
+                for num, name in WEEE_CATEGORIES.items():
+                    if name == ws:
+                        weee_num = str(num)
+                        break
+
+    # Build the WEEE display line with number prefix
+    if weee_cat and weee_num:
+        weee_line = f"{weee_num}. {weee_cat}"
+    elif weee_cat:
+        weee_line = weee_cat
+    else:
+        weee_line = ""
+
+    return weee_line, desc
+
+
 # ─── Helper: inject £40 doc-type line into line items if applicable ──────────
 
 def _inject_doc_type_line(line_items, document_type):
@@ -655,7 +704,8 @@ def _build_review_pdf(payload: dict) -> BytesIO:
         ps_col_w = [CONTENT_W * 0.20, CONTENT_W * 0.35, CONTENT_W * 0.20, CONTENT_W * 0.25]
         ps_headers = ["CONTAINER", "WASTE STREAM", "MOVEMENT TYPE", "PRICE"]
         ps_hdr_h = 9 * mm
-        ps_row_h = 8 * mm
+        ps_row_h_single = 8 * mm   # rows without two-line waste stream
+        ps_row_h_double = 14 * mm  # rows with WEEE category + description
 
         def draw_ps_header():
             nonlocal y
@@ -682,10 +732,8 @@ def _build_review_pdf(payload: dict) -> BytesIO:
 
         grand_total = 0.0
         for idx, item in enumerate(line_items):
-            ensure_space(ps_row_h)
-
             container_val = str(item.get("container") or "")
-            desc = _format_waste_stream_display(item)
+            weee_line, desc_line = _waste_stream_parts(item)
             movement_type = str(item.get("movement_type") or "")
             try:
                 price = float(item.get("price") or item.get("line_total") or item.get("unit_price") or 0)
@@ -694,6 +742,11 @@ def _build_review_pdf(payload: dict) -> BytesIO:
 
             grand_total += price
 
+            # Use taller row when we have both WEEE category and description
+            has_two_lines = bool(weee_line and desc_line)
+            ps_row_h = ps_row_h_double if has_two_lines else ps_row_h_single
+            ensure_space(ps_row_h)
+
             row_fill = LIGHT_ROW if idx % 2 == 0 else WHITE
             c.setFillColor(row_fill)
             c.rect(MARGIN, y - ps_row_h, CONTENT_W, ps_row_h, fill=1, stroke=0)
@@ -701,24 +754,45 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             c.setLineWidth(0.3)
             c.line(MARGIN, y - ps_row_h, MARGIN + CONTENT_W, y - ps_row_h)
 
-            text_y = y - ps_row_h + 2.5 * mm
+            # Waste Stream column — two-line layout
+            ws_x = MARGIN + ps_col_w[0]
+            max_ws_w = ps_col_w[1] - 6 * mm
+
+            if has_two_lines:
+                # Line 1: WEEE category (smaller font, muted grey)
+                line1_y = y - 5.5 * mm
+                c.setFont(FONT_R, 6.5)
+                c.setFillColor(LABEL_GREY)
+                weee_str = weee_line
+                if c.stringWidth(weee_str, FONT_R, 6.5) > max_ws_w:
+                    weee_str = _wrap_text(c, weee_str, FONT_R, 6.5, max_ws_w)[0]
+                c.drawString(ws_x + 3 * mm, line1_y, weee_str)
+
+                # Line 2: Product description (normal font)
+                line2_y = y - ps_row_h + 2.5 * mm
+                c.setFont(FONT_R, 8)
+                c.setFillColor(TEXT_BODY)
+                desc_str = desc_line
+                if c.stringWidth(desc_str, FONT_R, 8) > max_ws_w:
+                    desc_str = _wrap_text(c, desc_str, FONT_R, 8, max_ws_w)[0]
+                c.drawString(ws_x + 3 * mm, line2_y, desc_str)
+
+                # Vertical midpoint for other columns
+                text_y = y - ps_row_h / 2 - 1 * mm
+            else:
+                # Single line: show whichever is available
+                text_y = y - ps_row_h + 2.5 * mm
+                single_text = weee_line or desc_line or str(item.get("waste_stream") or item.get("description") or "")
+                c.setFont(FONT_R, 8)
+                c.setFillColor(TEXT_BODY)
+                if c.stringWidth(single_text, FONT_R, 8) > max_ws_w:
+                    single_text = _wrap_text(c, single_text, FONT_R, 8, max_ws_w)[0]
+                c.drawString(ws_x + 3 * mm, text_y, single_text)
 
             # Container
             c.setFont(FONT_R, 8)
             c.setFillColor(TEXT_BODY)
             c.drawString(MARGIN + 3 * mm, text_y, container_val or "\u2014")
-
-            # Waste Stream (description)
-            ws_x = MARGIN + ps_col_w[0]
-            max_desc = ps_col_w[1] - 6 * mm
-            desc_str = desc
-            c.setFont(FONT_R, 8)
-            while desc_str and c.stringWidth(desc_str, FONT_R, 8) > max_desc:
-                desc_str = desc_str[:-1]
-            if desc_str != desc and len(desc_str) > 1:
-                desc_str = desc_str[:-1] + "\u2026"
-            c.setFillColor(TEXT_BODY)
-            c.drawString(ws_x + 3 * mm, text_y, desc_str)
 
             # Movement Type
             mt_x = MARGIN + ps_col_w[0] + ps_col_w[1]
@@ -1705,11 +1779,12 @@ def _get_gsheets_client():
 
 
 def _format_line_items_cell(line_items):
-    """Format line items into a single cell string with newlines."""
+    """Format line items into a single cell string with newlines.
+    Uses two-line format: WEEE category on first line, product description on second."""
     lines = []
     for item in (line_items or []):
         container = str(item.get("container") or "")
-        display_desc = _format_waste_stream_display(item)
+        weee_line, desc_line = _waste_stream_parts(item)
         mt = str(item.get("movement_type") or "")
         try:
             price = float(item.get("price") or item.get("line_total") or item.get("unit_price") or 0)
@@ -1717,7 +1792,11 @@ def _format_line_items_cell(line_items):
             price = 0.0
         mt_str = f" [{mt}]" if mt else ""
         container_str = f"{container} | " if container else ""
-        lines.append(f"{container_str}{display_desc}{mt_str} | \u00a3{price:.2f}")
+        if weee_line and desc_line:
+            lines.append(f"{container_str}{weee_line}\n  {desc_line}{mt_str} | \u00a3{price:.2f}")
+        else:
+            display_desc = weee_line or desc_line or _format_waste_stream_display(item)
+            lines.append(f"{container_str}{display_desc}{mt_str} | \u00a3{price:.2f}")
     return "\n".join(lines) if lines else "\u2014"
 
 
@@ -1812,6 +1891,46 @@ HUBSPOT_BASE = "https://api.hubapi.com/crm/v3"
 HUBSPOT_APP_BASE = "https://app-eu1.hubspot.com"
 
 _cached_owner_id = None  # Cache Nathan Malone's owner ID
+
+# Pipeline cache: resolve "Repeat Business (Waste Experts)" on first use
+_REPEAT_BIZ_PIPELINE_NAME = "Repeat Business (Waste Experts)"
+_cached_pipeline = {"id": None, "closedwon_stage": None}
+
+
+def _resolve_pipeline():
+    """Fetch deal pipelines and cache the ID + closedwon stage for 'Repeat Business (Waste Experts)'."""
+    if _cached_pipeline["id"]:
+        return _cached_pipeline["id"], _cached_pipeline["closedwon_stage"]
+
+    status, data = _hs_request("GET", "/pipelines/deals")
+    if status != 200:
+        return None, None
+
+    for pipe in data.get("results", []):
+        if pipe.get("label", "").strip() == _REPEAT_BIZ_PIPELINE_NAME:
+            pipeline_id = pipe["id"]
+            closedwon_stage = None
+            for stage in pipe.get("stages", []):
+                label_lower = stage.get("label", "").lower()
+                if label_lower == "closed won" or stage.get("id") == "closedwon":
+                    closedwon_stage = stage["id"]
+                    break
+            # If no explicit match, look for any stage with "closed" and "won"
+            if not closedwon_stage:
+                for stage in pipe.get("stages", []):
+                    label_lower = stage.get("label", "").lower()
+                    if "closed" in label_lower and "won" in label_lower:
+                        closedwon_stage = stage["id"]
+                        break
+            # Fallback: use "closedwon" as the stage ID
+            if not closedwon_stage:
+                closedwon_stage = "closedwon"
+
+            _cached_pipeline["id"] = pipeline_id
+            _cached_pipeline["closedwon_stage"] = closedwon_stage
+            return pipeline_id, closedwon_stage
+
+    return None, None
 
 
 def _hs_headers():
@@ -2022,13 +2141,15 @@ def hubspot_create_deal():
             contact_id = data["results"][0]["id"]
 
     # Step 4 — Create the deal
+    # Resolve the "Repeat Business (Waste Experts)" pipeline
+    pipeline_id, closedwon_stage = _resolve_pipeline()
     deal_properties = {
         "dealname": deal_name,
         "createdate": today_iso,
         "closedate": today_iso,
         "amount": str(amount),
-        "dealstage": "closedwon",
-        "pipeline": "default",
+        "dealstage": closedwon_stage or "closedwon",
+        "pipeline": pipeline_id or "default",
         "description": description,
     }
     if owner_id:
@@ -2081,16 +2202,19 @@ def hubspot_create_deal():
         if assoc_status not in (200, 201):
             association_errors.append(f"Contact association failed: {assoc_data.get('message', '')}")
 
-    # Step 6 — Create line items (include container, waste stream, movement type in name)
+    # Step 6 — Create line items (two-line waste stream in name)
     line_item_ids = []
     for item in line_items:
-        display_desc = _format_waste_stream_display(item)
+        weee_line, desc_line = _waste_stream_parts(item)
         container = item.get("container", "")
         mt = item.get("movement_type", "")
         parts = []
         if container:
             parts.append(container)
-        parts.append(display_desc or "Item")
+        if weee_line and desc_line:
+            parts.append(f"{weee_line} / {desc_line}")
+        else:
+            parts.append(weee_line or desc_line or _format_waste_stream_display(item) or "Item")
         if mt:
             parts.append(f"[{mt}]")
         li_name = " ".join(parts)
@@ -2316,6 +2440,39 @@ def _build_delivery_email_html(payload):
         row("Site Restrictions", _val("site_restrictions")),
         row("Special Instructions", _val("special_instructions")),
     ])
+
+    # Products & Services section with two-line waste stream format
+    email_line_items = list(payload.get("line_items") or [])
+    _inject_doc_type_line(email_line_items, payload.get("document_type"))
+    if email_line_items:
+        li_rows = "".join([section_header("Products & Services")])
+        for li_item in email_line_items:
+            container = _esc(str(li_item.get("container") or "") or "\u2014")
+            weee_line, desc_line = _waste_stream_parts(li_item)
+            mt = _esc(str(li_item.get("movement_type") or "") or "\u2014")
+            try:
+                li_price = float(li_item.get("price") or li_item.get("line_total") or li_item.get("unit_price") or 0)
+            except (TypeError, ValueError):
+                li_price = 0.0
+            # Two-line waste stream: WEEE category (small/grey) + description (normal)
+            if weee_line and desc_line:
+                ws_html = (
+                    f'<span style="font-size:11px; color:#718096;">{_esc(weee_line)}</span>'
+                    f'<br/>{_esc(desc_line)}'
+                )
+            else:
+                ws_html = _esc(weee_line or desc_line or _format_waste_stream_display(li_item))
+            li_rows += (
+                f'<tr {row_style}>'
+                f'<td {label_style}>{container}</td>'
+                f'<td {value_style}>'
+                f'{ws_html}<br/>'
+                f'<span style="font-size:11px; color:#718096;">{mt}</span>'
+                f' &mdash; \u00a3{li_price:.2f}'
+                f'</td>'
+                f'</tr>'
+            )
+        table_rows += li_rows
 
     logo_url = (
         "https://i0.wp.com/wasteexperts.co.uk/wp-content/uploads/"
