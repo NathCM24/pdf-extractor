@@ -385,6 +385,83 @@ def _sanitise_filename(text):
     return re.sub(r'[/\\:*?"<>|]', "-", text).strip() or "Unknown"
 
 
+# ─── WEEE categories (number → name) ─────────────────────────────────────────
+
+WEEE_CATEGORIES = {
+    1: "Large Household Appliances",
+    2: "Small Household Appliances",
+    3: "IT and Telecommunications Equipment",
+    4: "Consumer Equipment",
+    5: "Lighting Equipment",
+    6: "Electrical and Electronic Tools",
+    7: "Toys, Leisure and Sports Equipment",
+    8: "Medical Devices",
+    9: "Monitoring and Control Equipment",
+    10: "Automatic Dispensers",
+    11: "Display Equipment",
+    12: "Appliances Containing Refrigerants",
+    13: "Gas Discharge Lamps and LED Light Sources",
+    14: "PV Panels (Solar Panels)",
+    15: "Vapes and Electronic Cigarettes",
+}
+
+
+def _format_waste_stream_display(item):
+    """Return the waste stream display string for a line item.
+    Format: '{WEEE Category Name} | {Product Description}'
+    If no WEEE number, just the product description."""
+    weee_num = item.get("weee_number") or ""
+    weee_cat = item.get("weee_category") or ""
+    desc = str(item.get("description") or "").strip()
+
+    # Try to resolve category from weee_number if weee_category is missing
+    if weee_num and not weee_cat:
+        try:
+            weee_cat = WEEE_CATEGORIES.get(int(weee_num), "")
+        except (ValueError, TypeError):
+            pass
+
+    # If no weee_number, try to parse from waste_stream string "N. Category Name"
+    if not weee_cat:
+        ws = str(item.get("waste_stream") or "").strip()
+        if ws:
+            m = re.match(r"^(\d{1,2})\.\s+(.+)", ws)
+            if m:
+                weee_cat = m.group(2).strip()
+            elif ws in WEEE_CATEGORIES.values():
+                weee_cat = ws
+
+    if weee_cat and desc:
+        return f"{weee_cat} | {desc}"
+    elif weee_cat:
+        return weee_cat
+    elif desc:
+        return desc
+    return str(item.get("waste_stream") or item.get("description") or "")
+
+
+# ─── Helper: inject £40 doc-type line into line items if applicable ──────────
+
+def _inject_doc_type_line(line_items, document_type):
+    """Append a £40 Consignment Note / Waste Transfer Note line item
+    to *line_items* (in-place) if *document_type* is one of the two note
+    types and no such line already exists.  Returns line_items for chaining."""
+    doc_type = (document_type or "").strip()
+    if doc_type not in ("Consignment Note", "Waste Transfer Note"):
+        return line_items
+    note_names = {"consignment note", "waste transfer note"}
+    already_listed = any(
+        (it.get("description") or "").strip().lower() in note_names
+        for it in line_items
+    )
+    if not already_listed:
+        line_items.append({
+            "description": doc_type, "container": "", "waste_stream": "",
+            "movement_type": "", "price": 40.00,
+        })
+    return line_items
+
+
 # ─── Professional PDF builder ────────────────────────────────────────────────
 
 def _build_review_pdf(payload: dict) -> BytesIO:
@@ -571,19 +648,8 @@ def _build_review_pdf(payload: dict) -> BytesIO:
     # ── Products & Services table (Container | Waste Stream | Movement Type | Price) ──
     line_items = list(payload.get("line_items") or [])
 
-    # Inject document type as a line item if applicable
-    doc_type = (payload.get("document_type") or "").strip()
-    if doc_type in ("Consignment Note", "Waste Transfer Note"):
-        note_names = {"consignment note", "waste transfer note"}
-        already_listed = any(
-            (it.get("description") or "").strip().lower() in note_names
-            for it in line_items
-        )
-        if not already_listed:
-            line_items.append({
-                "description": doc_type, "container": "", "waste_stream": "",
-                "movement_type": "", "price": 40.00,
-            })
+    # Inject document type as a £40 line item if applicable
+    _inject_doc_type_line(line_items, payload.get("document_type"))
 
     if line_items:
         ps_col_w = [CONTENT_W * 0.20, CONTENT_W * 0.35, CONTENT_W * 0.20, CONTENT_W * 0.25]
@@ -619,7 +685,7 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             ensure_space(ps_row_h)
 
             container_val = str(item.get("container") or "")
-            desc = str(item.get("description") or item.get("waste_stream") or "")
+            desc = _format_waste_stream_display(item)
             movement_type = str(item.get("movement_type") or "")
             try:
                 price = float(item.get("price") or item.get("line_total") or item.get("unit_price") or 0)
@@ -1546,10 +1612,15 @@ def send_to_webhook():
     customer_address = supplier_addr.replace("\n", ", ") if supplier_addr else "\u2014"
 
     customer_email = str(data.get("site_contact_email") or "").strip() or "\u2014"
-    line_items_cell = _format_line_items_cell(data.get("line_items"))
 
+    # Inject £40 doc-type line if applicable
+    wh_line_items = list(data.get("line_items") or [])
+    _inject_doc_type_line(wh_line_items, data.get("document_type"))
+    line_items_cell = _format_line_items_cell(wh_line_items)
+
+    # Recalculate total to include injected line
     try:
-        total_amount = f"\u00a3{float(data.get('overall_total') or 0):.2f}"
+        total_amount = f"\u00a3{sum(float(it.get('price', 0)) for it in wh_line_items):.2f}"
     except (TypeError, ValueError):
         total_amount = "\u00a30.00"
 
@@ -1638,8 +1709,7 @@ def _format_line_items_cell(line_items):
     lines = []
     for item in (line_items or []):
         container = str(item.get("container") or "")
-        desc = str(item.get("description") or "")
-        ws = str(item.get("waste_stream") or "")
+        display_desc = _format_waste_stream_display(item)
         mt = str(item.get("movement_type") or "")
         try:
             price = float(item.get("price") or item.get("line_total") or item.get("unit_price") or 0)
@@ -1647,8 +1717,7 @@ def _format_line_items_cell(line_items):
             price = 0.0
         mt_str = f" [{mt}]" if mt else ""
         container_str = f"{container} | " if container else ""
-        ws_str = f"({ws}) " if ws else ""
-        lines.append(f"{container_str}{desc} {ws_str}{mt_str}| \u00a3{price:.2f}")
+        lines.append(f"{container_str}{display_desc}{mt_str} | \u00a3{price:.2f}")
     return "\n".join(lines) if lines else "\u2014"
 
 
@@ -1691,10 +1760,14 @@ def save_to_sheets():
         customer_address = supplier_addr.replace("\n", ", ") if supplier_addr else "\u2014"
 
         customer_email = str(data.get("site_contact_email") or "").strip() or "\u2014"
-        line_items_cell = _format_line_items_cell(data.get("line_items"))
+
+        # Inject £40 doc-type line if applicable
+        gs_line_items = list(data.get("line_items") or [])
+        _inject_doc_type_line(gs_line_items, data.get("document_type"))
+        line_items_cell = _format_line_items_cell(gs_line_items)
 
         try:
-            total_amount = f"\u00a3{float(data.get('overall_total') or 0):.2f}"
+            total_amount = f"\u00a3{sum(float(it.get('price', 0)) for it in gs_line_items):.2f}"
         except (TypeError, ValueError):
             total_amount = "\u00a30.00"
 
@@ -1875,8 +1948,14 @@ def hubspot_create_deal():
     amount = payload.get("amount", 0)
     po_number = payload.get("po_number", "")
     supplier_name = payload.get("supplier_name", "")
-    line_items = payload.get("line_items", [])
+    line_items = list(payload.get("line_items", []))
     description = payload.get("description", "")
+
+    # Inject £40 doc-type line if applicable
+    document_type = payload.get("document_type", "")
+    _inject_doc_type_line(line_items, document_type)
+    # Recalculate amount to include the injected line
+    amount = sum(float(it.get("price", 0)) for it in line_items)
     delivery_details = payload.get("delivery_details", {})
 
     today_iso = date.today().isoformat()
@@ -2005,16 +2084,13 @@ def hubspot_create_deal():
     # Step 6 — Create line items (include container, waste stream, movement type in name)
     line_item_ids = []
     for item in line_items:
-        desc = item.get("description", "Item")
+        display_desc = _format_waste_stream_display(item)
         container = item.get("container", "")
-        ws = item.get("waste_stream", "")
         mt = item.get("movement_type", "")
         parts = []
         if container:
             parts.append(container)
-        parts.append(desc)
-        if ws:
-            parts.append(f"({ws})")
+        parts.append(display_desc or "Item")
         if mt:
             parts.append(f"[{mt}]")
         li_name = " ".join(parts)

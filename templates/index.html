@@ -293,9 +293,9 @@
     }
     .toast.show { opacity: 1; }
 
-    /* --- Line items (4-column: Container | Waste Stream | Movement Type | Price | Remove) --- */
+    /* --- Line items (5-column: Container | WEEE # | Waste Stream | Movement Type | Price | Remove) --- */
     .line-item-row {
-      display: grid; grid-template-columns: 20% 35% 20% 15% 10%; gap: 6px;
+      display: grid; grid-template-columns: 15% 8% 30% 17% 15% 5%; gap: 6px;
       align-items: end; padding: 8px 0; border-bottom: 1px solid #2f4a60;
     }
     .line-item-row:last-child { border-bottom: none; }
@@ -307,6 +307,38 @@
       font-family: 'Montserrat', sans-serif; cursor: pointer;
     }
     .line-item-row select option { background: #1e2e3d; color: #e8ecf1; }
+    /* WEEE # dropdown: compact */
+    .li-weee-num {
+      width: 50px; min-width: 42px; text-align: center;
+      border: 1px solid #3d5a73; border-radius: 4px;
+      background: #1e2e3d; color: #e8ecf1;
+      font-family: 'Montserrat', sans-serif; font-size: 12px;
+      padding: 7px 4px; cursor: pointer;
+    }
+    .li-weee-num option { background: #1e2e3d; color: #e8ecf1; }
+    /* WEEE tooltip wrapper */
+    .weee-wrap { position: relative; display: inline-block; width: 100%; }
+    .weee-tooltip {
+      display: none; position: absolute; bottom: calc(100% + 6px); left: 50%;
+      transform: translateX(-50%); background: #162432; color: #e8ecf1;
+      padding: 6px 10px; border-radius: 4px; font-size: 11px; white-space: nowrap;
+      z-index: 100; pointer-events: none; border: 1px solid #3d5a73;
+      box-shadow: 0 2px 8px rgba(0,0,0,.35);
+    }
+    .weee-tooltip::after {
+      content: ''; position: absolute; top: 100%; left: 50%;
+      transform: translateX(-50%); border: 5px solid transparent;
+      border-top-color: #162432;
+    }
+    .weee-wrap:hover .weee-tooltip { display: block; }
+    /* Product description text input */
+    .li-waste-desc {
+      width: 100%; border: 1px solid #3d5a73; border-radius: 4px;
+      background: #1e2e3d; color: #e8ecf1;
+      font-family: 'Montserrat', sans-serif; font-size: 12px;
+      padding: 7px 8px;
+    }
+    .li-waste-desc:focus { outline: none; border-color: #8ec431; box-shadow: 0 0 0 2px rgba(142,196,49,.2); }
     .li-price-wrap {
       display: flex; align-items: center; position: relative;
     }
@@ -656,7 +688,7 @@
 
           <!-- Document Type row -->
           <div class="full doc-type-row">
-            <span class="dt-label">Document Type<span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--right">Select the document type for this order. Consignment Note or Waste Transfer Note will automatically add a &pound;40 line item.</span></span></span>
+            <span class="dt-label">Document Type<span class="help-tooltip-wrap"><span class="help-tooltip-icon">?</span><span class="help-tooltip-popup help-tooltip-popup--right">Select the document type for this order. A &pound;40 line will be added automatically to the PDF download, HubSpot, email, and webhook outputs.</span></span></span>
             <select id="document_type" onchange="onDocTypeChange()">
               <option value="">None</option>
               <option value="Consignment Note">Consignment Note</option>
@@ -665,8 +697,9 @@
           </div>
 
           <!-- Line item header row -->
-          <div class="full" style="display:grid; grid-template-columns:20% 35% 20% 15% 10%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
+          <div class="full" style="display:grid; grid-template-columns:15% 8% 30% 17% 15% 5%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Container</span>
+            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">WEEE</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Waste Stream</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Movement Type</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Price</span>
@@ -856,8 +889,9 @@
           </div>
 
           <!-- Line item header row -->
-          <div class="full" style="display:grid; grid-template-columns:20% 35% 20% 15% 10%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
+          <div class="full" style="display:grid; grid-template-columns:15% 8% 30% 17% 15% 5%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Container</span>
+            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">WEEE</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Waste Stream</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Movement Type</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Price</span>
@@ -1321,16 +1355,44 @@
     let lineItemCounter = 0;
     const MOVEMENT_TYPES = ['', 'Remove', 'Uplift', 'Exchange', 'WWL', 'Delivery'];
     const CONTAINER_TYPES = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD'];
-    const WASTE_STREAM_CATEGORIES = [
-      '', '1. Large Household Appliances', '2. Small Household Appliances',
-      '3. IT and Telecommunications Equipment', '4. Consumer Equipment',
-      '5. Lighting Equipment', '6. Electrical and Electronic Tools',
-      '7. Toys, Leisure and Sports Equipment', '8. Medical Devices',
-      '9. Monitoring and Control Equipment', '10. Automatic Dispensers',
-      '11. Display Equipment', '12. Appliances Containing Refrigerants',
-      '13. Gas Discharge Lamps and LED Light Sources', '14. PV Panels (Solar Panels)',
-      '15. Vapes and Electronic Cigarettes'
-    ];
+
+    /* WEEE category number → name mapping */
+    const WEEE_CATEGORIES = {
+      1: 'Large Household Appliances',
+      2: 'Small Household Appliances',
+      3: 'IT and Telecommunications Equipment',
+      4: 'Consumer Equipment',
+      5: 'Lighting Equipment',
+      6: 'Electrical and Electronic Tools',
+      7: 'Toys, Leisure and Sports Equipment',
+      8: 'Medical Devices',
+      9: 'Monitoring and Control Equipment',
+      10: 'Automatic Dispensers',
+      11: 'Display Equipment',
+      12: 'Appliances Containing Refrigerants',
+      13: 'Gas Discharge Lamps and LED Light Sources',
+      14: 'PV Panels (Solar Panels)',
+      15: 'Vapes and Electronic Cigarettes'
+    };
+
+    /* Parse a WEEE number from a waste_stream string like "13. Gas Discharge..." or just "13" */
+    function parseWeeeNum(ws) {
+      if (!ws) return '';
+      var s = String(ws).trim();
+      /* If it's just a number */
+      var n = parseInt(s, 10);
+      if (n >= 1 && n <= 15 && String(n) === s) return String(n);
+      /* If it starts with "N. " */
+      var m = s.match(/^(\d{1,2})\.\s/);
+      if (m && parseInt(m[1],10) >= 1 && parseInt(m[1],10) <= 15) return m[1];
+      /* Try matching by category name */
+      var lower = s.toLowerCase();
+      for (var k = 1; k <= 15; k++) {
+        if (lower === WEEE_CATEGORIES[k].toLowerCase()) return String(k);
+        if (lower === k + '. ' + WEEE_CATEGORIES[k].toLowerCase()) return String(k);
+      }
+      return '';
+    }
 
     function addLineItem(desc, movementType, price, isDocTypeLine, containerType, wasteStream) {
       const containerEl = document.getElementById('line-items-container');
@@ -1343,25 +1405,47 @@
         var sel = (containerType || 'Magnum') === ct ? ' selected' : '';
         return '<option value="' + escHtml(ct) + '"' + sel + '>' + escHtml(ct) + '</option>';
       }).join('');
-      var wsOptions = WASTE_STREAM_CATEGORIES.map(function(ws) {
-        var sel = (wasteStream || '') === ws ? ' selected' : '';
-        var label = ws || '\u2014';
-        return '<option value="' + escHtml(ws) + '"' + sel + '>' + escHtml(label) + '</option>';
-      }).join('');
+      /* WEEE # dropdown (1-15) */
+      var weeeNum = parseWeeeNum(wasteStream);
+      var weeeOpts = '<option value="">\u2014</option>';
+      for (var w = 1; w <= 15; w++) {
+        var wSel = (weeeNum === String(w)) ? ' selected' : '';
+        weeeOpts += '<option value="' + w + '"' + wSel + '>' + w + '</option>';
+      }
+      /* Tooltip text for current selection */
+      var tooltipText = weeeNum ? WEEE_CATEGORIES[parseInt(weeeNum,10)] || '' : '';
       var mtOptions = MOVEMENT_TYPES.map(function(mt) {
         var sel = (movementType || '') === mt ? ' selected' : '';
         var label = mt || '\u2014';
         return '<option value="' + escHtml(mt) + '"' + sel + '>' + escHtml(label) + '</option>';
       }).join('');
       var priceVal = (price != null && price !== '') ? parseFloat(price) : 0;
+      var descVal = desc || '';
       row.innerHTML =
         '<div><select class="li-container">' + ctOptions + '</select></div>' +
-        '<div><select class="li-waste-stream">' + wsOptions + '</select></div>' +
+        '<div><div class="weee-wrap"><select class="li-weee-num" onchange="updateWeeeTooltip(this)">' + weeeOpts + '</select><span class="weee-tooltip">' + escHtml(tooltipText) + '</span></div></div>' +
+        '<div><input type="text" class="li-waste-desc" value="' + escHtml(descVal) + '" placeholder="Product description" /></div>' +
         '<div><select class="li-movement">' + mtOptions + '</select></div>' +
         '<div><div class="li-price-wrap"><span class="li-price-prefix">\u00a3</span><input type="number" class="li-price" value="' + priceVal.toFixed(2) + '" min="0" step="0.01" onchange="recalcOverallTotal()" /></div></div>' +
         '<div style="padding-bottom:1px;"><button class="btn-remove" type="button" onclick="removeLineItem(this)">&times;</button></div>';
       containerEl.appendChild(row);
       recalcOverallTotal();
+    }
+
+    function updateWeeeTooltip(sel) {
+      var num = parseInt(sel.value, 10);
+      var tooltip = sel.closest('.weee-wrap').querySelector('.weee-tooltip');
+      if (tooltip) tooltip.textContent = (num >= 1 && num <= 15) ? WEEE_CATEGORIES[num] : '';
+    }
+
+    /* Format waste stream display: "{WEEE Category Name} | {Product Description}" */
+    function formatWasteStreamDisplay(li) {
+      var cat = li.weee_category || '';
+      var desc = li.description || '';
+      if (cat && desc) return cat + ' | ' + desc;
+      if (cat) return cat;
+      if (desc) return desc;
+      return li.waste_stream || '';
     }
 
     function removeLineItem(btn) {
@@ -1385,11 +1469,17 @@
     function getLineItems() {
       const items = [];
       document.querySelectorAll('#line-items-container .line-item-row').forEach(row => {
-        var wsVal = (row.querySelector('.li-waste-stream') || {}).value || '';
+        var weeeNum = (row.querySelector('.li-weee-num') || {}).value || '';
+        var weeeCategory = (weeeNum && WEEE_CATEGORIES[parseInt(weeeNum,10)]) || '';
+        var descText = (row.querySelector('.li-waste-desc') || {}).value || '';
+        /* Build waste_stream: "N. Category Name" for backward compat, or empty */
+        var wsVal = weeeNum ? (weeeNum + '. ' + weeeCategory) : '';
         items.push({
           container: (row.querySelector('.li-container') || {}).value || 'Magnum',
           waste_stream: wsVal,
-          description: wsVal,
+          weee_number: weeeNum,
+          weee_category: weeeCategory,
+          description: descText,
           movement_type: (row.querySelector('.li-movement') || {}).value || '',
           price: parseFloat((row.querySelector('.li-price') || {}).value) || 0
         });
@@ -1404,34 +1494,11 @@
       recalcOverallTotal();
     }
 
-    /* ── Document Type auto-add £40 line item ── */
-    var _docTypeLineAdded = '';  /* Tracks which doc type line was auto-added */
+    /* ── Document Type change handler (no longer auto-adds £40 line) ── */
+    var _docTypeLineAdded = '';  /* Kept for compatibility */
 
     function onDocTypeChange() {
-      var docType = getField('document_type');
-      var noteTypes = ['Consignment Note', 'Waste Transfer Note'];
-
-      /* Remove any existing auto-added doc type line */
-      document.querySelectorAll('#line-items-container .line-item-row[data-doc-type-line="true"]').forEach(function(row) {
-        row.remove();
-      });
-      _docTypeLineAdded = '';
-
-      /* If a note type is selected, add the £40 line item */
-      if (noteTypes.indexOf(docType) !== -1) {
-        /* Check if user already manually added this as a line item */
-        var alreadyExists = false;
-        document.querySelectorAll('#line-items-container .line-item-row').forEach(function(row) {
-          var wsEl = row.querySelector('.li-waste-stream');
-          var desc = wsEl ? (wsEl.value || '').trim().toLowerCase() : '';
-          if (desc === docType.toLowerCase()) alreadyExists = true;
-        });
-        if (!alreadyExists) {
-          addLineItem(docType, '', 40.00, true, '', '');
-          _docTypeLineAdded = docType;
-        }
-      }
-      recalcOverallTotal();
+      /* No auto-add — the £40 line is injected only in PDF/HubSpot/email/webhook outputs */
     }
 
     /* ── Fill form from extraction response ── */
@@ -1479,7 +1546,7 @@
         addLineItem(item.description, item.movement_type || '', price, false, item.container || 'Magnum', item.waste_stream || '');
       });
 
-      /* Auto-add doc type £40 line item if applicable */
+      /* Document type change (no longer auto-adds £40 line) */
       onDocTypeChange();
 
       /* Render confidence dots */
@@ -1850,9 +1917,9 @@
       /* Build description from line items + delivery details */
       var desc = items.map(function(li, i) {
         var ct = li.container ? li.container + ' | ' : '';
-        var ws = li.waste_stream ? ' (' + li.waste_stream + ')' : '';
+        var wsDisplay = formatWasteStreamDisplay(li);
         var mt = li.movement_type ? ' [' + li.movement_type + ']' : '';
-        return (i+1) + '. ' + ct + (li.description || 'Item') + ws + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
+        return (i+1) + '. ' + ct + (wsDisplay || 'Item') + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
       }).join('; ');
 
       /* Append delivery details to description */
@@ -1878,7 +1945,7 @@
       if (items.length) {
         liHtml = '<table class="hs-li-table"><thead><tr><th>Container</th><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
         items.forEach(function(li) {
-          liHtml += '<tr><td>' + escHtml(li.container || '\u2014') + '</td><td>' + escHtml(li.waste_stream || li.description || '\u2014') + '</td><td>' + escHtml(li.movement_type || '\u2014') + '</td><td>\u00a3' + (li.price||0).toFixed(2) + '</td></tr>';
+          liHtml += '<tr><td>' + escHtml(li.container || '\u2014') + '</td><td>' + escHtml(formatWasteStreamDisplay(li) || '\u2014') + '</td><td>' + escHtml(li.movement_type || '\u2014') + '</td><td>\u00a3' + (li.price||0).toFixed(2) + '</td></tr>';
         });
         liHtml += '</tbody></table>';
       } else {
@@ -1940,6 +2007,7 @@
         amount: payload.overall_total || 0,
         po_number: payload.purchase_order_number || '',
         supplier_name: supplierName,
+        document_type: payload.document_type || '',
         line_items: items,
         description: desc,
         delivery_details: {
@@ -2708,16 +2776,6 @@
 
       /* Line items */
       var CEF_CONTAINER_TYPES = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD'];
-      var CEF_WASTE_STREAM_CATEGORIES = [
-        '', '1. Large Household Appliances', '2. Small Household Appliances',
-        '3. IT and Telecommunications Equipment', '4. Consumer Equipment',
-        '5. Lighting Equipment', '6. Electrical and Electronic Tools',
-        '7. Toys, Leisure and Sports Equipment', '8. Medical Devices',
-        '9. Monitoring and Control Equipment', '10. Automatic Dispensers',
-        '11. Display Equipment', '12. Appliances Containing Refrigerants',
-        '13. Gas Discharge Lamps and LED Light Sources', '14. PV Panels (Solar Panels)',
-        '15. Vapes and Electronic Cigarettes'
-      ];
       window.cefAddLineItem = function(desc, mt, price, isDoc, containerType, wasteStream) {
         var c = document.getElementById('cef-line-items-container');
         var idx = cefLineItemCounter++;
@@ -2727,16 +2785,22 @@
         var ctOpts = CEF_CONTAINER_TYPES.map(function(ct) {
           return '<option value="'+escHtml(ct)+'"'+((containerType||'Magnum')===ct?' selected':'')+'>'+escHtml(ct)+'</option>';
         }).join('');
-        var wsOpts = CEF_WASTE_STREAM_CATEGORIES.map(function(ws) {
-          return '<option value="'+escHtml(ws)+'"'+((wasteStream||'')===ws?' selected':'')+'>'+escHtml(ws||'\u2014')+'</option>';
-        }).join('');
+        /* WEEE # dropdown */
+        var weeeNum = parseWeeeNum(wasteStream);
+        var weeeOpts = '<option value="">\u2014</option>';
+        for (var w = 1; w <= 15; w++) {
+          weeeOpts += '<option value="'+w+'"'+(weeeNum===String(w)?' selected':'')+'>'+w+'</option>';
+        }
+        var tooltipText = weeeNum ? WEEE_CATEGORIES[parseInt(weeeNum,10)] || '' : '';
         var opts = CEF_MT.map(function(m) {
           return '<option value="'+escHtml(m)+'"'+((mt||'')===m?' selected':'')+'>'+escHtml(m||'\u2014')+'</option>';
         }).join('');
         var pv = (price!=null&&price!=='')?parseFloat(price):0;
+        var descVal = desc || '';
         row.innerHTML =
           '<div><select class="li-container">'+ctOpts+'</select></div>' +
-          '<div><select class="li-waste-stream">'+wsOpts+'</select></div>' +
+          '<div><div class="weee-wrap"><select class="li-weee-num" onchange="updateWeeeTooltip(this)">'+weeeOpts+'</select><span class="weee-tooltip">'+escHtml(tooltipText)+'</span></div></div>' +
+          '<div><input type="text" class="li-waste-desc" value="'+escHtml(descVal)+'" placeholder="Product description" /></div>' +
           '<div><select class="li-movement">'+opts+'</select></div>' +
           '<div><div class="li-price-wrap"><span class="li-price-prefix">\u00a3</span><input type="number" class="li-price" value="'+pv.toFixed(2)+'" min="0" step="0.01" onchange="cefRecalcTotal()" /></div></div>' +
           '<div style="padding-bottom:1px;"><button class="btn-remove" type="button" onclick="cefRemoveLineItem(this)">&times;</button></div>';
@@ -2757,10 +2821,16 @@
       function cefGetLI() {
         var items = [];
         document.querySelectorAll('#cef-line-items-container .line-item-row').forEach(function(r) {
+          var weeeNum = (r.querySelector('.li-weee-num') || {}).value || '';
+          var weeeCategory = (weeeNum && WEEE_CATEGORIES[parseInt(weeeNum,10)]) || '';
+          var descText = (r.querySelector('.li-waste-desc') || {}).value || '';
+          var wsVal = weeeNum ? (weeeNum + '. ' + weeeCategory) : '';
           items.push({
             container: (r.querySelector('.li-container') || {}).value || 'Magnum',
-            waste_stream: (r.querySelector('.li-waste-stream') || {}).value || '',
-            description: (r.querySelector('.li-waste-stream') || {}).value || '',
+            waste_stream: wsVal,
+            weee_number: weeeNum,
+            weee_category: weeeCategory,
+            description: descText,
             movement_type: (r.querySelector('.li-movement') || {}).value || '',
             price: parseFloat((r.querySelector('.li-price') || {}).value) || 0
           });
@@ -2772,20 +2842,9 @@
         cefLineItemCounter = 0; cefDocTypeLineAdded = ''; cefRecalcTotal();
       }
 
-      /* Doc type */
+      /* Doc type — no longer auto-adds £40 line; injected in PDF/HubSpot/email/webhook */
       window.cefOnDocTypeChange = function() {
-        var dt = cefGF('cef_document_type');
-        document.querySelectorAll('#cef-line-items-container .line-item-row[data-doc-type-line="true"]').forEach(function(r){r.remove();});
-        cefDocTypeLineAdded = '';
-        if (dt === 'Consignment Note' || dt === 'Waste Transfer Note') {
-          var exists = false;
-          document.querySelectorAll('#cef-line-items-container .line-item-row').forEach(function(r) {
-            var wsEl = r.querySelector('.li-waste-stream');
-            if (wsEl && (wsEl.value||'').trim().toLowerCase() === dt.toLowerCase()) exists = true;
-          });
-          if (!exists) { cefAddLineItem(dt, '', 40.00, true, '', ''); cefDocTypeLineAdded = dt; }
-        }
-        cefRecalcTotal();
+        /* No auto-add */
       };
 
       /* Fill form */
@@ -2917,7 +2976,7 @@
         else { ooHtml = '<option value="">No owners</option>'; }
 
         var personDetails = CEF_PERSONS[person] || CEF_PERSONS['Katie Wooton'];
-        var desc = items.map(function(li,i){ var ct=li.container?li.container+' | ':''; var ws=li.waste_stream?' ('+li.waste_stream+')':''; var mt=li.movement_type?' ['+li.movement_type+']':''; return (i+1)+'. '+ct+(li.description||'Item')+ws+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2); }).join('; ');
+        var desc = items.map(function(li,i){ var ct=li.container?li.container+' | ':''; var wsD=formatWasteStreamDisplay(li); var mt=li.movement_type?' ['+li.movement_type+']':''; return (i+1)+'. '+ct+(wsD||'Item')+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2); }).join('; ');
         desc += '\n\nPrepared By: '+personDetails.name+' | '+personDetails.title+' | '+personDetails.email+' | '+personDetails.phone;
         if (p.po_date) desc += '\nPO Date: '+p.po_date;
         var dd = [['CEF Branch',bn],['Supplier','Waste Experts'],['Site Contact',p.site_contact],['Delivery Address',p.delivery_address],['Delivery Postcode',p.delivery_postcode]];
@@ -2927,7 +2986,7 @@
         var liH = '';
         if (items.length) {
           liH = '<table class="hs-li-table"><thead><tr><th>Container</th><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
-          items.forEach(function(li){ liH += '<tr><td>'+escHtml(li.container||'\u2014')+'</td><td>'+escHtml(li.waste_stream||li.description||'\u2014')+'</td><td>'+escHtml(li.movement_type||'\u2014')+'</td><td>\u00a3'+(li.price||0).toFixed(2)+'</td></tr>'; });
+          items.forEach(function(li){ liH += '<tr><td>'+escHtml(li.container||'\u2014')+'</td><td>'+escHtml(formatWasteStreamDisplay(li)||'\u2014')+'</td><td>'+escHtml(li.movement_type||'\u2014')+'</td><td>\u00a3'+(li.price||0).toFixed(2)+'</td></tr>'; });
           liH += '</tbody></table>';
         } else { liH = '<div style="color:#8aa3b8;font-size:12px;">No line items</div>'; }
 
@@ -2954,7 +3013,7 @@
           '</div></div></div>';
 
         document.getElementById('hs-modal-root').innerHTML = mH;
-        window._cefDeal = { deal_name:dn, amount:p.overall_total||0, po_number:p.po_reference||'', supplier_name:bn, line_items:items, description:desc,
+        window._cefDeal = { deal_name:dn, amount:p.overall_total||0, po_number:p.po_reference||'', supplier_name:bn, document_type:p.document_type||'', line_items:items, description:desc,
           delivery_details:{ customer_name:bn, supplier:'Waste Experts', purchase_order_number:p.po_reference||'', site_contact:p.site_contact||'', site_contact_number:p.cef_branch_phone||'', site_contact_email:p.cef_branch_email||'', secondary_site_contact:'', secondary_site_contact_number:'', secondary_site_contact_email:'', site_name:bn, site_address:p.delivery_address||p.cef_branch_address||'', site_postcode:p.delivery_postcode||p.cef_branch_postcode||'', opening_times:'', access:'', site_restrictions:'', special_instructions:p.special_instructions||'' }
         };
       };
