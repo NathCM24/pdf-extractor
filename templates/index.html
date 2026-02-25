@@ -293,9 +293,9 @@
     }
     .toast.show { opacity: 1; }
 
-    /* --- Line items (5-column: Container | WEEE # | Waste Stream | Movement Type | Price | Remove) --- */
+    /* --- Line items (7-column: Container | Qty | WEEE # | Waste Stream | Movement Type | Price | Remove) --- */
     .line-item-row {
-      display: grid; grid-template-columns: 15% 8% 30% 17% 15% 5%; gap: 6px;
+      display: grid; grid-template-columns: 14% 7% 7% 28% 16% 14% 4%; gap: 6px;
       align-items: end; padding: 8px 0; border-bottom: 1px solid #2f4a60;
     }
     .line-item-row:last-child { border-bottom: none; }
@@ -339,6 +339,18 @@
       padding: 7px 8px;
     }
     .li-waste-desc:focus { outline: none; border-color: #8ec431; box-shadow: 0 0 0 2px rgba(142,196,49,.2); }
+    /* Qty number input: compact */
+    .li-qty {
+      width: 55px; min-width: 45px; text-align: right;
+      border: 1px solid #3d5a73; border-radius: 4px;
+      background: #1e2e3d; color: #e8ecf1;
+      font-family: 'Montserrat', sans-serif; font-size: 12px;
+      padding: 7px 6px;
+      -moz-appearance: textfield;
+    }
+    .li-qty::-webkit-outer-spin-button,
+    .li-qty::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .li-qty:focus { outline: none; border-color: #8ec431; box-shadow: 0 0 0 2px rgba(142,196,49,.2); }
     .li-price-wrap {
       display: flex; align-items: center; position: relative;
     }
@@ -697,8 +709,9 @@
           </div>
 
           <!-- Line item header row -->
-          <div class="full" style="display:grid; grid-template-columns:15% 8% 30% 17% 15% 5%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
+          <div class="full" style="display:grid; grid-template-columns:14% 7% 7% 28% 16% 14% 4%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Container</span>
+            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Qty</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">WEEE</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Waste Stream</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Movement Type</span>
@@ -889,8 +902,9 @@
           </div>
 
           <!-- Line item header row -->
-          <div class="full" style="display:grid; grid-template-columns:15% 8% 30% 17% 15% 5%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
+          <div class="full" style="display:grid; grid-template-columns:14% 7% 7% 28% 16% 14% 4%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Container</span>
+            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Qty</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">WEEE</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Waste Stream</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Movement Type</span>
@@ -1394,7 +1408,7 @@
       return '';
     }
 
-    function addLineItem(desc, movementType, price, isDocTypeLine, containerType, wasteStream) {
+    function addLineItem(desc, movementType, price, isDocTypeLine, containerType, wasteStream, qty) {
       const containerEl = document.getElementById('line-items-container');
       const idx = lineItemCounter++;
       const row = document.createElement('div');
@@ -1405,6 +1419,9 @@
         var sel = (containerType || 'Magnum') === ct ? ' selected' : '';
         return '<option value="' + escHtml(ct) + '"' + sel + '>' + escHtml(ct) + '</option>';
       }).join('');
+      /* Qty */
+      var qtyVal = parseInt(qty, 10);
+      if (isNaN(qtyVal) || qtyVal < 1) qtyVal = 1;
       /* WEEE # dropdown (1-15) */
       var weeeNum = parseWeeeNum(wasteStream);
       var weeeOpts = '<option value="">\u2014</option>';
@@ -1423,6 +1440,7 @@
       var descVal = desc || '';
       row.innerHTML =
         '<div><select class="li-container">' + ctOptions + '</select></div>' +
+        '<div><input type="number" class="li-qty" value="' + qtyVal + '" min="1" step="1" /></div>' +
         '<div><div class="weee-wrap"><select class="li-weee-num" onchange="updateWeeeTooltip(this)">' + weeeOpts + '</select><span class="weee-tooltip">' + escHtml(tooltipText) + '</span></div></div>' +
         '<div><input type="text" class="li-waste-desc" value="' + escHtml(descVal) + '" placeholder="Product description" /></div>' +
         '<div><select class="li-movement">' + mtOptions + '</select></div>' +
@@ -1499,8 +1517,11 @@
         var descText = (row.querySelector('.li-waste-desc') || {}).value || '';
         /* Build waste_stream: "N. Category Name" for backward compat, or empty */
         var wsVal = weeeNum ? (weeeNum + '. ' + weeeCategory) : '';
+        var qtyVal = parseInt((row.querySelector('.li-qty') || {}).value, 10);
+        if (isNaN(qtyVal) || qtyVal < 1) qtyVal = 1;
         items.push({
           container: (row.querySelector('.li-container') || {}).value || 'Magnum',
+          quantity: qtyVal,
           waste_stream: wsVal,
           weee_number: weeeNum,
           weee_category: weeeCategory,
@@ -1568,7 +1589,7 @@
       const items = data.line_items || [];
       items.forEach(item => {
         var price = item.price != null ? item.price : (item.line_total || item.unit_price || 0);
-        addLineItem(item.description, item.movement_type || '', price, false, item.container || 'Magnum', item.waste_stream || '');
+        addLineItem(item.description, item.movement_type || '', price, false, item.container || 'Magnum', item.waste_stream || '', item.quantity || 1);
       });
 
       /* Document type change (no longer auto-adds £40 line) */
@@ -1942,12 +1963,13 @@
       /* Build description from line items + delivery details (two-line waste stream) */
       var desc = items.map(function(li, i) {
         var ct = li.container ? li.container + ' | ' : '';
+        var qtyStr = (li.quantity && li.quantity > 1) ? 'x' + li.quantity + ' | ' : '';
         var parts = wasteStreamParts(li);
         var mt = li.movement_type ? ' [' + li.movement_type + ']' : '';
         if (parts.weee && parts.desc) {
-          return (i+1) + '. ' + ct + parts.weee + '\n   ' + parts.desc + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
+          return (i+1) + '. ' + ct + qtyStr + parts.weee + '\n   ' + parts.desc + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
         }
-        return (i+1) + '. ' + ct + (parts.weee || parts.desc || 'Item') + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
+        return (i+1) + '. ' + ct + qtyStr + (parts.weee || parts.desc || 'Item') + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
       }).join('\n');
 
       /* Append delivery details to description */
@@ -1971,7 +1993,7 @@
       /* Build line items table (two-line waste stream) */
       var liHtml = '';
       if (items.length) {
-        liHtml = '<table class="hs-li-table"><thead><tr><th>Container</th><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
+        liHtml = '<table class="hs-li-table"><thead><tr><th>Container</th><th>Qty</th><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
         items.forEach(function(li) {
           var pts = wasteStreamParts(li);
           var wsCell = '';
@@ -1980,7 +2002,7 @@
           } else {
             wsCell = escHtml(pts.weee || pts.desc || formatWasteStreamDisplay(li) || '\u2014');
           }
-          liHtml += '<tr><td>' + escHtml(li.container || '\u2014') + '</td><td>' + wsCell + '</td><td>' + escHtml(li.movement_type || '\u2014') + '</td><td>\u00a3' + (li.price||0).toFixed(2) + '</td></tr>';
+          liHtml += '<tr><td>' + escHtml(li.container || '\u2014') + '</td><td>' + (li.quantity || 1) + '</td><td>' + wsCell + '</td><td>' + escHtml(li.movement_type || '\u2014') + '</td><td>\u00a3' + (li.price||0).toFixed(2) + '</td></tr>';
         });
         liHtml += '</tbody></table>';
       } else {
@@ -2811,7 +2833,7 @@
 
       /* Line items */
       var CEF_CONTAINER_TYPES = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD', 'Data POD', 'Electric POD', 'Lighting POD', 'Toner POD', 'Haz Box'];
-      window.cefAddLineItem = function(desc, mt, price, isDoc, containerType, wasteStream) {
+      window.cefAddLineItem = function(desc, mt, price, isDoc, containerType, wasteStream, qty) {
         var c = document.getElementById('cef-line-items-container');
         var idx = cefLineItemCounter++;
         var row = document.createElement('div');
@@ -2820,6 +2842,9 @@
         var ctOpts = CEF_CONTAINER_TYPES.map(function(ct) {
           return '<option value="'+escHtml(ct)+'"'+((containerType||'Magnum')===ct?' selected':'')+'>'+escHtml(ct)+'</option>';
         }).join('');
+        /* Qty */
+        var qtyVal = parseInt(qty, 10);
+        if (isNaN(qtyVal) || qtyVal < 1) qtyVal = 1;
         /* WEEE # dropdown */
         var weeeNum = parseWeeeNum(wasteStream);
         var weeeOpts = '<option value="">\u2014</option>';
@@ -2834,6 +2859,7 @@
         var descVal = desc || '';
         row.innerHTML =
           '<div><select class="li-container">'+ctOpts+'</select></div>' +
+          '<div><input type="number" class="li-qty" value="'+qtyVal+'" min="1" step="1" /></div>' +
           '<div><div class="weee-wrap"><select class="li-weee-num" onchange="updateWeeeTooltip(this)">'+weeeOpts+'</select><span class="weee-tooltip">'+escHtml(tooltipText)+'</span></div></div>' +
           '<div><input type="text" class="li-waste-desc" value="'+escHtml(descVal)+'" placeholder="Product description" /></div>' +
           '<div><select class="li-movement">'+opts+'</select></div>' +
@@ -2860,8 +2886,11 @@
           var weeeCategory = (weeeNum && WEEE_CATEGORIES[parseInt(weeeNum,10)]) || '';
           var descText = (r.querySelector('.li-waste-desc') || {}).value || '';
           var wsVal = weeeNum ? (weeeNum + '. ' + weeeCategory) : '';
+          var qtyVal = parseInt((r.querySelector('.li-qty') || {}).value, 10);
+          if (isNaN(qtyVal) || qtyVal < 1) qtyVal = 1;
           items.push({
             container: (r.querySelector('.li-container') || {}).value || 'Magnum',
+            quantity: qtyVal,
             waste_stream: wsVal,
             weee_number: weeeNum,
             weee_category: weeeCategory,
@@ -2903,7 +2932,7 @@
         document.getElementById('cef-doc-supplier-label').textContent = 'From: ' + bn;
         cefClearLI();
         (data.line_items || []).forEach(function(li) {
-          cefAddLineItem(li.description, li.movement_type || '', li.price != null ? li.price : (li.line_total || li.unit_price || 0), false, li.container || 'Magnum', li.waste_stream || '');
+          cefAddLineItem(li.description, li.movement_type || '', li.price != null ? li.price : (li.line_total || li.unit_price || 0), false, li.container || 'Magnum', li.waste_stream || '', li.quantity || 1);
         });
         /* Confidence dots */
         var fmap = {cef_po_reference:'po_reference',cef_branch_name:'cef_branch_name',cef_branch_address:'cef_branch_address',cef_branch_postcode:'cef_branch_postcode',cef_branch_phone:'cef_branch_phone',cef_branch_email:'cef_branch_email',cef_po_date:'po_date',cef_entered_by:'entered_by',cef_site_contact:'site_contact',cef_delivery_address:'delivery_address',cef_delivery_postcode:'delivery_postcode'};
@@ -3011,7 +3040,7 @@
         else { ooHtml = '<option value="">No owners</option>'; }
 
         var personDetails = CEF_PERSONS[person] || CEF_PERSONS['Katie Wooton'];
-        var desc = items.map(function(li,i){ var ct=li.container?li.container+' | ':''; var pts=wasteStreamParts(li); var mt=li.movement_type?' ['+li.movement_type+']':''; if(pts.weee&&pts.desc){return (i+1)+'. '+ct+pts.weee+'\n   '+pts.desc+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2);} return (i+1)+'. '+ct+(pts.weee||pts.desc||'Item')+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2); }).join('\n');
+        var desc = items.map(function(li,i){ var ct=li.container?li.container+' | ':''; var qS=(li.quantity&&li.quantity>1)?'x'+li.quantity+' | ':''; var pts=wasteStreamParts(li); var mt=li.movement_type?' ['+li.movement_type+']':''; if(pts.weee&&pts.desc){return (i+1)+'. '+ct+qS+pts.weee+'\n   '+pts.desc+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2);} return (i+1)+'. '+ct+qS+(pts.weee||pts.desc||'Item')+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2); }).join('\n');
         desc += '\n\nPrepared By: '+personDetails.name+' | '+personDetails.title+' | '+personDetails.email+' | '+personDetails.phone;
         if (p.po_date) desc += '\nPO Date: '+p.po_date;
         var dd = [['CEF Branch',bn],['Supplier','Waste Experts'],['Site Contact',p.site_contact],['Delivery Address',p.delivery_address],['Delivery Postcode',p.delivery_postcode]];
@@ -3020,8 +3049,8 @@
 
         var liH = '';
         if (items.length) {
-          liH = '<table class="hs-li-table"><thead><tr><th>Container</th><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
-          items.forEach(function(li){ var pts=wasteStreamParts(li); var wsC=''; if(pts.weee&&pts.desc){wsC='<span style="font-size:10px;color:#718096;">'+escHtml(pts.weee)+'</span><br/>'+escHtml(pts.desc);}else{wsC=escHtml(pts.weee||pts.desc||formatWasteStreamDisplay(li)||'\u2014');} liH += '<tr><td>'+escHtml(li.container||'\u2014')+'</td><td>'+wsC+'</td><td>'+escHtml(li.movement_type||'\u2014')+'</td><td>\u00a3'+(li.price||0).toFixed(2)+'</td></tr>'; });
+          liH = '<table class="hs-li-table"><thead><tr><th>Container</th><th>Qty</th><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
+          items.forEach(function(li){ var pts=wasteStreamParts(li); var wsC=''; if(pts.weee&&pts.desc){wsC='<span style="font-size:10px;color:#718096;">'+escHtml(pts.weee)+'</span><br/>'+escHtml(pts.desc);}else{wsC=escHtml(pts.weee||pts.desc||formatWasteStreamDisplay(li)||'\u2014');} liH += '<tr><td>'+escHtml(li.container||'\u2014')+'</td><td>'+(li.quantity||1)+'</td><td>'+wsC+'</td><td>'+escHtml(li.movement_type||'\u2014')+'</td><td>\u00a3'+(li.price||0).toFixed(2)+'</td></tr>'; });
           liH += '</tbody></table>';
         } else { liH = '<div style="color:#8aa3b8;font-size:12px;">No line items</div>'; }
 

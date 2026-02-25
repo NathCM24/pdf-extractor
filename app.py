@@ -146,6 +146,24 @@ CONTAINER AUTO-DETECTION (for each line item, pick the best match from the descr
 - If description contains "Battery" or "POD" → "Battery POD"
 - If none match → default to "Magnum"
 
+SMART LINE SPLITTING — MULTIPLE CONTAINERS:
+If a product description references multiple container types from this list [Green Steel, Magnum, Collapsible, Pallet, Non-Linear Crate, Durapipe, Battery POD], create a SEPARATE line item for each container. Extract the quantity for each container if mentioned.
+
+Examples:
+- "Magnum & Green Steel Empty & Replace" → TWO line items:
+  Line 1: container "Magnum", quantity 1, description "Empty & Replace"
+  Line 2: container "Green Steel", quantity 1, description "Empty & Replace"
+- "2x Magnum, 1x Collapsible - Mixed WEEE Collection" → TWO line items:
+  Line 1: container "Magnum", quantity 2, description "Mixed WEEE Collection"
+  Line 2: container "Collapsible", quantity 1, description "Mixed WEEE Collection"
+- If only one container is mentioned, keep it as a single line item as normal.
+
+QUANTITY EXTRACTION:
+For each line item, extract the quantity from the PO text. Look for patterns like:
+- "2x", "x2", "2 x", "qty 2", "quantity: 2", "qty: 2"
+- A number immediately before the container name (e.g. "2 Magnum")
+- If no quantity is found, default to 1.
+
 WASTE STREAM AUTO-DETECTION (for each line item, pick the most appropriate WEEE category):
 The 15 WEEE categories are:
 1. Large Household Appliances
@@ -694,15 +712,15 @@ def _build_review_pdf(payload: dict) -> BytesIO:
 
     down(box_h + 8 * mm)
 
-    # ── Products & Services table (Container | Waste Stream | Movement Type | Price) ──
+    # ── Products & Services table (Container | Qty | Waste Stream | Movement Type | Price) ──
     line_items = list(payload.get("line_items") or [])
 
     # Inject document type as a £40 line item if applicable
     _inject_doc_type_line(line_items, payload.get("document_type"))
 
     if line_items:
-        ps_col_w = [CONTENT_W * 0.20, CONTENT_W * 0.35, CONTENT_W * 0.20, CONTENT_W * 0.25]
-        ps_headers = ["CONTAINER", "WASTE STREAM", "MOVEMENT TYPE", "PRICE"]
+        ps_col_w = [CONTENT_W * 0.17, CONTENT_W * 0.07, CONTENT_W * 0.32, CONTENT_W * 0.19, CONTENT_W * 0.25]
+        ps_headers = ["CONTAINER", "QTY", "WASTE STREAM", "MOVEMENT TYPE", "PRICE"]
         ps_hdr_h = 9 * mm
         ps_row_h_single = 8 * mm   # rows without two-line waste stream
         ps_row_h_double = 14 * mm  # rows with WEEE category + description
@@ -733,6 +751,11 @@ def _build_review_pdf(payload: dict) -> BytesIO:
         grand_total = 0.0
         for idx, item in enumerate(line_items):
             container_val = str(item.get("container") or "")
+            quantity_val = item.get("quantity", 1)
+            try:
+                quantity_val = int(quantity_val)
+            except (TypeError, ValueError):
+                quantity_val = 1
             weee_line, desc_line = _waste_stream_parts(item)
             movement_type = str(item.get("movement_type") or "")
             try:
@@ -755,8 +778,8 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             c.line(MARGIN, y - ps_row_h, MARGIN + CONTENT_W, y - ps_row_h)
 
             # Waste Stream column — two-line layout
-            ws_x = MARGIN + ps_col_w[0]
-            max_ws_w = ps_col_w[1] - 6 * mm
+            ws_x = MARGIN + ps_col_w[0] + ps_col_w[1]
+            max_ws_w = ps_col_w[2] - 6 * mm
 
             if has_two_lines:
                 # Line 1: WEEE category (smaller font, muted grey)
@@ -794,14 +817,20 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             c.setFillColor(TEXT_BODY)
             c.drawString(MARGIN + 3 * mm, text_y, container_val or "\u2014")
 
+            # Quantity
+            qty_x = MARGIN + ps_col_w[0]
+            c.setFont(FONT_R, 8)
+            c.setFillColor(TEXT_BODY)
+            c.drawString(qty_x + 3 * mm, text_y, str(quantity_val))
+
             # Movement Type
-            mt_x = MARGIN + ps_col_w[0] + ps_col_w[1]
+            mt_x = MARGIN + ps_col_w[0] + ps_col_w[1] + ps_col_w[2]
             c.setFont(FONT_R, 8)
             c.setFillColor(TEXT_BODY)
             c.drawString(mt_x + 3 * mm, text_y, movement_type or "\u2014")
 
             # Price
-            price_x = MARGIN + ps_col_w[0] + ps_col_w[1] + ps_col_w[2]
+            price_x = MARGIN + ps_col_w[0] + ps_col_w[1] + ps_col_w[2] + ps_col_w[3]
             c.setFont(FONT_B, 9)
             c.setFillColor(NAVY)
             c.drawRightString(price_x + ps_col_w[3] - 3 * mm, text_y, _money(price))
@@ -976,6 +1005,10 @@ def _normalise_data(data: dict):
         item["movement_type"] = str(item.get("movement_type") or "")
         item["container"] = str(item.get("container") or "Magnum")
         item["waste_stream"] = str(item.get("waste_stream") or "")
+        try:
+            item["quantity"] = max(1, int(item.get("quantity", 1)))
+        except (TypeError, ValueError):
+            item["quantity"] = 1
         # Support both old format (quantity/unit_price/line_total) and new format (price)
         if "price" in item:
             try:
@@ -1225,6 +1258,24 @@ CONTAINER AUTO-DETECTION (for each line item):
 - "Dura" or "Durapipe" or "Flo Tube" → "Durapipe"
 - "Battery" or "POD" → "Battery POD"
 - Default → "Magnum"
+
+SMART LINE SPLITTING — MULTIPLE CONTAINERS:
+If a product description references multiple container types from this list [Green Steel, Magnum, Collapsible, Pallet, Non-Linear Crate, Durapipe, Battery POD], create a SEPARATE line item for each container. Extract the quantity for each container if mentioned.
+
+Examples:
+- "Magnum & Green Steel Empty & Replace" → TWO line items:
+  Line 1: container "Magnum", quantity 1, description "Empty & Replace"
+  Line 2: container "Green Steel", quantity 1, description "Empty & Replace"
+- "2x Magnum, 1x Collapsible - Mixed WEEE Collection" → TWO line items:
+  Line 1: container "Magnum", quantity 2, description "Mixed WEEE Collection"
+  Line 2: container "Collapsible", quantity 1, description "Mixed WEEE Collection"
+- If only one container is mentioned, keep it as a single line item as normal.
+
+QUANTITY EXTRACTION:
+For each line item, extract the quantity from the PO text. Look for patterns like:
+- "2x", "x2", "2 x", "qty 2", "quantity: 2", "qty: 2"
+- A number immediately before the container name (e.g. "2 Magnum")
+- If no quantity is found, default to 1.
 
 WASTE STREAM — pick from the 15 WEEE categories:
 1. Large Household Appliances | 2. Small Household Appliances | 3. IT and Telecommunications Equipment
@@ -1784,6 +1835,11 @@ def _format_line_items_cell(line_items):
     lines = []
     for item in (line_items or []):
         container = str(item.get("container") or "")
+        qty = item.get("quantity", 1)
+        try:
+            qty = int(qty)
+        except (TypeError, ValueError):
+            qty = 1
         weee_line, desc_line = _waste_stream_parts(item)
         mt = str(item.get("movement_type") or "")
         try:
@@ -1792,11 +1848,12 @@ def _format_line_items_cell(line_items):
             price = 0.0
         mt_str = f" [{mt}]" if mt else ""
         container_str = f"{container} | " if container else ""
+        qty_str = f"x{qty} | " if qty and qty > 1 else ""
         if weee_line and desc_line:
-            lines.append(f"{container_str}{weee_line}\n  {desc_line}{mt_str} | \u00a3{price:.2f}")
+            lines.append(f"{container_str}{qty_str}{weee_line}\n  {desc_line}{mt_str} | \u00a3{price:.2f}")
         else:
             display_desc = weee_line or desc_line or _format_waste_stream_display(item)
-            lines.append(f"{container_str}{display_desc}{mt_str} | \u00a3{price:.2f}")
+            lines.append(f"{container_str}{qty_str}{display_desc}{mt_str} | \u00a3{price:.2f}")
     return "\n".join(lines) if lines else "\u2014"
 
 
@@ -2220,10 +2277,15 @@ def hubspot_create_deal():
         li_name = " ".join(parts)
         # Use 'price' field (new format) or fall back to 'unit_price' (old format)
         item_price = item.get("price", item.get("unit_price", 0))
+        item_qty = item.get("quantity", 1)
+        try:
+            item_qty = max(1, int(item_qty))
+        except (TypeError, ValueError):
+            item_qty = 1
         li_body = {
             "properties": {
                 "name": li_name,
-                "quantity": "1",
+                "quantity": str(item_qty),
                 "price": str(item_price),
             }
         }
@@ -2448,6 +2510,12 @@ def _build_delivery_email_html(payload):
         li_rows = "".join([section_header("Products & Services")])
         for li_item in email_line_items:
             container = _esc(str(li_item.get("container") or "") or "\u2014")
+            li_qty = li_item.get("quantity", 1)
+            try:
+                li_qty = int(li_qty)
+            except (TypeError, ValueError):
+                li_qty = 1
+            qty_html = f' <span style="font-size:11px; color:#718096;">(x{li_qty})</span>' if li_qty > 1 else ""
             weee_line, desc_line = _waste_stream_parts(li_item)
             mt = _esc(str(li_item.get("movement_type") or "") or "\u2014")
             try:
@@ -2464,7 +2532,7 @@ def _build_delivery_email_html(payload):
                 ws_html = _esc(weee_line or desc_line or _format_waste_stream_display(li_item))
             li_rows += (
                 f'<tr {row_style}>'
-                f'<td {label_style}>{container}</td>'
+                f'<td {label_style}>{container}{qty_html}</td>'
                 f'<td {value_style}>'
                 f'{ws_html}<br/>'
                 f'<span style="font-size:11px; color:#718096;">{mt}</span>'
