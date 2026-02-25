@@ -126,6 +126,8 @@ STEP 2 — Return ONLY valid JSON with this shape:
   "line_items": [
     {{
       "description": "Product or service description (e.g. '8ft Dura Pipe - Exchange'). Max 8 words.",
+      "container": "Container type (Green Steel, Magnum, Collapsible, Pallet, Non-Linear Crate, Durapipe, Battery POD). Default Magnum.",
+      "waste_stream": "WEEE category name from the 15 categories listed below, or null",
       "quantity": 1,
       "unit_price": 0.00,
       "line_total": 0.00
@@ -133,6 +135,47 @@ STEP 2 — Return ONLY valid JSON with this shape:
   ],
   "overall_total": 0.00
 }}
+
+CONTAINER AUTO-DETECTION (for each line item, pick the best match from the description):
+- If description contains "Green Steel" → "Green Steel"
+- If description contains "Magnum" → "Magnum"
+- If description contains "Collapsible" → "Collapsible"
+- If description contains "Pallet" → "Pallet"
+- If description contains "Non-Linear" or "Crate" → "Non-Linear Crate"
+- If description contains "Dura" or "Durapipe" or "Flo Tube" → "Durapipe"
+- If description contains "Battery" or "POD" → "Battery POD"
+- If none match → default to "Magnum"
+
+WASTE STREAM AUTO-DETECTION (for each line item, pick the most appropriate WEEE category):
+The 15 WEEE categories are:
+1. Large Household Appliances
+2. Small Household Appliances
+3. IT and Telecommunications Equipment
+4. Consumer Equipment
+5. Lighting Equipment
+6. Electrical and Electronic Tools
+7. Toys, Leisure and Sports Equipment
+8. Medical Devices
+9. Monitoring and Control Equipment
+10. Automatic Dispensers
+11. Display Equipment
+12. Appliances Containing Refrigerants
+13. Gas Discharge Lamps and LED Light Sources
+14. PV Panels (Solar Panels)
+15. Vapes and Electronic Cigarettes
+
+Hints for waste stream detection:
+- "Lamp", "Fluorescent", "Tube", "LED" → 13. Gas Discharge Lamps and LED Light Sources
+- "WEEE", "Mixed WEEE", "Small WEEE" → 2. Small Household Appliances
+- "Fridge", "Refrigerant", "Cooling" → 12. Appliances Containing Refrigerants
+- "Screen", "Monitor", "Display", "TV" → 11. Display Equipment
+- "Battery", "Batteries" → 2. Small Household Appliances (default)
+- "IT", "Computer", "Server" → 3. IT and Telecommunications Equipment
+- "Vape", "E-Cig" → 15. Vapes and Electronic Cigarettes
+- "Solar", "PV", "Panel" → 14. PV Panels (Solar Panels)
+- "Consignment Note", "Waste Transfer Note" → leave waste_stream as null (it's a document, not waste)
+- Use your own knowledge to intelligently map to the most appropriate WEEE category
+- If no match → null (leave blank for manual selection)
 
 RULES:
 - Use null when a value is genuinely not found.
@@ -525,7 +568,7 @@ def _build_review_pdf(payload: dict) -> BytesIO:
 
     down(box_h + 8 * mm)
 
-    # ── Products & Services table (Waste Stream | Movement Type | Price) ──
+    # ── Products & Services table (Container | Waste Stream | Movement Type | Price) ──
     line_items = list(payload.get("line_items") or [])
 
     # Inject document type as a line item if applicable
@@ -538,26 +581,24 @@ def _build_review_pdf(payload: dict) -> BytesIO:
         )
         if not already_listed:
             line_items.append({
-                "description": doc_type, "movement_type": "",
-                "price": 40.00,
+                "description": doc_type, "container": "", "waste_stream": "",
+                "movement_type": "", "price": 40.00,
             })
 
     if line_items:
-        ps_col_w = [CONTENT_W * 0.45, CONTENT_W * 0.30, CONTENT_W * 0.25]
-        ps_headers = ["WASTE STREAM", "MOVEMENT TYPE", "PRICE"]
+        ps_col_w = [CONTENT_W * 0.20, CONTENT_W * 0.35, CONTENT_W * 0.20, CONTENT_W * 0.25]
+        ps_headers = ["CONTAINER", "WASTE STREAM", "MOVEMENT TYPE", "PRICE"]
         ps_hdr_h = 9 * mm
         ps_row_h = 8 * mm
 
         def draw_ps_header():
             nonlocal y
             _rounded_rect(c, MARGIN, y - ps_hdr_h, CONTENT_W, ps_hdr_h, r=2 * mm, fill=GREEN)
-            c.setFont(FONT_B, 8)
+            c.setFont(FONT_B, 7.5)
             c.setFillColor(WHITE)
             hx = MARGIN + 3 * mm
             for i, hdr in enumerate(ps_headers):
-                if i == 0:
-                    c.drawString(hx, y - ps_hdr_h + 2.5 * mm, hdr)
-                elif i == 2:
+                if i == len(ps_headers) - 1:
                     c.drawRightString(hx + ps_col_w[i] - 3 * mm, y - ps_hdr_h + 2.5 * mm, hdr)
                 else:
                     c.drawString(hx, y - ps_hdr_h + 2.5 * mm, hdr)
@@ -577,7 +618,8 @@ def _build_review_pdf(payload: dict) -> BytesIO:
         for idx, item in enumerate(line_items):
             ensure_space(ps_row_h)
 
-            desc = str(item.get("description") or "")
+            container_val = str(item.get("container") or "")
+            desc = str(item.get("description") or item.get("waste_stream") or "")
             movement_type = str(item.get("movement_type") or "")
             try:
                 price = float(item.get("price") or item.get("line_total") or item.get("unit_price") or 0)
@@ -595,28 +637,34 @@ def _build_review_pdf(payload: dict) -> BytesIO:
 
             text_y = y - ps_row_h + 2.5 * mm
 
+            # Container
+            c.setFont(FONT_R, 8)
+            c.setFillColor(TEXT_BODY)
+            c.drawString(MARGIN + 3 * mm, text_y, container_val or "\u2014")
+
             # Waste Stream (description)
-            max_desc = ps_col_w[0] - 6 * mm
+            ws_x = MARGIN + ps_col_w[0]
+            max_desc = ps_col_w[1] - 6 * mm
             desc_str = desc
-            c.setFont(FONT_R, 9)
-            while desc_str and c.stringWidth(desc_str, FONT_R, 9) > max_desc:
+            c.setFont(FONT_R, 8)
+            while desc_str and c.stringWidth(desc_str, FONT_R, 8) > max_desc:
                 desc_str = desc_str[:-1]
             if desc_str != desc and len(desc_str) > 1:
                 desc_str = desc_str[:-1] + "\u2026"
             c.setFillColor(TEXT_BODY)
-            c.drawString(MARGIN + 3 * mm, text_y, desc_str)
+            c.drawString(ws_x + 3 * mm, text_y, desc_str)
 
             # Movement Type
-            mt_x = MARGIN + ps_col_w[0]
-            c.setFont(FONT_R, 9)
+            mt_x = MARGIN + ps_col_w[0] + ps_col_w[1]
+            c.setFont(FONT_R, 8)
             c.setFillColor(TEXT_BODY)
             c.drawString(mt_x + 3 * mm, text_y, movement_type or "\u2014")
 
             # Price
-            price_x = MARGIN + ps_col_w[0] + ps_col_w[1]
+            price_x = MARGIN + ps_col_w[0] + ps_col_w[1] + ps_col_w[2]
             c.setFont(FONT_B, 9)
             c.setFillColor(NAVY)
-            c.drawRightString(price_x + ps_col_w[2] - 3 * mm, text_y, _money(price))
+            c.drawRightString(price_x + ps_col_w[3] - 3 * mm, text_y, _money(price))
 
             down(ps_row_h)
 
@@ -786,6 +834,8 @@ def _normalise_data(data: dict):
     for item in line_items:
         item["description"] = str(item.get("description") or "")
         item["movement_type"] = str(item.get("movement_type") or "")
+        item["container"] = str(item.get("container") or "Magnum")
+        item["waste_stream"] = str(item.get("waste_stream") or "")
         # Support both old format (quantity/unit_price/line_total) and new format (price)
         if "price" in item:
             try:
@@ -989,6 +1039,7 @@ EXTRACTION RULES:
    - Extract: Qty, Item code, Description, Cost, Per unit, Required date, Goods total
    - Each line item (e.g. "WEEE Green Empty & Replace", "Lamp Green Steel Empty & Replace", "Ea Consignment Note")
    - Use the description and goods total for each line.
+   - For each line item, also determine the container type and waste stream (WEEE category).
 
 5. Entered By: The person who entered/created the PO (e.g. "Lewis Grant", "George Hall"). Usually near top or bottom.
 
@@ -1014,6 +1065,8 @@ Return ONLY valid JSON with this shape:
   "line_items": [
     {
       "description": "Product or service description. Max 8 words.",
+      "container": "Container type: Green Steel, Magnum, Collapsible, Pallet, Non-Linear Crate, Durapipe, or Battery POD. Default Magnum.",
+      "waste_stream": "WEEE category from the 15 categories below, or null",
       "quantity": 1,
       "item_code": "Item/product code if present, or null",
       "unit_price": 0.00,
@@ -1022,6 +1075,27 @@ Return ONLY valid JSON with this shape:
   ],
   "overall_total": 0.00
 }
+
+CONTAINER AUTO-DETECTION (for each line item):
+- "Green Steel" → "Green Steel"
+- "Magnum" → "Magnum"
+- "Collapsible" → "Collapsible"
+- "Pallet" → "Pallet"
+- "Non-Linear" or "Crate" → "Non-Linear Crate"
+- "Dura" or "Durapipe" or "Flo Tube" → "Durapipe"
+- "Battery" or "POD" → "Battery POD"
+- Default → "Magnum"
+
+WASTE STREAM — pick from the 15 WEEE categories:
+1. Large Household Appliances | 2. Small Household Appliances | 3. IT and Telecommunications Equipment
+4. Consumer Equipment | 5. Lighting Equipment | 6. Electrical and Electronic Tools
+7. Toys, Leisure and Sports Equipment | 8. Medical Devices | 9. Monitoring and Control Equipment
+10. Automatic Dispensers | 11. Display Equipment | 12. Appliances Containing Refrigerants
+13. Gas Discharge Lamps and LED Light Sources | 14. PV Panels (Solar Panels) | 15. Vapes and Electronic Cigarettes
+
+Hints: "Lamp/Fluorescent/LED"→13, "WEEE/Mixed WEEE"→2, "Fridge/Refrigerant"→12, "Screen/Monitor/TV"→11,
+"Battery"→2, "IT/Computer"→3, "Vape/E-Cig"→15, "Solar/PV"→14, "Consignment/Waste Transfer Note"→null.
+Use your knowledge for best match. If no match → null.
 
 RULES:
 - Use null when a value is genuinely not found.
@@ -1057,6 +1131,8 @@ def _normalise_cef_data(parsed):
         if isinstance(item, dict):
             li = {
                 "description": str(item.get("description") or "").strip(),
+                "container": str(item.get("container") or "Magnum"),
+                "waste_stream": str(item.get("waste_stream") or ""),
                 "quantity": item.get("quantity", 1),
                 "item_code": item.get("item_code"),
                 "unit_price": float(item.get("unit_price") or 0),
@@ -1205,13 +1281,7 @@ def download_cef_review_pdf():
 
 @app.route("/api/send-cef-delivery-email", methods=["POST"])
 def send_cef_delivery_email():
-    """Send a CEF delivery email via Resend API."""
-    resend_key = RESEND_API_KEY
-    if not resend_key:
-        return jsonify({
-            "error": "Email not configured — add RESEND_API_KEY in Railway environment variables"
-        }), 500
-
+    """Send a CEF delivery email via Microsoft Graph API."""
     body = request.get_json(silent=True) or {}
     to_email = (body.get("to_email") or "").strip()
     payload = body.get("payload") or {}
@@ -1262,44 +1332,20 @@ def send_cef_delivery_email():
     supplier_name = "Waste Experts"
 
     pdf_bytes = pdf_buffer.getvalue()
-    pdf_b64 = base64.standard_b64encode(pdf_bytes).decode()
 
     safe_po = _sanitise_filename(po_number)
     attachment_filename = f"CEF_PO_{safe_po}.pdf"
 
     email_html = _build_delivery_email_html(mapped)
 
-    resend_payload = {
-        "from": "Waste Experts PO Extractor <onboarding@resend.dev>",
-        "to": [to_email],
-        "subject": f"CEF Purchase Order — {po_number} — {supplier_name}",
-        "html": email_html,
-        "attachments": [{
-            "filename": attachment_filename,
-            "content": pdf_b64,
-        }],
-    }
+    subject = f"CEF Purchase Order \u2014 {po_number} \u2014 {supplier_name}"
 
     try:
-        resp = req_lib.post(
-            "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {resend_key}",
-                "Content-Type": "application/json",
-            },
-            json=resend_payload,
-            timeout=30,
-        )
-        if resp.ok:
-            resp_body = resp.json()
-            return jsonify({"success": True, "id": resp_body.get("id")}), 200
+        ok, err = _send_email_via_graph(to_email, subject, email_html, attachment_filename, pdf_bytes)
+        if ok:
+            return jsonify({"success": True}), 200
         else:
-            try:
-                err_body = resp.json()
-                err_msg = err_body.get("message", resp.text)
-            except Exception:
-                err_msg = resp.text
-            return jsonify({"error": f"Resend API error: {err_msg}"}), resp.status_code
+            return jsonify({"error": err or "Failed to send email"}), 500
     except Exception as exc:
         return jsonify({"error": f"Failed to send email: {exc}"}), 500
 
@@ -1591,14 +1637,18 @@ def _format_line_items_cell(line_items):
     """Format line items into a single cell string with newlines."""
     lines = []
     for item in (line_items or []):
+        container = str(item.get("container") or "")
         desc = str(item.get("description") or "")
+        ws = str(item.get("waste_stream") or "")
         mt = str(item.get("movement_type") or "")
         try:
             price = float(item.get("price") or item.get("line_total") or item.get("unit_price") or 0)
         except (TypeError, ValueError):
             price = 0.0
         mt_str = f" [{mt}]" if mt else ""
-        lines.append(f"{desc}{mt_str} | \u00a3{price:.2f}")
+        container_str = f"{container} | " if container else ""
+        ws_str = f"({ws}) " if ws else ""
+        lines.append(f"{container_str}{desc} {ws_str}{mt_str}| \u00a3{price:.2f}")
     return "\n".join(lines) if lines else "\u2014"
 
 
@@ -1952,12 +2002,22 @@ def hubspot_create_deal():
         if assoc_status not in (200, 201):
             association_errors.append(f"Contact association failed: {assoc_data.get('message', '')}")
 
-    # Step 6 — Create line items (include movement type in name)
+    # Step 6 — Create line items (include container, waste stream, movement type in name)
     line_item_ids = []
     for item in line_items:
         desc = item.get("description", "Item")
+        container = item.get("container", "")
+        ws = item.get("waste_stream", "")
         mt = item.get("movement_type", "")
-        li_name = f"{desc} [{mt}]" if mt else desc
+        parts = []
+        if container:
+            parts.append(container)
+        parts.append(desc)
+        if ws:
+            parts.append(f"({ws})")
+        if mt:
+            parts.append(f"[{mt}]")
+        li_name = " ".join(parts)
         # Use 'price' field (new format) or fall back to 'unit_price' (old format)
         item_price = item.get("price", item.get("unit_price", 0))
         li_body = {
@@ -1997,11 +2057,92 @@ def hubspot_create_deal():
     return jsonify(result), 201
 
 
-# ─── Customer Delivery Email (via Resend API) ────────────────────────────────
+# ─── Customer Delivery Email (via Microsoft Graph API) ───────────────────────
 
-# Resolve Resend API key: env var first, hardcoded fallback for testing
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip() or "re_RzdFeJwp_BvayxAaBy88Sq5vyREmoDz4d"
-print(f"RESEND_API_KEY: {'SET' if RESEND_API_KEY else 'NOT SET'}")
+MS_TENANT_ID = os.environ.get("MS_TENANT_ID", "").strip()
+MS_CLIENT_ID = os.environ.get("MS_CLIENT_ID", "").strip()
+MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET", "").strip()
+MS_SENDER_EMAIL = os.environ.get("MS_SENDER_EMAIL", "orders@wasteexperts.co.uk").strip()
+
+# Token cache
+_ms_token_cache = {"token": None, "expires_at": 0}
+
+
+def _get_ms_token():
+    """Obtain an OAuth2 token using client credentials flow, with caching."""
+    import time
+    now = time.time()
+    if _ms_token_cache["token"] and _ms_token_cache["expires_at"] > now + 60:
+        return _ms_token_cache["token"]
+
+    if not all([MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET]):
+        return None
+
+    resp = req_lib.post(
+        f"https://login.microsoftonline.com/{MS_TENANT_ID}/oauth2/v2.0/token",
+        data={
+            "client_id": MS_CLIENT_ID,
+            "client_secret": MS_CLIENT_SECRET,
+            "scope": "https://graph.microsoft.com/.default",
+            "grant_type": "client_credentials",
+        },
+        timeout=30,
+    )
+    if not resp.ok:
+        print(f"[MS Graph] Token fetch failed: {resp.status_code} {resp.text[:200]}")
+        return None
+
+    data = resp.json()
+    _ms_token_cache["token"] = data["access_token"]
+    _ms_token_cache["expires_at"] = now + data.get("expires_in", 3600)
+    return _ms_token_cache["token"]
+
+
+def _send_email_via_graph(to_email, subject, html_body, attachment_name, attachment_bytes):
+    """Send an email via Microsoft Graph API."""
+    token = _get_ms_token()
+    if not token:
+        return None, "Email service not configured — set MS_TENANT_ID, MS_CLIENT_ID, and MS_CLIENT_SECRET"
+
+    attachment_b64 = base64.standard_b64encode(attachment_bytes).decode()
+
+    resp = req_lib.post(
+        f"https://graph.microsoft.com/v1.0/users/{MS_SENDER_EMAIL}/sendMail",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "message": {
+                "subject": subject,
+                "body": {
+                    "contentType": "HTML",
+                    "content": html_body,
+                },
+                "toRecipients": [{"emailAddress": {"address": to_email}}],
+                "attachments": [{
+                    "@odata.type": "#microsoft.graph.fileAttachment",
+                    "name": attachment_name,
+                    "contentType": "application/pdf",
+                    "contentBytes": attachment_b64,
+                }],
+            }
+        },
+        timeout=30,
+    )
+    if resp.ok or resp.status_code == 202:
+        return True, None
+    else:
+        err_msg = resp.text[:300]
+        print(f"[MS Graph] Send failed: {resp.status_code} {err_msg}")
+        return None, f"Graph API error ({resp.status_code}): {err_msg}"
+
+
+# Check MS credentials at startup
+if all([MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET]):
+    print(f"[MS Graph] Credentials found — email via {MS_SENDER_EMAIL}")
+else:
+    print("[MS Graph] WARNING: MS_TENANT_ID / MS_CLIENT_ID / MS_CLIENT_SECRET not fully set — email sending disabled")
 
 
 def _esc(text):
@@ -2165,51 +2306,17 @@ def _build_delivery_email_html(payload):
 
 @app.route("/api/send-delivery-email/status", methods=["GET"])
 def delivery_email_status():
-    """Debug: check if RESEND_API_KEY is configured."""
-    key = RESEND_API_KEY
-    if key:
-        masked = key[:8] + "***" + key[-4:] if len(key) > 12 else "***"
-        return jsonify({"configured": True, "key_preview": masked, "length": len(key)})
-    return jsonify({"configured": False, "key_preview": None, "length": 0})
-
-
-@app.route("/api/test-resend", methods=["GET"])
-def test_resend():
-    """Send a minimal test email via Resend using requests library to debug 403."""
-    api_key = RESEND_API_KEY
-    if not api_key:
-        return jsonify({"error": "No RESEND_API_KEY", "key_first_5": "NO KEY"})
-
-    response = req_lib.post(
-        "https://api.resend.com/emails",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "from": "onboarding@resend.dev",
-            "to": ["orders@wasteexperts.co.uk"],
-            "subject": "Test Email from PO Extractor",
-            "html": "<p>This is a test email. If you see this, Resend is working!</p>",
-        },
-    )
-
+    """Debug: check if Microsoft Graph email is configured."""
+    configured = all([MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET])
     return jsonify({
-        "status": response.status_code,
-        "response": response.text,
-        "key_first_5": api_key[:5] if api_key else "NO KEY",
+        "configured": configured,
+        "sender": MS_SENDER_EMAIL if configured else None,
     })
 
 
 @app.route("/api/send-delivery-email", methods=["POST"])
 def send_delivery_email():
-    """Generate PDF and send it via Resend API."""
-    resend_key = RESEND_API_KEY
-    if not resend_key:
-        return jsonify({
-            "error": "Email not configured \u2014 add RESEND_API_KEY in Railway environment variables"
-        }), 500
-
+    """Generate PDF and send it via Microsoft Graph API."""
     body = request.get_json(silent=True) or {}
     to_email = (body.get("to_email") or "").strip()
     payload = body.get("payload") or {}
@@ -2233,9 +2340,7 @@ def send_delivery_email():
     po_number = (payload.get("purchase_order_number") or "").strip() or "Unknown"
     supplier_name = "Waste Experts"
 
-    # Base64-encode the PDF for attachment
     pdf_bytes = pdf_buffer.getvalue()
-    pdf_b64 = base64.standard_b64encode(pdf_bytes).decode()
 
     # Sanitised filename
     safe_po = _sanitise_filename(po_number)
@@ -2245,38 +2350,14 @@ def send_delivery_email():
     # Build branded HTML email body with full operations detail
     email_html = _build_delivery_email_html(payload)
 
-    # Send via Resend API (branded HTML)
-    resend_payload = {
-        "from": "Waste Experts PO Extractor <onboarding@resend.dev>",
-        "to": [to_email],
-        "subject": f"Purchase Order \u2014 {po_number} \u2014 {supplier_name}",
-        "html": email_html,
-        "attachments": [{
-            "filename": attachment_filename,
-            "content": pdf_b64,
-        }],
-    }
+    subject = f"Purchase Order \u2014 {po_number} \u2014 {supplier_name}"
 
     try:
-        resp = req_lib.post(
-            "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {resend_key}",
-                "Content-Type": "application/json",
-            },
-            json=resend_payload,
-            timeout=30,
-        )
-        if resp.ok:
-            resp_body = resp.json()
-            return jsonify({"success": True, "id": resp_body.get("id")}), 200
+        ok, err = _send_email_via_graph(to_email, subject, email_html, attachment_filename, pdf_bytes)
+        if ok:
+            return jsonify({"success": True}), 200
         else:
-            try:
-                err_body = resp.json()
-                err_msg = err_body.get("message", resp.text)
-            except Exception:
-                err_msg = resp.text
-            return jsonify({"error": f"Resend API error: {err_msg}"}), resp.status_code
+            return jsonify({"error": err or "Failed to send email"}), 500
     except Exception as exc:
         return jsonify({"error": f"Failed to send email: {exc}"}), 500
 

@@ -293,13 +293,13 @@
     }
     .toast.show { opacity: 1; }
 
-    /* --- Line items (3-column: Waste Stream | Movement Type | Price | Remove) --- */
+    /* --- Line items (4-column: Container | Waste Stream | Movement Type | Price | Remove) --- */
     .line-item-row {
-      display: grid; grid-template-columns: 3fr 2fr 1.5fr auto; gap: 10px;
+      display: grid; grid-template-columns: 20% 35% 20% 15% 10%; gap: 6px;
       align-items: end; padding: 8px 0; border-bottom: 1px solid #2f4a60;
     }
     .line-item-row:last-child { border-bottom: none; }
-    .line-item-row input, .line-item-row select { font-size: 13px; padding: 8px 10px; }
+    .line-item-row input, .line-item-row select { font-size: 12px; padding: 7px 8px; }
     .line-item-row .li-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #8aa3b8; margin-bottom: 2px; }
     .line-item-row select {
       border: 1px solid #3d5a73; border-radius: 4px;
@@ -311,15 +311,15 @@
       display: flex; align-items: center; position: relative;
     }
     .li-price-wrap .li-price-prefix {
-      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
-      font-size: 13px; font-weight: 600; color: #8aa3b8; pointer-events: none; z-index: 1;
+      position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+      font-size: 12px; font-weight: 600; color: #8aa3b8; pointer-events: none; z-index: 1;
     }
     .li-price-wrap input {
-      padding-left: 24px; text-align: right; width: 100%;
+      padding-left: 22px; text-align: right; width: 100%;
     }
     .btn-remove {
       border: none; background: rgba(180,35,24,.2); color: #f87171; border-radius: 4px;
-      padding: 8px 10px; cursor: pointer; font-weight: 700; font-size: 13px;
+      padding: 7px 8px; cursor: pointer; font-weight: 700; font-size: 13px;
       font-family: 'Montserrat', sans-serif; transition: background .2s;
     }
     .btn-remove:hover { background: rgba(180,35,24,.35); }
@@ -665,11 +665,12 @@
           </div>
 
           <!-- Line item header row -->
-          <div class="full" style="display:grid; grid-template-columns:3fr 2fr 1.5fr auto; gap:10px; padding:6px 0; border-bottom:1px solid #3d5a73;">
+          <div class="full" style="display:grid; grid-template-columns:20% 35% 20% 15% 10%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
+            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Container</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Waste Stream</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Movement Type</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Price</span>
-            <span style="width:38px;"></span>
+            <span></span>
           </div>
 
           <div class="full" id="line-items-container">
@@ -855,11 +856,12 @@
           </div>
 
           <!-- Line item header row -->
-          <div class="full" style="display:grid; grid-template-columns:3fr 2fr 1.5fr auto; gap:10px; padding:6px 0; border-bottom:1px solid #3d5a73;">
+          <div class="full" style="display:grid; grid-template-columns:20% 35% 20% 15% 10%; gap:6px; padding:6px 0; border-bottom:1px solid #3d5a73;">
+            <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Container</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Waste Stream</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Movement Type</span>
             <span style="font-size:10px; font-weight:700; text-transform:uppercase; color:#8ec431; letter-spacing:.3px;">Price</span>
-            <span style="width:38px;"></span>
+            <span></span>
           </div>
 
           <div class="full" id="cef-line-items-container">
@@ -1318,27 +1320,47 @@
     /* ── Line items ── */
     let lineItemCounter = 0;
     const MOVEMENT_TYPES = ['', 'Remove', 'Uplift', 'Exchange', 'WWL', 'Delivery'];
+    const CONTAINER_TYPES = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD'];
+    const WASTE_STREAM_CATEGORIES = [
+      '', '1. Large Household Appliances', '2. Small Household Appliances',
+      '3. IT and Telecommunications Equipment', '4. Consumer Equipment',
+      '5. Lighting Equipment', '6. Electrical and Electronic Tools',
+      '7. Toys, Leisure and Sports Equipment', '8. Medical Devices',
+      '9. Monitoring and Control Equipment', '10. Automatic Dispensers',
+      '11. Display Equipment', '12. Appliances Containing Refrigerants',
+      '13. Gas Discharge Lamps and LED Light Sources', '14. PV Panels (Solar Panels)',
+      '15. Vapes and Electronic Cigarettes'
+    ];
 
-    function addLineItem(desc, movementType, price, isDocTypeLine) {
-      const container = document.getElementById('line-items-container');
+    function addLineItem(desc, movementType, price, isDocTypeLine, containerType, wasteStream) {
+      const containerEl = document.getElementById('line-items-container');
       const idx = lineItemCounter++;
       const row = document.createElement('div');
       row.className = 'line-item-row';
       row.dataset.liIdx = idx;
       if (isDocTypeLine) row.dataset.docTypeLine = 'true';
+      var ctOptions = CONTAINER_TYPES.map(function(ct) {
+        var sel = (containerType || 'Magnum') === ct ? ' selected' : '';
+        return '<option value="' + escHtml(ct) + '"' + sel + '>' + escHtml(ct) + '</option>';
+      }).join('');
+      var wsOptions = WASTE_STREAM_CATEGORIES.map(function(ws) {
+        var sel = (wasteStream || '') === ws ? ' selected' : '';
+        var label = ws || '\u2014';
+        return '<option value="' + escHtml(ws) + '"' + sel + '>' + escHtml(label) + '</option>';
+      }).join('');
       var mtOptions = MOVEMENT_TYPES.map(function(mt) {
         var sel = (movementType || '') === mt ? ' selected' : '';
         var label = mt || '\u2014';
         return '<option value="' + escHtml(mt) + '"' + sel + '>' + escHtml(label) + '</option>';
       }).join('');
-      var safeDesc = (desc || '').replace(/"/g, '&quot;');
       var priceVal = (price != null && price !== '') ? parseFloat(price) : 0;
       row.innerHTML =
-        '<div><input type="text" class="li-desc" value="' + safeDesc + '" placeholder="Waste stream description" /></div>' +
+        '<div><select class="li-container">' + ctOptions + '</select></div>' +
+        '<div><select class="li-waste-stream">' + wsOptions + '</select></div>' +
         '<div><select class="li-movement">' + mtOptions + '</select></div>' +
         '<div><div class="li-price-wrap"><span class="li-price-prefix">\u00a3</span><input type="number" class="li-price" value="' + priceVal.toFixed(2) + '" min="0" step="0.01" onchange="recalcOverallTotal()" /></div></div>' +
         '<div style="padding-bottom:1px;"><button class="btn-remove" type="button" onclick="removeLineItem(this)">&times;</button></div>';
-      container.appendChild(row);
+      containerEl.appendChild(row);
       recalcOverallTotal();
     }
 
@@ -1354,7 +1376,7 @@
 
     function recalcOverallTotal() {
       let total = 0;
-      document.querySelectorAll('.line-item-row').forEach(row => {
+      document.querySelectorAll('#line-items-container .line-item-row').forEach(row => {
         total += parseFloat(row.querySelector('.li-price').value) || 0;
       });
       document.getElementById('overall_total_display').textContent = '\u00a3' + total.toFixed(2);
@@ -1362,11 +1384,14 @@
 
     function getLineItems() {
       const items = [];
-      document.querySelectorAll('.line-item-row').forEach(row => {
+      document.querySelectorAll('#line-items-container .line-item-row').forEach(row => {
+        var wsVal = (row.querySelector('.li-waste-stream') || {}).value || '';
         items.push({
-          description: row.querySelector('.li-desc').value.trim(),
-          movement_type: row.querySelector('.li-movement').value,
-          price: parseFloat(row.querySelector('.li-price').value) || 0
+          container: (row.querySelector('.li-container') || {}).value || 'Magnum',
+          waste_stream: wsVal,
+          description: wsVal,
+          movement_type: (row.querySelector('.li-movement') || {}).value || '',
+          price: parseFloat((row.querySelector('.li-price') || {}).value) || 0
         });
       });
       return items;
@@ -1387,7 +1412,7 @@
       var noteTypes = ['Consignment Note', 'Waste Transfer Note'];
 
       /* Remove any existing auto-added doc type line */
-      document.querySelectorAll('.line-item-row[data-doc-type-line="true"]').forEach(function(row) {
+      document.querySelectorAll('#line-items-container .line-item-row[data-doc-type-line="true"]').forEach(function(row) {
         row.remove();
       });
       _docTypeLineAdded = '';
@@ -1396,12 +1421,13 @@
       if (noteTypes.indexOf(docType) !== -1) {
         /* Check if user already manually added this as a line item */
         var alreadyExists = false;
-        document.querySelectorAll('.line-item-row').forEach(function(row) {
-          var desc = (row.querySelector('.li-desc').value || '').trim().toLowerCase();
+        document.querySelectorAll('#line-items-container .line-item-row').forEach(function(row) {
+          var wsEl = row.querySelector('.li-waste-stream');
+          var desc = wsEl ? (wsEl.value || '').trim().toLowerCase() : '';
           if (desc === docType.toLowerCase()) alreadyExists = true;
         });
         if (!alreadyExists) {
-          addLineItem(docType, '', 40.00, true);
+          addLineItem(docType, '', 40.00, true, '', '');
           _docTypeLineAdded = docType;
         }
       }
@@ -1450,7 +1476,7 @@
       const items = data.line_items || [];
       items.forEach(item => {
         var price = item.price != null ? item.price : (item.line_total || item.unit_price || 0);
-        addLineItem(item.description, item.movement_type || '', price);
+        addLineItem(item.description, item.movement_type || '', price, false, item.container || 'Magnum', item.waste_stream || '');
       });
 
       /* Auto-add doc type £40 line item if applicable */
@@ -1688,26 +1714,6 @@
       }
     }
 
-    /* ── Test Resend API ── */
-    async function testResend() {
-      var btn = document.getElementById('btn-test-resend');
-      var output = document.getElementById('resend-test-output');
-      btn.disabled = true;
-      btn.textContent = 'Testing\u2026';
-      output.classList.remove('hidden');
-      output.textContent = 'Sending test email via Resend\u2026';
-      try {
-        var resp = await fetch('/api/test-resend');
-        var data = await resp.json();
-        output.textContent = JSON.stringify(data, null, 2);
-      } catch(err) {
-        output.textContent = 'Error: ' + err.message;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Test Resend';
-      }
-    }
-
     /* Patch uploadAndExtract to remember filename */
     var _origUploadAndExtract = uploadAndExtract;
     uploadAndExtract = async function(file) {
@@ -1745,11 +1751,7 @@
                   helpTooltip('The email address where extracted PDFs are sent when you click \'Send to Customer Delivery\'.', 'right') +
                 '</div>' +
                 '<input type="email" id="settings-delivery-email" value="' + escHtml(getDeliveryEmail()) + '" style="width:100%; border:1px solid #3d5a73; border-radius:4px; padding:10px 12px; font-size:14px; font-family:Montserrat,sans-serif; background:#1e2e3d; color:#e8ecf1;" onchange="saveDeliveryEmail(this.value)" />' +
-                '<div style="margin-top:10px; display:flex; flex-direction:column; gap:3px;">' +
-                  '<button class="btn-debug" type="button" onclick="testResend()" id="btn-test-resend">Test Resend</button>' +
-                  '<span style="font-size:10px; color:#6b7280;">Sends a test email via Resend API to debug 403 issues</span>' +
-                '</div>' +
-                '<pre id="resend-test-output" class="hidden" style="margin-top:10px; background:#0d1b28; border:1px solid #2a4054; border-radius:4px; padding:14px; color:#c8dce8; font-size:12px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:300px; overflow:auto;"></pre>' +
+                '<div style="margin-top:6px; font-size:10px; color:#6b7280;">Emails sent via Microsoft Graph API from orders@wasteexperts.co.uk</div>' +
               '</div>' +
               '<div style="border-top:1px solid #2f4a60; padding-top:14px;">' +
                 '<div class="collapsible-header" id="templates-toggle" onclick="toggleTemplatesSection()">' +
@@ -1847,8 +1849,10 @@
 
       /* Build description from line items + delivery details */
       var desc = items.map(function(li, i) {
+        var ct = li.container ? li.container + ' | ' : '';
+        var ws = li.waste_stream ? ' (' + li.waste_stream + ')' : '';
         var mt = li.movement_type ? ' [' + li.movement_type + ']' : '';
-        return (i+1) + '. ' + (li.description || 'Item') + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
+        return (i+1) + '. ' + ct + (li.description || 'Item') + ws + mt + ' \u2014 \u00a3' + (li.price||0).toFixed(2);
       }).join('; ');
 
       /* Append delivery details to description */
@@ -1872,9 +1876,9 @@
       /* Build line items table */
       var liHtml = '';
       if (items.length) {
-        liHtml = '<table class="hs-li-table"><thead><tr><th>Waste Stream</th><th>Movement Type</th><th>Price</th></tr></thead><tbody>';
+        liHtml = '<table class="hs-li-table"><thead><tr><th>Container</th><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
         items.forEach(function(li) {
-          liHtml += '<tr><td>' + escHtml(li.description) + '</td><td>' + escHtml(li.movement_type || '\u2014') + '</td><td>\u00a3' + (li.price||0).toFixed(2) + '</td></tr>';
+          liHtml += '<tr><td>' + escHtml(li.container || '\u2014') + '</td><td>' + escHtml(li.waste_stream || li.description || '\u2014') + '</td><td>' + escHtml(li.movement_type || '\u2014') + '</td><td>\u00a3' + (li.price||0).toFixed(2) + '</td></tr>';
         });
         liHtml += '</tbody></table>';
       } else {
@@ -2232,19 +2236,32 @@
       html += '<div class="full" id="train-line-items">';
       var items = data.line_items || [];
       if (items.length) {
-        html += '<div class="train-li-row" style="border:none; padding-bottom:2px; grid-template-columns:3fr 2fr 1.5fr;">' +
+        html += '<div class="train-li-row" style="border:none; padding-bottom:2px; grid-template-columns:1.5fr 2.5fr 1.5fr 1fr;">' +
+          '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Container</span>' +
           '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Waste Stream</span>' +
           '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Movement Type</span>' +
           '<span style="font-size:10px; font-weight:700; color:#8aa3b8; text-transform:uppercase;">Price</span></div>';
+        var trainContainerTypes = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD'];
+        var trainWsCategories = ['', '1. Large Household Appliances', '2. Small Household Appliances', '3. IT and Telecommunications Equipment', '4. Consumer Equipment', '5. Lighting Equipment', '6. Electrical and Electronic Tools', '7. Toys, Leisure and Sports Equipment', '8. Medical Devices', '9. Monitoring and Control Equipment', '10. Automatic Dispensers', '11. Display Equipment', '12. Appliances Containing Refrigerants', '13. Gas Discharge Lamps and LED Light Sources', '14. PV Panels (Solar Panels)', '15. Vapes and Electronic Cigarettes'];
         items.forEach(function(li) {
+          var ctOpts = trainContainerTypes.map(function(ct) {
+            var sel = (li.container || 'Magnum') === ct ? ' selected' : '';
+            return '<option value="' + escHtml(ct) + '"' + sel + '>' + escHtml(ct) + '</option>';
+          }).join('');
+          var wsOpts = trainWsCategories.map(function(ws) {
+            var sel = (li.waste_stream || '') === ws ? ' selected' : '';
+            var label = ws || '\u2014';
+            return '<option value="' + escHtml(ws) + '"' + sel + '>' + escHtml(label) + '</option>';
+          }).join('');
           var mtOpts = ['', 'Remove', 'Uplift', 'Exchange', 'WWL', 'Delivery'].map(function(mt) {
             var sel = (li.movement_type || '') === mt ? ' selected' : '';
             var label = mt || '\u2014';
             return '<option value="' + escHtml(mt) + '"' + sel + '>' + escHtml(label) + '</option>';
           }).join('');
           var priceVal = li.price != null ? li.price : (li.line_total || li.unit_price || 0);
-          html += '<div class="train-li-row" style="grid-template-columns:3fr 2fr 1.5fr;">' +
-            '<input type="text" class="tli-desc" value="' + escHtml(String(li.description || '')) + '" />' +
+          html += '<div class="train-li-row" style="grid-template-columns:1.5fr 2.5fr 1.5fr 1fr;">' +
+            '<select class="tli-container" style="font-size:12px; padding:6px 8px; background:#1e2e3d; color:#e8ecf1; border:1px solid #3d5a73; border-radius:4px;">' + ctOpts + '</select>' +
+            '<select class="tli-desc" style="font-size:12px; padding:6px 8px; background:#1e2e3d; color:#e8ecf1; border:1px solid #3d5a73; border-radius:4px;">' + wsOpts + '</select>' +
             '<select class="tli-movement" style="font-size:12px; padding:6px 8px; background:#1e2e3d; color:#e8ecf1; border:1px solid #3d5a73; border-radius:4px;">' + mtOpts + '</select>' +
             '<input type="number" class="tli-price" value="' + (parseFloat(priceVal) || 0).toFixed(2) + '" min="0" step="0.01" />' +
             '</div>';
@@ -2284,6 +2301,8 @@
         var desc = row.querySelector('.tli-desc');
         if (!desc) return;
         lineItems.push({
+          container: (row.querySelector('.tli-container') || {}).value || 'Magnum',
+          waste_stream: desc.value || '',
           description: desc.value || '',
           movement_type: (row.querySelector('.tli-movement') || {}).value || '',
           price: parseFloat((row.querySelector('.tli-price') || {}).value) || 0,
@@ -2401,7 +2420,7 @@
        Customer Delivery Email
        ═══════════════════════════════════════════════════════════════════════ */
 
-    var _defaultDeliveryEmail = 'orders@wasteexperts.co.uk';
+    var _defaultDeliveryEmail = 'solutions@wasteexperts.co.uk';
 
     function getDeliveryEmail() {
       try { return localStorage.getItem('delivery_email') || _defaultDeliveryEmail; } catch(e) { return _defaultDeliveryEmail; }
@@ -2688,19 +2707,36 @@
       }
 
       /* Line items */
-      window.cefAddLineItem = function(desc, mt, price, isDoc) {
+      var CEF_CONTAINER_TYPES = ['Green Steel', 'Magnum', 'Collapsible', 'Pallet', 'Non-Linear Crate', 'Durapipe', 'Battery POD'];
+      var CEF_WASTE_STREAM_CATEGORIES = [
+        '', '1. Large Household Appliances', '2. Small Household Appliances',
+        '3. IT and Telecommunications Equipment', '4. Consumer Equipment',
+        '5. Lighting Equipment', '6. Electrical and Electronic Tools',
+        '7. Toys, Leisure and Sports Equipment', '8. Medical Devices',
+        '9. Monitoring and Control Equipment', '10. Automatic Dispensers',
+        '11. Display Equipment', '12. Appliances Containing Refrigerants',
+        '13. Gas Discharge Lamps and LED Light Sources', '14. PV Panels (Solar Panels)',
+        '15. Vapes and Electronic Cigarettes'
+      ];
+      window.cefAddLineItem = function(desc, mt, price, isDoc, containerType, wasteStream) {
         var c = document.getElementById('cef-line-items-container');
         var idx = cefLineItemCounter++;
         var row = document.createElement('div');
         row.className = 'line-item-row'; row.dataset.liIdx = idx;
         if (isDoc) row.dataset.docTypeLine = 'true';
+        var ctOpts = CEF_CONTAINER_TYPES.map(function(ct) {
+          return '<option value="'+escHtml(ct)+'"'+((containerType||'Magnum')===ct?' selected':'')+'>'+escHtml(ct)+'</option>';
+        }).join('');
+        var wsOpts = CEF_WASTE_STREAM_CATEGORIES.map(function(ws) {
+          return '<option value="'+escHtml(ws)+'"'+((wasteStream||'')===ws?' selected':'')+'>'+escHtml(ws||'\u2014')+'</option>';
+        }).join('');
         var opts = CEF_MT.map(function(m) {
           return '<option value="'+escHtml(m)+'"'+((mt||'')===m?' selected':'')+'>'+escHtml(m||'\u2014')+'</option>';
         }).join('');
-        var sd = (desc||'').replace(/"/g,'&quot;');
         var pv = (price!=null&&price!=='')?parseFloat(price):0;
         row.innerHTML =
-          '<div><input type="text" class="li-desc" value="'+sd+'" placeholder="Waste stream" /></div>' +
+          '<div><select class="li-container">'+ctOpts+'</select></div>' +
+          '<div><select class="li-waste-stream">'+wsOpts+'</select></div>' +
           '<div><select class="li-movement">'+opts+'</select></div>' +
           '<div><div class="li-price-wrap"><span class="li-price-prefix">\u00a3</span><input type="number" class="li-price" value="'+pv.toFixed(2)+'" min="0" step="0.01" onchange="cefRecalcTotal()" /></div></div>' +
           '<div style="padding-bottom:1px;"><button class="btn-remove" type="button" onclick="cefRemoveLineItem(this)">&times;</button></div>';
@@ -2721,7 +2757,13 @@
       function cefGetLI() {
         var items = [];
         document.querySelectorAll('#cef-line-items-container .line-item-row').forEach(function(r) {
-          items.push({ description: r.querySelector('.li-desc').value.trim(), movement_type: r.querySelector('.li-movement').value, price: parseFloat(r.querySelector('.li-price').value)||0 });
+          items.push({
+            container: (r.querySelector('.li-container') || {}).value || 'Magnum',
+            waste_stream: (r.querySelector('.li-waste-stream') || {}).value || '',
+            description: (r.querySelector('.li-waste-stream') || {}).value || '',
+            movement_type: (r.querySelector('.li-movement') || {}).value || '',
+            price: parseFloat((r.querySelector('.li-price') || {}).value) || 0
+          });
         });
         return items;
       }
@@ -2738,9 +2780,10 @@
         if (dt === 'Consignment Note' || dt === 'Waste Transfer Note') {
           var exists = false;
           document.querySelectorAll('#cef-line-items-container .line-item-row').forEach(function(r) {
-            if ((r.querySelector('.li-desc').value||'').trim().toLowerCase() === dt.toLowerCase()) exists = true;
+            var wsEl = r.querySelector('.li-waste-stream');
+            if (wsEl && (wsEl.value||'').trim().toLowerCase() === dt.toLowerCase()) exists = true;
           });
-          if (!exists) { cefAddLineItem(dt, '', 40.00, true); cefDocTypeLineAdded = dt; }
+          if (!exists) { cefAddLineItem(dt, '', 40.00, true, '', ''); cefDocTypeLineAdded = dt; }
         }
         cefRecalcTotal();
       };
@@ -2766,7 +2809,7 @@
         document.getElementById('cef-doc-supplier-label').textContent = 'From: ' + bn;
         cefClearLI();
         (data.line_items || []).forEach(function(li) {
-          cefAddLineItem(li.description, li.movement_type || '', li.price != null ? li.price : (li.line_total || li.unit_price || 0));
+          cefAddLineItem(li.description, li.movement_type || '', li.price != null ? li.price : (li.line_total || li.unit_price || 0), false, li.container || 'Magnum', li.waste_stream || '');
         });
         /* Confidence dots */
         var fmap = {cef_po_reference:'po_reference',cef_branch_name:'cef_branch_name',cef_branch_address:'cef_branch_address',cef_branch_postcode:'cef_branch_postcode',cef_branch_phone:'cef_branch_phone',cef_branch_email:'cef_branch_email',cef_po_date:'po_date',cef_entered_by:'entered_by',cef_site_contact:'site_contact',cef_delivery_address:'delivery_address',cef_delivery_postcode:'delivery_postcode'};
@@ -2874,7 +2917,7 @@
         else { ooHtml = '<option value="">No owners</option>'; }
 
         var personDetails = CEF_PERSONS[person] || CEF_PERSONS['Katie Wooton'];
-        var desc = items.map(function(li,i){ var mt=li.movement_type?' ['+li.movement_type+']':''; return (i+1)+'. '+(li.description||'Item')+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2); }).join('; ');
+        var desc = items.map(function(li,i){ var ct=li.container?li.container+' | ':''; var ws=li.waste_stream?' ('+li.waste_stream+')':''; var mt=li.movement_type?' ['+li.movement_type+']':''; return (i+1)+'. '+ct+(li.description||'Item')+ws+mt+' \u2014 \u00a3'+(li.price||0).toFixed(2); }).join('; ');
         desc += '\n\nPrepared By: '+personDetails.name+' | '+personDetails.title+' | '+personDetails.email+' | '+personDetails.phone;
         if (p.po_date) desc += '\nPO Date: '+p.po_date;
         var dd = [['CEF Branch',bn],['Supplier','Waste Experts'],['Site Contact',p.site_contact],['Delivery Address',p.delivery_address],['Delivery Postcode',p.delivery_postcode]];
@@ -2883,8 +2926,8 @@
 
         var liH = '';
         if (items.length) {
-          liH = '<table class="hs-li-table"><thead><tr><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
-          items.forEach(function(li){ liH += '<tr><td>'+escHtml(li.description)+'</td><td>'+escHtml(li.movement_type||'\u2014')+'</td><td>\u00a3'+(li.price||0).toFixed(2)+'</td></tr>'; });
+          liH = '<table class="hs-li-table"><thead><tr><th>Container</th><th>Waste Stream</th><th>Movement</th><th>Price</th></tr></thead><tbody>';
+          items.forEach(function(li){ liH += '<tr><td>'+escHtml(li.container||'\u2014')+'</td><td>'+escHtml(li.waste_stream||li.description||'\u2014')+'</td><td>'+escHtml(li.movement_type||'\u2014')+'</td><td>\u00a3'+(li.price||0).toFixed(2)+'</td></tr>'; });
           liH += '</tbody></table>';
         } else { liH = '<div style="color:#8aa3b8;font-size:12px;">No line items</div>'; }
 
