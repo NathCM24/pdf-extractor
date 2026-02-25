@@ -1,7 +1,7 @@
 # Supplier Order Extractor
 ## Setup & Deployment Guide
 
-Upload a supplier purchase order PDF (Go Green, Mitie, Suez, etc.) and get all key fields extracted instantly, ready to paste into HubSpot or download as a CSV.
+Upload a supplier purchase order PDF (Go Green, Mitie, Suez, etc.) and get all key fields extracted instantly, ready to paste into HubSpot or download as a CSV. 
 
 ---
 
