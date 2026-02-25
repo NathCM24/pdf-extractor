@@ -525,6 +525,7 @@ def _inject_doc_type_line(line_items, document_type):
         line_items.append({
             "description": doc_type, "container": "", "waste_stream": "",
             "movement_type": "", "price": 40.00,
+            "_is_doc_type_line": True,
         })
     return line_items
 
@@ -817,11 +818,12 @@ def _build_review_pdf(payload: dict) -> BytesIO:
             c.setFillColor(TEXT_BODY)
             c.drawString(MARGIN + 3 * mm, text_y, container_val or "\u2014")
 
-            # Quantity
+            # Quantity (skip for auto-added document type line)
             qty_x = MARGIN + ps_col_w[0]
             c.setFont(FONT_R, 8)
             c.setFillColor(TEXT_BODY)
-            c.drawString(qty_x + 3 * mm, text_y, str(quantity_val))
+            if not item.get("_is_doc_type_line"):
+                c.drawString(qty_x + 3 * mm, text_y, str(quantity_val))
 
             # Movement Type
             mt_x = MARGIN + ps_col_w[0] + ps_col_w[1] + ps_col_w[2]
@@ -1848,7 +1850,8 @@ def _format_line_items_cell(line_items):
             price = 0.0
         mt_str = f" [{mt}]" if mt else ""
         container_str = f"{container} | " if container else ""
-        qty_str = f"x{qty} | " if qty and qty > 1 else ""
+        is_doc_line = item.get("_is_doc_type_line", False)
+        qty_str = "" if is_doc_line else (f"x{qty} | " if qty and qty > 1 else "")
         if weee_line and desc_line:
             lines.append(f"{container_str}{qty_str}{weee_line}\n  {desc_line}{mt_str} | \u00a3{price:.2f}")
         else:
@@ -2282,13 +2285,16 @@ def hubspot_create_deal():
             item_qty = max(1, int(item_qty))
         except (TypeError, ValueError):
             item_qty = 1
-        li_body = {
-            "properties": {
-                "name": li_name,
-                "quantity": str(item_qty),
-                "price": str(item_price),
-            }
+        # Skip quantity for auto-added document type line
+        li_props = {
+            "name": li_name,
+            "price": str(item_price),
         }
+        if not item.get("_is_doc_type_line"):
+            li_props["quantity"] = str(item_qty)
+        else:
+            li_props["quantity"] = "1"
+        li_body = {"properties": li_props}
 
         li_status, li_data = _hs_request("POST", "/objects/line_items", li_body)
         if li_status in (200, 201):
@@ -2515,7 +2521,11 @@ def _build_delivery_email_html(payload):
                 li_qty = int(li_qty)
             except (TypeError, ValueError):
                 li_qty = 1
-            qty_html = f' <span style="font-size:11px; color:#718096;">(x{li_qty})</span>' if li_qty > 1 else ""
+            # Skip quantity display for auto-added document type line
+            if li_item.get("_is_doc_type_line"):
+                qty_html = ""
+            else:
+                qty_html = f' <span style="font-size:11px; color:#718096;">(x{li_qty})</span>' if li_qty > 1 else ""
             weee_line, desc_line = _waste_stream_parts(li_item)
             mt = _esc(str(li_item.get("movement_type") or "") or "\u2014")
             try:
